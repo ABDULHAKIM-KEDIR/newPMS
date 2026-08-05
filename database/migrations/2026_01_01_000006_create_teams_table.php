@@ -1,0 +1,22 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration {
+    public function up(): void
+    {
+        Schema::create('teams', function (Blueprint $table) {
+            $table->id('team_id');
+            $table->string('team_name', 100); // e.g. Software Development, Network & Infrastructure
+            $table->foreignId('team_leader_id')->nullable()->constrained('users', 'user_id')->nullOnDelete();
+            $table->text('description')->nullable();
+        });
+    }
+
+    public function down(): void
+    {
+        Schema::dropIfExists('teams');
+    }
+};
