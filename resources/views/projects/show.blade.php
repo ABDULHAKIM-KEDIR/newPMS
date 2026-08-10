@@ -5,14 +5,33 @@
 @endsection
 
 @section('content')
-<div class="page-head">
-  <div>
-    <h1>{{ $project->project_name }}</h1>
-    <div class="page-sub">{{ $project->project_type }} · {{ optional($project->team)->team_name }} Team · Started {{ optional($project->start_date)->format('d M Y') }}</div>
+@if (session('status'))
+  <div class="status-alert">{{ session('status') }}</div>
+@endif
+<div x-data="{ showCR: false }">
+  <div class="page-head">
+    <div>
+      <h1>{{ $project->project_name }}</h1>
+      <div class="page-sub">{{ $project->project_type }} · {{ optional($project->team)->team_name }} Team · Started {{ optional($project->start_date)->format('d M Y') }}</div>
+    </div>
+    <div style="display:flex; gap:8px;">
+      <button class="btn btn-ghost" @click="showCR = !showCR">Log Change Request</button>
+      <a href="{{ route('projects.edit', $project) }}" class="btn btn-primary">Edit Project</a>
+    </div>
   </div>
-  <div style="display:flex; gap:8px;">
-    <button class="btn btn-ghost">Log Change Request</button>
-    <button class="btn btn-primary">Edit Project</button>
+
+  <div class="card card-pad" x-show="showCR" x-cloak x-transition style="margin-bottom:18px;">
+    <form method="POST" action="{{ route('projects.changeRequests.store', $project) }}">
+      @csrf
+      <div class="form-field" style="margin-bottom:12px;">
+        <label for="cr_description">What's the change you're requesting?</label>
+        <textarea id="cr_description" name="description" required placeholder="e.g. Extend go-live by two weeks to accommodate UAT feedback"></textarea>
+      </div>
+      <div style="display:flex; gap:10px;">
+        <button type="submit" class="btn btn-accent">Submit request</button>
+        <button type="button" class="btn btn-ghost" @click="showCR = false">Cancel</button>
+      </div>
+    </form>
   </div>
 </div>
 
@@ -99,7 +118,7 @@
 
   <div x-show="tab === 'changes'" x-cloak>
     <div class="card"><table>
-      <thead><tr><th style="width:38%">Request</th><th>Requested by</th><th>Date</th><th>Status</th></tr></thead>
+      <thead><tr><th style="width:34%">Request</th><th>Requested by</th><th>Date</th><th>Status</th><th></th></tr></thead>
       <tbody>
         @foreach ($project->changeRequests as $c)
           @php $ccls = ['Approved' => 'b-active', 'Rejected' => 'b-blocked'][$c->status] ?? 'b-risk'; @endphp
@@ -108,6 +127,18 @@
             <td>{{ optional($c->requester)->full_name }}</td>
             <td>{{ optional($c->requested_date)->format('d M Y') }}</td>
             <td><span class="badge {{ $ccls }}"><span class="badge-dot"></span>{{ $c->status }}</span></td>
+            <td style="text-align:right;">
+              @if ($c->status === 'Pending' && auth()->user()->isDirectorOrAdmin())
+                <form method="POST" action="{{ route('changeRequests.approve', $c) }}" style="display:inline;">
+                  @csrf
+                  <button type="submit" class="btn btn-ghost" style="padding:5px 11px; font-size:11.5px; color:var(--success); border-color:var(--success-soft);">Approve</button>
+                </form>
+                <form method="POST" action="{{ route('changeRequests.reject', $c) }}" style="display:inline;">
+                  @csrf
+                  <button type="submit" class="btn btn-ghost" style="padding:5px 11px; font-size:11.5px; color:var(--danger); border-color:var(--danger-soft);">Reject</button>
+                </form>
+              @endif
+            </td>
           </tr>
         @endforeach
       </tbody>

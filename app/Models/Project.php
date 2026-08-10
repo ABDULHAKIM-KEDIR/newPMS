@@ -75,4 +75,18 @@ class Project extends Model
         }
         return max(0, $phases->count() - 1);
     }
+
+    /**
+     * True if the user can manage this project's tasks/assignments —
+     * either they lead the project's team, or they hold a directorate-wide
+     * management role (ICT Director / System Administrator).
+     */
+    public function isManagedBy(User $user): bool
+    {
+        if ($user->isDirectorOrAdmin()) {
+            return true;
+        }
+
+        return optional($this->team)->team_leader_id === $user->user_id;
+    }
 }

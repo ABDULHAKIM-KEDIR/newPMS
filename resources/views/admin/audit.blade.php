@@ -5,7 +5,7 @@
 @section('content')
 <div class="page-head">
   <div><h1>Audit Log</h1><div class="page-sub">System-wide record of who did what, and when</div></div>
-  <button class="btn btn-ghost">Export CSV</button>
+  <a href="{{ route('admin.audit.export') }}" class="btn btn-ghost">Export CSV</a>
 </div>
 
 <div class="card">

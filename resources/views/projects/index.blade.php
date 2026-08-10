@@ -8,7 +8,7 @@
     <h1>Projects</h1>
     <div class="page-sub">All software, network-infrastructure and training engagements run by the directorate</div>
   </div>
-  <button class="btn btn-accent">+ New Project</button>
+  <a href="{{ route('projects.create') }}" class="btn btn-accent">+ New Project</a>
 </div>
 
 <div class="filter-row">

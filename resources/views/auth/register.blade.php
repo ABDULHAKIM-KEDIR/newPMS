@@ -14,7 +14,7 @@
       </ul>
     </div>
   @endif
-
+  
   <form method="POST" action="{{ route('register.attempt') }}">
     @csrf
     <div class="field">

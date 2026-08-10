@@ -47,4 +47,19 @@ class User extends Authenticatable
         $parts = explode(' ', trim($this->full_name));
         return strtoupper(substr($parts[0] ?? '', 0, 1) . substr($parts[1] ?? '', 0, 1));
     }
+
+    /**
+     * True if the user carries the given directorate-wide role
+     * (e.g. 'ICT Director', 'System Administrator'). Roles are loaded
+     * eagerly where possible to avoid N+1 queries.
+     */
+    public function hasRole(string $roleName): bool
+    {
+        return $this->roles->contains('role_name', $roleName);
+    }
+
+    public function isDirectorOrAdmin(): bool
+    {
+        return $this->hasRole('ICT Director') || $this->hasRole('System Administrator');
+    }
 }

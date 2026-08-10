@@ -8,7 +8,7 @@
     <h1>Good morning, {{ explode(' ', auth()->user()->full_name)[0] }} 👋</h1>
     <div class="page-sub">Directorate-wide status across {{ $stats['active_projects'] }} active projects · {{ now()->format('l, j M Y') }}</div>
   </div>
-  <a href="{{ route('projects.index') }}" class="btn btn-accent">+ New Project</a>
+  <a href="{{ route('projects.create') }}" class="btn btn-accent">+ New Project</a>
 </div>
 
 <div class="grid grid-4" style="margin-bottom:18px;">
