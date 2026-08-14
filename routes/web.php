@@ -1,5 +1,5 @@
 <?php
-
+use App\Http\Controllers\AttachmentController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BudgetController;
@@ -66,4 +66,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/admin/roles/{role}/permissions/{permission}', [RoleController::class, 'togglePermission'])->name('admin.roles.togglePermission');
     Route::get('/admin/audit-log', [AuditLogController::class, 'index'])->name('admin.audit');
     Route::get('/admin/audit-log/export', [AuditLogController::class, 'export'])->name('admin.audit.export');
+    Route::post('/tasks/{task}/attachments', [AttachmentController::class, 'upload'])->name('tasks.attachments.upload');
+    Route::get('/tasks/{task}/attachments/{attachment}/download', [AttachmentController::class, 'download'])->name('tasks.attachments.download');
+    Route::delete('/tasks/{task}/attachments/{attachment}', [AttachmentController::class, 'destroy'])->name('tasks.attachments.destroy');
 });

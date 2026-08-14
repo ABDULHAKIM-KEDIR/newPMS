@@ -8,6 +8,7 @@ use App\Models\TaskProgressLog;
 use App\Support\Activity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
 
 class TaskController extends Controller
 {
@@ -26,47 +27,61 @@ class TaskController extends Controller
         return view('tasks.index', compact('tasks'));
     }
 
-    public function show(Task $task)
-    {
-        $task->load(['subtasks', 'comments.user', 'dependencies', 'assignee', 'phase.project.team']);
-        $user = Auth::user();
-        $project = $task->phase->project;
+ public function show(Task $task)
+{
+    $task->load(['subtasks', 'comments.user', 'dependencies', 'assignee', 'phase.project.team']);
 
-        $canManage = $project->isManagedBy($user);
-        $canUpdateStatus = $canManage || $task->assigned_to === $user->user_id;
+    // Load attachments with uploader
+    $attachments = $task->attachments()->with('uploader')->get()->map(function ($att) {
+        return [
+            'id' => $att->attachment_id,
+            'file_name' => $att->file_name,
+            'file_url' => Storage::disk('public')->url($att->file_path),
+            'uploader' => optional($att->uploader)->full_name,
+            'uploader_id' => $att->uploaded_by,  // for permission check
+            'created_at' => $att->created_at ? $att->created_at->diffForHumans() : null,
+        ];
+    });
 
-        $assignableUsers = [];
-        if ($canManage && $project->team) {
-            $assignableUsers = $project->team->members()
-                ->with('user')->get()
-                ->pluck('user')->filter()
-                ->map(fn ($u) => ['id' => $u->user_id, 'name' => $u->full_name])
-                ->values();
-        }
+    $user = Auth::user();
+    $project = $task->phase->project;
 
-        return response()->json([
-            'id' => $task->task_id,
-            'name' => $task->task_name,
-            'status' => $task->status,
-            'statuses' => self::STATUSES,
-            'priority' => $task->priority,
-            'assignee' => optional($task->assignee)->full_name,
-            'assignee_id' => $task->assigned_to,
-            'phase' => optional($task->phase)->phase_name,
-            'due' => optional($task->end_date)?->format('d M Y'),
-            'description' => $task->description,
-            'can_update_status' => $canUpdateStatus,
-            'can_manage' => $canManage,
-            'assignable_users' => $assignableUsers,
-            'subtasks' => $task->subtasks->map(fn ($t) => ['name' => $t->task_name, 'status' => $t->status]),
-            'comments' => $task->comments->map(fn ($c) => [
-                'user' => optional($c->user)->full_name,
-                'text' => $c->comment_text,
-                'at' => $c->created_at?->diffForHumans(),
-            ]),
-        ]);
+    $canManage = $project->isManagedBy($user);
+    $canUpdateStatus = $canManage || $task->assigned_to === $user->user_id;
+
+    $assignableUsers = [];
+    if ($canManage && $project->team) {
+        $assignableUsers = $project->team->members()
+            ->with('user')->get()
+            ->pluck('user')->filter()
+            ->map(fn ($u) => ['id' => $u->user_id, 'name' => $u->full_name])
+            ->values();
     }
 
+    return response()->json([
+        'id' => $task->task_id,
+        'name' => $task->task_name,
+        'status' => $task->status,
+        'statuses' => self::STATUSES,
+        'priority' => $task->priority,
+        'assignee' => optional($task->assignee)->full_name,
+        'assignee_id' => $task->assigned_to,
+        'phase' => optional($task->phase)->phase_name,
+        'due' => optional($task->end_date)?->format('d M Y'),
+        'description' => $task->description,
+        'can_update_status' => $canUpdateStatus,
+        'can_manage' => $canManage,
+        'assignable_users' => $assignableUsers,
+        'subtasks' => $task->subtasks->map(fn ($t) => ['name' => $t->task_name, 'status' => $t->status]),
+        'comments' => $task->comments->map(fn ($c) => [
+            'user' => optional($c->user)->full_name,
+            'text' => $c->comment_text,
+            'at' => $c->created_at?->diffForHumans(),
+        ]),
+        'attachments' => $attachments,
+        'current_user_id' => $user->user_id,  // ← NEW
+    ]);
+}
     public function updateStatus(Request $request, Task $task)
     {
         $task->load('phase.project.team');
