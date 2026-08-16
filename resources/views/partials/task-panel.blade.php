@@ -1,6 +1,5 @@
 {{-- Task detail slide-over. Alpine component fetches /tasks/{id} (JSON) and lets
-     authorized users change status, reassign, and comment — all persisted via
-     the routes in TaskController. --}}
+     authorized users change status, reassign, comment, and manage attachments. --}}
 <div x-data="taskPanel()" x-show="open" x-cloak>
   <div class="overlay" :class="{ show: open }" @click="close()"></div>
   <div class="panel" :class="{ show: open }">
@@ -52,6 +51,35 @@
         </template>
       </div>
 
+      <!-- ===== NEW: ATTACHMENTS SECTION ===== -->
+      <div style="margin-top:20px;">
+        <div class="stat-label" style="margin-bottom:10px;">Attachments</div>
+        <div x-show="task.attachments && task.attachments.length" style="margin-bottom:12px;">
+          <template x-for="att in task.attachments" :key="att.id">
+            <div class="attachment-item" style="display:flex; justify-content:space-between; align-items:center; padding:4px 0; border-bottom:1px solid var(--line);">
+              <div>
+                <a :href="att.file_url" target="_blank" x-text="att.file_name" style="color:var(--link); text-decoration:underline;"></a>
+                <span style="font-size:11px; color:var(--ink-faint);" x-text="' by ' + att.uploader + ' ' + att.created_at"></span>
+              </div>
+              <button x-show="task.can_manage || att.uploader_id === task.current_user_id"
+                      @click="deleteAttachment(att.id)"
+                      class="text-danger" style="background:none; border:none; cursor:pointer; font-size:13px; color:var(--danger);">✕</button>
+            </div>
+          </template>
+        </div>
+        <div x-show="!task.attachments || !task.attachments.length" style="font-size:12.5px; color:var(--ink-faint); margin-bottom:12px;">No attachments yet.</div>
+
+        <!-- Upload form -->
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input type="file" id="file-input" @change="fileSelected = $event.target.files[0]" style="flex:1; font-size:12px;">
+          <button class="btn btn-primary" style="padding:6px 14px;" @click="uploadAttachment()" :disabled="!fileSelected || uploading">
+            <span x-show="!uploading">Upload</span>
+            <span x-show="uploading">Uploading…</span>
+          </button>
+        </div>
+      </div>
+      <!-- ===== END ATTACHMENTS ===== -->
+
       <div style="margin-top:20px;">
         <div class="stat-label" style="margin-bottom:10px;">Activity &amp; comments</div>
         <template x-for="c in task.comments" :key="c.text + c.at">
@@ -82,6 +110,8 @@
       newComment: '',
       posting: false,
       savedMessage: '',
+      fileSelected: null,
+      uploading: false,
 
       csrf() {
         return document.querySelector('meta[name="csrf-token"]').content;
@@ -92,11 +122,11 @@
         this.task = await res.json();
         this.open = true;
         this.dirty = false;
+        this.fileSelected = null;
+        document.getElementById('file-input').value = ''; // reset file input
       },
       close() {
         this.open = false;
-        // Kanban / My Tasks are rendered server-side, so if status or
-        // assignee changed while the panel was open, refresh to match.
         if (this.dirty) window.location.reload();
       },
 
@@ -138,8 +168,60 @@
         this.newComment = '';
         this.posting = false;
       },
+
+      // ===== NEW: ATTACHMENT METHODS =====
+      async uploadAttachment() {
+        if (!this.fileSelected) return;
+        this.uploading = true;
+        const formData = new FormData();
+        formData.append('file', this.fileSelected);
+
+        try {
+          const res = await fetch(`/tasks/${this.task.id}/attachments`, {
+            method: 'POST',
+            body: formData,
+            headers: {
+              'X-CSRF-TOKEN': this.csrf()
+            }
+          });
+          const data = await res.json();
+          // Append the new attachment to the list
+          this.task.attachments = [...(this.task.attachments || []), data.attachment];
+          this.flash('File uploaded');
+          this.dirty = true;
+          this.fileSelected = null;
+          document.getElementById('file-input').value = '';
+        } catch (e) {
+          alert('Upload failed: ' + e.message);
+        } finally {
+          this.uploading = false;
+        }
+      },
+
+      async deleteAttachment(attachmentId) {
+        if (!confirm('Delete this attachment?')) return;
+        try {
+          const res = await fetch(`/tasks/${this.task.id}/attachments/${attachmentId}`, {
+            method: 'DELETE',
+            headers: {
+              'X-CSRF-TOKEN': this.csrf()
+            }
+          });
+          const data = await res.json();
+          if (data.success) {
+            this.task.attachments = this.task.attachments.filter(att => att.id !== attachmentId);
+            this.flash('Attachment deleted');
+            this.dirty = true;
+          } else {
+            alert('Delete failed');
+          }
+        } catch (e) {
+          alert('Delete error: ' + e.message);
+        }
+      }
     }
   }
+
   // Global helper so any onclick="openTask(id)" in the page can reach the Alpine component.
   window.openTask = (id) => {
     document.querySelector('[x-data^="taskPanel"]').__x.$data.show(id);

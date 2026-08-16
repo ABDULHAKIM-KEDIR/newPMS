@@ -62,4 +62,8 @@ class Task extends Model
         return $this->belongsToMany(Task::class, 'task_dependencies', 'depends_on_task_id', 'task_id')
             ->withPivot('dependency_type');
     }
+    public function attachments()
+{
+    return $this->morphMany(Attachment::class, 'attachable', 'entity_type', 'entity_id');
+}
 }
