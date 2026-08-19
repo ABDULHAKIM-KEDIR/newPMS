@@ -6,16 +6,18 @@
 <div class="page-head">
   <div>
     <h1>Good morning, {{ explode(' ', auth()->user()->full_name)[0] }} 👋</h1>
-    <div class="page-sub">Directorate-wide status across {{ $stats['active_projects'] }} active projects · {{ now()->format('l, j M Y') }}</div>
+    <div class="page-sub">{{ $scoped ? "Your teams' status" : "Directorate-wide status" }} across {{ $stats['active_projects'] }} active projects · {{ now()->format('l, j M Y') }}</div>
   </div>
-  <a href="{{ route('projects.create') }}" class="btn btn-accent">+ New Project</a>
+  @if (auth()->user()->canCreateProjects())
+    <a href="{{ route('projects.create') }}" class="btn btn-accent">+ New Project</a>
+  @endif
 </div>
 
 <div class="grid grid-4" style="margin-bottom:18px;">
   <div class="card stat-card">
     <div class="stat-label">Active Projects</div>
     <div class="stat-value">{{ $stats['active_projects'] }}</div>
-    <div class="stat-delta">Across all teams</div>
+    <div class="stat-delta">{{ $scoped ? "Across your team(s)" : "Across all teams" }}</div>
   </div>
   <div class="card stat-card">
     <div class="stat-label">Open Tasks</div>
@@ -38,9 +40,12 @@
 <div class="two-col">
   <div class="card card-pad">
     <div class="card-title-row">
-      <h3>Projects in progress</h3>
+      <h3>{{ $scoped ? "Your team's projects" : "Projects in progress" }}</h3>
       <a class="link-small" href="{{ route('projects.index') }}">View all →</a>
     </div>
+    @if ($projects->isEmpty())
+      <div class="empty"><h4>No projects yet</h4>{{ $scoped ? "Nothing assigned to your team so far." : "" }}</div>
+    @endif
     <table><tbody>
       @foreach ($projects as $p)
         @php $b = $p->budget; $util = $b ? $b->utilisationPercent() : 0; @endphp
@@ -75,7 +80,7 @@
     </div>
 
     <div class="card card-pad">
-      <div class="card-title-row"><h3>Team load — open tasks</h3></div>
+      <div class="card-title-row"><h3>{{ $scoped ? "Your team's workload" : "Team load — open tasks" }}</h3></div>
       @foreach ($teamLoad as $u)
         @php $pct = min(100, $u->open_task_count * 15); @endphp
         <div style="margin-bottom:13px;">

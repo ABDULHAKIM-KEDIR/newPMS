@@ -10,8 +10,10 @@ installed by Composer/npm on your machine, as usual for any Laravel project).
 
 - **22 migrations** — one per table in the DB design (`database/migrations`)
 - **20 Eloquent models** with the relationships between them (`app/Models`)
-- **A seeder** with realistic sample data — users, teams, projects, phases, tasks,
-  budgets, change requests, notifications, audit log (`database/seeders/DatabaseSeeder.php`)
+- **A seeder** that creates the RBAC scaffolding (4 roles, 15 permissions, the
+  grants between them) plus exactly **one bootstrap account** — a System
+  Administrator — and nothing else. This is a clean install, not demo data
+  (`database/seeders/DatabaseSeeder.php`)
 - **8 controllers** + routes for Dashboard, Projects, Tasks, Teams, Budgets, Roles &
   Access, Audit Log, Notifications (`app/Http/Controllers`, `routes/web.php`)
 - **Blade views** implementing the UI mockup — sidebar/topbar layout, the "phase rail"
@@ -59,7 +61,8 @@ installed by Composer/npm on your machine, as usual for any Laravel project).
 
 6. Open **`http://ict-pms.test`** — Herd starts serving automatically once the site
    is detected; no need to run `php artisan serve`. You'll land on `/login` — sign
-   in with any seeded account (see "Notes on this prototype" below for the list).
+   in with `admin@ju.edu.et` / `ChangeMe123!` (the one seeded account — see
+   "Notes on this app" below for what to do with it).
 
 ### Using MySQL instead of SQLite
 Herd includes a one-click MySQL service if you'd rather use that. In `.env`,
@@ -67,69 +70,82 @@ comment out the `DB_CONNECTION=sqlite` line and uncomment the MySQL block below 
 then create the `ict_pms` database (Herd's "Databases" tab, or `mysql -u root -e
 "create database ict_pms"`) before running `php artisan migrate --seed`.
 
-## Notes on this prototype
+## Notes on this app
 
-- **Real login, logout, and sign-up.** Every route except `/login` and `/register`
-  requires a signed-in session. Anyone can create an account at `/register` (full
-  name, email, optional phone, password) — new accounts start with the **Team
-  Member** role, and an ICT Director can change that afterwards from **Roles &
-  Access**. Login is by email + password against the `users` table.
+- **There's no self-service sign-up.** `/register` has been removed entirely —
+  accounts are created by a System Administrator from **Users**
+  (`/admin/users`), who sets the person's name, email, temporary password, and
+  starting role at creation time. The login page reflects this: no "Sign up"
+  link, just a note to contact your System Administrator.
 
-  The sidebar footer shows whoever is actually logged in (name, role, initials) and
-  has a working **Log out** button. "My Tasks" and "Notifications" are scoped to the
-  logged-in user, so different accounts see different data.
+- **The one account that exists after a fresh install:**
+  ```
+  admin@ju.edu.et
+  ChangeMe123!
+  ```
+  This is a **System Administrator** — by design, that role can manage users
+  and roles but doesn't have project/team/budget permissions (see the RBAC
+  breakdown below). Its first real job is to create the actual people who'll
+  use the system: go to **Users → + New User**, create someone as an
+  **ICT Director** (or promote a Team Leader later), then let that account
+  create the first teams and projects. Change this password after logging in
+  for the first time — there's no in-app "change my own password" screen yet,
+  so for now that means editing the user's password hash directly or adding
+  one if you need it.
 
-  `DatabaseSeeder.php` still creates a handful of sample users (Tariku Bekele,
-  Selam Girma, etc., all with password `password`) purely so the seeded projects,
-  tasks, and teams have someone to be assigned to — the login page no longer
-  advertises them. Sign up your own account, or use one of the seeded ones by
-  looking up its email in `database/seeders/DatabaseSeeder.php` if you want to see
-  data already assigned to you.
-- **Task detail panel** (`/tasks/{id}`) returns JSON, fetched client-side by Alpine —
-  this is the one endpoint in the app that isn't a full page, by design, since it
-  backs the slide-over panel.
-- **What the landing page promises is now actually wired up, not just displayed:**
-  - **Task status** can be changed from the task detail panel by the assignee or
-    whoever manages that project (the project's team leader, an ICT Director, or a
-    System Administrator) — writes a `task_progress_logs` row and an audit log entry.
-  - **Task comments** post for real via the panel's "Send" button.
-  - **Task reassignment** — project managers get an editable assignee dropdown in
-    the panel, scoped to that project's team members.
-  - **Change requests** get real **Approve / Reject** buttons on the project page
-    (visible to ICT Directors / System Administrators only), which update the
-    request and notify whoever filed it.
-  - **Roles & Access** — a user's role is now an editable dropdown (Director/Admin
-    only) instead of a static badge; changing it updates `user_roles` and notifies
-    the user.
-  - Every one of the above writes to the **audit log** and, where relevant, creates
-    a **notification** for the other party — via the small `App\Support\Activity`
-    helper (`app/Support/Activity.php`), so "every action logged" is now true rather
-    than just seeded-looking.
-  - Authorization for all of this lives in two small helpers rather than a full
-    policy/gate system: `User::isDirectorOrAdmin()` and `Project::isManagedBy()`
-    (checks the project's `team_leader_id`). Good enough for this prototype's scope
-    — worth replacing with Laravel Policies if this goes further.
-- **Every remaining button in the UI is now wired up too** (previously several were
-  decorative):
-  - **+ New Project** (dashboard / Projects) → a real create form at `/projects/create`
-    that also auto-generates the five lifecycle phases and a budget row.
-  - **Edit Project** → `/projects/{id}/edit`, updates name, type, team, status, dates,
-    and allocated budget.
-  - **Log Change Request** (project page) → an inline form that submits a real
-    pending change request.
-  - **+ New Team** → `/teams/create`.
-  - **Manage →** on each team card → a real team page (`/teams/{id}`) where the
-    team's leader or a Director/Admin can add or remove members.
-  - **+ New Role** and the **permission matrix** on Roles & Access → creating a role
-    and toggling a role's permissions (click a ✓/– cell) are both live now,
-    Director/Admin only.
-  - **Export CSV** on the Audit Log → streams a real CSV download.
-  - The **topbar search bar** → a working `/search` page across projects, tasks,
-    and people.
-- Sample data lives entirely in `DatabaseSeeder.php` — re-running `php artisan
-  migrate:fresh --seed` gives you a clean, consistent dataset any time.
-- Currency is hard-coded to ETB in a couple of display spots; `project_budgets.currency`
-  is already a column if you need multi-currency later.
+- **Full role-based access control, backed by the database, not hard-coded
+  role names.** `roles` → `permissions` → `role_permissions` (already in the
+  original schema) is the actual source of truth at runtime: `User::hasPermission()`
+  plus a `Gate::before` in `AppServiceProvider` mean `$user->can('edit_projects')`,
+  `@can('manage_users')` in Blade, and `->middleware('can:approve_change_requests')`
+  on a route all just work — granting or revoking a permission from **Roles &
+  Access** takes effect immediately, no deploy needed. The canonical permission
+  list and each role's starting grant live in one place, `app/Support/Permissions.php`.
+
+  Default grants:
+  - **ICT Director** — full project/task/team/budget/change-request authority,
+    plus viewing the audit log. Not user or role management.
+  - **Team Leader** — can create and edit projects, create/assign tasks, manage
+    team membership. Actual "is this your project" scoping still comes from
+    being set as a specific team's `team_leader_id`, not the role label alone.
+  - **Team Member** — read access everywhere, can update the status of tasks
+    assigned to them. Can't create or edit anything organizational.
+  - **System Administrator** — manages users, roles, permissions, the audit
+    log, and system settings. Deliberately *not* given project/budget
+    authority by default — that's an ICT Director's job. A System
+    Administrator can grant themselves more from Roles & Access if a
+    directorate wants to run that way, but it's not the default.
+
+  Every sensitive route carries `->middleware('can:...')` **and** a matching
+  controller-level check — hitting a restricted URL directly returns a
+  branded 403 page (`resources/views/errors/403.blade.php`), not just a
+  hidden button.
+
+- **User management** (`/admin/users`, System Administrator only): list with
+  search + Active/Inactive filter, create, edit, and activate/deactivate.
+  Deactivating someone takes effect immediately, not just at their next
+  login — a small `EnsureUserIsActive` middleware force-logs-out an existing
+  session the moment their status flips.
+
+- **System Settings** (`/admin/settings`, System Administrator only) —
+  directorate name, default currency, session-timeout notice, support email,
+  stored in a `system_settings` key/value table.
+
+- **The audit log captures more than before**: IP address on every entry, plus
+  login/logout, user creation/deactivation, role changes, task
+  assignment/status changes, project changes, change-request decisions, and
+  permission/role edits — via a small `App\Support\Activity` helper
+  (`app/Support/Activity.php`), not just the handful of actions seeded data
+  used to fake.
+
+- **Task detail panel** (`/tasks/{id}`) returns JSON, fetched client-side by
+  Alpine — the one endpoint in the app that isn't a full page, since it backs
+  the slide-over panel. Status changes, comments, and reassignment there are
+  all real, permission-checked writes.
+
+- **Dashboard is scoped by role** — an ICT Director/System Administrator sees
+  directorate-wide numbers; anyone else sees only their own team(s).
+
 
 ## Folder structure
 

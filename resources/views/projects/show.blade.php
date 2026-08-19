@@ -16,7 +16,9 @@
     </div>
     <div style="display:flex; gap:8px;">
       <button class="btn btn-ghost" @click="showCR = !showCR">Log Change Request</button>
-      <a href="{{ route('projects.edit', $project) }}" class="btn btn-primary">Edit Project</a>
+      @if (auth()->user()->can('edit_projects') && $project->isManagedBy(auth()->user()))
+        <a href="{{ route('projects.edit', $project) }}" class="btn btn-primary">Edit Project</a>
+      @endif
     </div>
   </div>
 
@@ -46,8 +48,58 @@
     <div class="tab" :class="{ active: tab === 'budget' }" @click="tab = 'budget'">Budget</div>
     <div class="tab" :class="{ active: tab === 'changes' }" @click="tab = 'changes'">Change Requests</div>
   </div>
-
   <div x-show="tab === 'tasks'">
+    @if (auth()->user()->can('create_tasks') && $project->isManagedBy(auth()->user()))
+      <div x-data="{ showNewTask: false }" style="margin-bottom:16px;">
+        <div style="display:flex; justify-content:flex-end; margin-bottom:{{ '0' }};">
+          <button class="btn btn-accent" @click="showNewTask = !showNewTask" x-text="showNewTask ? 'Cancel' : '+ New Task'"></button>
+        </div>
+        <div class="card card-pad" x-show="showNewTask" x-cloak x-transition style="margin-top:12px;">
+          <form method="POST" action="{{ route('tasks.store') }}">
+            @csrf
+            <div class="form-grid">
+              <div class="form-field">
+                <label for="task_name">Task name</label>
+                <input type="text" id="task_name" name="task_name" required autofocus>
+              </div>
+              <div class="form-field">
+                <label for="phase_id">Phase</label>
+                <select id="phase_id" name="phase_id" required>
+                  @foreach ($project->phases as $ph)
+                    <option value="{{ $ph->phase_id }}" {{ $ph->status === 'In Progress' ? 'selected' : '' }}>{{ $ph->phase_name }}</option>
+                  @endforeach
+                </select>
+              </div>
+            </div>
+            <div class="form-grid">
+              <div class="form-field">
+                <label for="assigned_to">Assignee</label>
+                <select id="assigned_to" name="assigned_to">
+                  <option value="">— Unassigned —</option>
+                  @foreach ($assignableUsers as $au)
+                    <option value="{{ $au['id'] }}">{{ $au['name'] }}</option>
+                  @endforeach
+                </select>
+              </div>
+              <div class="form-field">
+                <label for="priority">Priority</label>
+                <select id="priority" name="priority" required>
+                  <option value="Medium" selected>Medium</option>
+                  <option value="High">High</option>
+                  <option value="Low">Low</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-field">
+              <label for="end_date">Due date</label>
+              <input type="date" id="end_date" name="end_date">
+            </div>
+            <button type="submit" class="btn btn-accent">Add task</button>
+          </form>
+        </div>
+      </div>
+    @endif
+
     <div class="kanban">
       @foreach (['Pending' => 'Pending', 'In Progress' => 'In Progress', 'Done' => 'Done'] as $statusKey => $statusLabel)
         <div>
@@ -70,11 +122,15 @@
                 </div>
               </div>
             @endforeach
+            @if ($tasks->where('status', $statusKey)->isEmpty())
+              <div style="text-align:center; padding:20px 8px; color:var(--ink-faint); font-size:12px;">No tasks</div>
+            @endif
           </div>
         </div>
       @endforeach
     </div>
   </div>
+
 
   <div x-show="tab === 'deliverables'" x-cloak>
     <div class="card"><table>
@@ -128,7 +184,7 @@
             <td>{{ optional($c->requested_date)->format('d M Y') }}</td>
             <td><span class="badge {{ $ccls }}"><span class="badge-dot"></span>{{ $c->status }}</span></td>
             <td style="text-align:right;">
-              @if ($c->status === 'Pending' && auth()->user()->isDirectorOrAdmin())
+              @if ($c->status === 'Pending' && auth()->user()->can('approve_change_requests'))
                 <form method="POST" action="{{ route('changeRequests.approve', $c) }}" style="display:inline;">
                   @csrf
                   <button type="submit" class="btn btn-ghost" style="padding:5px 11px; font-size:11.5px; color:var(--success); border-color:var(--success-soft);">Approve</button>

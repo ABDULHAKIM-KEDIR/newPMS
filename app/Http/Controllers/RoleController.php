@@ -6,6 +6,7 @@ use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
 use App\Support\Activity;
+use App\Support\Permissions;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -13,16 +14,19 @@ class RoleController extends Controller
 {
     public function index()
     {
+        abort_unless(Auth::user()->can('manage_roles') || Auth::user()->can('manage_users'), 403);
+
         $roles = Role::with('permissions')->get();
         $permissions = Permission::all();
         $users = User::with('roles')->get();
+        $roleGrants = Permissions::ROLE_GRANTS;
 
-        return view('admin.roles', compact('roles', 'permissions', 'users'));
+        return view('admin.roles', compact('roles', 'permissions', 'users', 'roleGrants'));
     }
 
     public function updateUserRole(Request $request, User $user)
     {
-        abort_unless(Auth::user()->isDirectorOrAdmin(), 403);
+        abort_unless(Auth::user()->can('manage_users'), 403);
 
         $data = $request->validate([
             'role_id' => ['required', 'exists:roles,role_id'],
@@ -42,7 +46,7 @@ class RoleController extends Controller
 
     public function storeRole(Request $request)
     {
-        abort_unless(Auth::user()->isDirectorOrAdmin(), 403);
+        abort_unless(Auth::user()->can('manage_roles'), 403);
 
         $data = $request->validate([
             'role_name' => ['required', 'string', 'max:100', 'unique:roles,role_name'],
@@ -58,7 +62,7 @@ class RoleController extends Controller
 
     public function togglePermission(Request $request, Role $role, Permission $permission)
     {
-        abort_unless(Auth::user()->isDirectorOrAdmin(), 403);
+        abort_unless(Auth::user()->can('manage_roles'), 403);
 
         if ($role->permissions()->where('permissions.permission_id', $permission->permission_id)->exists()) {
             $role->permissions()->detach($permission->permission_id);

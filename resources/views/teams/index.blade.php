@@ -5,7 +5,9 @@
 @section('content')
 <div class="page-head">
   <div><h1>Teams</h1><div class="page-sub">Directorate teams and their current staffing</div></div>
-  <a href="{{ route('teams.create') }}" class="btn btn-accent">+ New Team</a>
+  @if (auth()->user()->can('manage_team') && auth()->user()->hasRole('ICT Director'))
+    <a href="{{ route('teams.create') }}" class="btn btn-accent">+ New Team</a>
+  @endif
 </div>
 
 <div class="grid" style="grid-template-columns:repeat(3,1fr);">

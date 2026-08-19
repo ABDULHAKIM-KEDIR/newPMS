@@ -13,6 +13,8 @@ class TeamController extends Controller
 {
     public function index()
     {
+        abort_unless(Auth::user()->can('view_projects'), 403);
+
         $teams = Team::with(['leader', 'members', 'projects'])->get();
 
         return view('teams.index', compact('teams'));
@@ -20,6 +22,12 @@ class TeamController extends Controller
 
     public function create()
     {
+        // Standing up a brand-new team is an org-structure change — reserved
+        // for whoever holds manage_team AND the ICT Director role specifically.
+        // A Team Leader has manage_team too, but only to run the team(s) they
+        // already lead, not to create new ones.
+        abort_unless($this->canCreateTeams(), 403);
+
         $users = User::orderBy('full_name')->get();
 
         return view('teams.create', compact('users'));
@@ -27,6 +35,8 @@ class TeamController extends Controller
 
     public function store(Request $request)
     {
+        abort_unless($this->canCreateTeams(), 403);
+
         $data = $request->validate([
             'team_name' => ['required', 'string', 'max:100'],
             'team_leader_id' => ['nullable', 'exists:users,user_id'],
@@ -46,9 +56,11 @@ class TeamController extends Controller
 
     public function show(Team $team)
     {
+        abort_unless(Auth::user()->can('view_projects'), 403);
+
         $team->load(['leader', 'members.user', 'projects.budget']);
         $user = Auth::user();
-        $canManage = $user->isDirectorOrAdmin() || $team->team_leader_id === $user->user_id;
+        $canManage = $this->canManageTeam($user, $team);
 
         $memberIds = $team->members->pluck('user_id');
         $availableUsers = $canManage
@@ -61,7 +73,7 @@ class TeamController extends Controller
     public function addMember(Request $request, Team $team)
     {
         $user = Auth::user();
-        abort_unless($user->isDirectorOrAdmin() || $team->team_leader_id === $user->user_id, 403);
+        abort_unless($this->canManageTeam($user, $team), 403);
 
         $data = $request->validate([
             'user_id' => ['required', 'exists:users,user_id'],
@@ -80,7 +92,7 @@ class TeamController extends Controller
     public function removeMember(Team $team, TeamMember $member)
     {
         $user = Auth::user();
-        abort_unless($user->isDirectorOrAdmin() || $team->team_leader_id === $user->user_id, 403);
+        abort_unless($this->canManageTeam($user, $team), 403);
         abort_unless($member->team_id === $team->team_id, 404);
 
         $removedName = optional($member->user)->full_name ?? 'A member';
@@ -89,5 +101,21 @@ class TeamController extends Controller
         Activity::log('Removed team member', 'Team', $team->team_id, "{$removedName} left {$team->team_name}");
 
         return back()->with('status', 'Member removed.');
+    }
+
+    private function canCreateTeams(): bool
+    {
+        $user = Auth::user();
+
+        return $user->can('manage_team') && $user->hasRole('ICT Director');
+    }
+
+    private function canManageTeam(User $user, Team $team): bool
+    {
+        if (! $user->can('manage_team')) {
+            return false;
+        }
+
+        return $user->hasRole('ICT Director') || $team->team_leader_id === $user->user_id;
     }
 }

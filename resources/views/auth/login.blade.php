@@ -25,6 +25,6 @@
   </form>
 
   <div style="text-align:center; margin-top:18px; font-size:12.6px; color:var(--ink-soft);">
-    Don't have an account? <a href="{{ route('register') }}" style="color:var(--primary); font-weight:600;">Sign up</a>
+    Don't have an account? Ask a System Administrator to create one for you under Users.
   </div>
 @endsection

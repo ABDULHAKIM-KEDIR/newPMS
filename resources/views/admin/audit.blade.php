@@ -10,7 +10,7 @@
 
 <div class="card">
   <table>
-    <thead><tr><th style="width:16%">Time</th><th>User</th><th>Action</th><th>Entity</th><th>Details</th></tr></thead>
+    <thead><tr><th style="width:15%">Time</th><th>User</th><th>Action</th><th>Entity</th><th>Details</th><th style="width:11%">IP address</th></tr></thead>
     <tbody>
       @foreach ($logs as $log)
         <tr>
@@ -19,6 +19,7 @@
           <td>{{ $log->action }}</td>
           <td class="mono">{{ $log->entity_type }}{{ $log->entity_id ? '-'.$log->entity_id : '' }}</td>
           <td class="cell-sub">{{ $log->details }}</td>
+          <td class="mono cell-sub">{{ $log->ip_address ?? '—' }}</td>
         </tr>
       @endforeach
     </tbody>

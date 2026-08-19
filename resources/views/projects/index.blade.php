@@ -8,7 +8,9 @@
     <h1>Projects</h1>
     <div class="page-sub">All software, network-infrastructure and training engagements run by the directorate</div>
   </div>
-  <a href="{{ route('projects.create') }}" class="btn btn-accent">+ New Project</a>
+  @if (auth()->user()->canCreateProjects())
+    <a href="{{ route('projects.create') }}" class="btn btn-accent">+ New Project</a>
+  @endif
 </div>
 
 <div class="filter-row">

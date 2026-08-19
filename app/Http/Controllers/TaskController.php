@@ -73,7 +73,8 @@ class TaskController extends Controller
         $project = $task->phase->project;
         $user = Auth::user();
 
-        abort_unless($project->isManagedBy($user) || $task->assigned_to === $user->user_id, 403);
+        $isAssignee = $task->assigned_to === $user->user_id;
+        abort_unless($user->can('update_task_status') && ($isAssignee || $project->isManagedBy($user)), 403);
 
         $data = $request->validate([
             'status' => ['required', 'in:' . implode(',', self::STATUSES)],
@@ -129,13 +130,47 @@ class TaskController extends Controller
         ]);
     }
 
+    public function store(Request $request)
+    {
+        $user = Auth::user();
+        abort_unless($user->can('create_tasks'), 403);
+
+        $data = $request->validate([
+            'phase_id' => ['required', 'exists:phases,phase_id'],
+            'task_name' => ['required', 'string', 'max:150'],
+            'assigned_to' => ['nullable', 'exists:users,user_id'],
+            'priority' => ['required', 'in:High,Medium,Low'],
+            'end_date' => ['nullable', 'date'],
+        ]);
+
+        $phase = \App\Models\Phase::with('project')->findOrFail($data['phase_id']);
+        abort_unless($phase->project->isManagedBy($user), 403);
+
+        $task = Task::create([
+            'phase_id' => $phase->phase_id,
+            'task_name' => $data['task_name'],
+            'assigned_to' => $data['assigned_to'] ?? null,
+            'priority' => $data['priority'],
+            'status' => 'Pending',
+            'end_date' => $data['end_date'] ?? null,
+        ]);
+
+        Activity::log('Created task', 'Task', $task->task_id, "{$task->task_name} on {$phase->project->project_name}");
+
+        if ($task->assigned_to) {
+            Activity::notify($task->assigned_to, $user->full_name . " assigned you a new task: \"{$task->task_name}\"", 'task');
+        }
+
+        return back()->with('status', 'Task added.');
+    }
+
     public function assign(Request $request, Task $task)
     {
         $task->load('phase.project');
         $project = $task->phase->project;
         $user = Auth::user();
 
-        abort_unless($project->isManagedBy($user), 403);
+        abort_unless($user->can('assign_tasks') && $project->isManagedBy($user), 403);
 
         $data = $request->validate([
             'assigned_to' => ['required', 'exists:users,user_id'],

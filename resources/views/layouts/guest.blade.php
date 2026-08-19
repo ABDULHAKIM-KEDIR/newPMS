@@ -25,12 +25,14 @@
   .guest-brand .t2 { font-size:12px; color:var(--ink-soft); }
   .field { margin-bottom:16px; }
   .field label { display:block; font-size:12.5px; font-weight:600; color:var(--ink-soft); margin-bottom:6px; }
-  .field input {
+  .field input, .field select {
     width:100%; border:1px solid var(--line); border-radius:8px; padding:10px 12px;
-    font-size:13.5px; font-family:inherit; background:var(--surface); color:var(--ink);
+    font-size:13.5px; font-family:inherit; background:var(--surface); color:var(--ink); box-sizing:border-box;
   }
-  .field input:focus { outline:none; border-color:var(--primary); }
+  .field input:focus, .field select:focus { outline:none; border-color:var(--primary); }
+  .field-hint { font-size:11.5px; color:var(--ink-faint); margin-top:5px; line-height:1.5; }
   .field-error { color:var(--danger); font-size:12px; margin-top:6px; }
+  .field-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
   .guest-hint {
     margin-top:22px; padding:13px 14px; background:var(--surface-alt); border-radius:9px;
     font-size:11.8px; color:var(--ink-soft); line-height:1.65;

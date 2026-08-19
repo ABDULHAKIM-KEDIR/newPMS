@@ -25,7 +25,7 @@ class ChangeRequestController extends Controller
     private function decide(ChangeRequest $changeRequest, string $decision): void
     {
         $user = Auth::user();
-        abort_unless($user->isDirectorOrAdmin(), 403);
+        abort_unless($user->can('approve_change_requests'), 403);
 
         $changeRequest->update([
             'status' => $decision,
