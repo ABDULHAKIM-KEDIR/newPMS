@@ -61,13 +61,31 @@
         <input type="date" id="end_date" name="end_date" value="{{ old('end_date', optional($project->end_date)->format('Y-m-d')) }}">
       </div>
     </div>
-    <div class="form-field">
-      <label for="allocated_amount">Budget allocated (ETB)</label>
-      <input type="number" step="0.01" min="0" id="allocated_amount" name="allocated_amount" value="{{ old('allocated_amount', optional($project->budget)->allocated_amount) }}">
-    </div>
-    <div style="display:flex; gap:10px; margin-top:20px;">
-      <button type="submit" class="btn btn-accent">Save changes</button>
-      <a href="{{ route('projects.show', $project) }}" class="btn btn-ghost">Cancel</a>
+    @if ($canEditBudget)
+      <div class="form-field">
+        <label for="allocated_amount">Budget allocated (ETB)</label>
+        <input type="number" step="0.01" min="0" id="allocated_amount" name="allocated_amount" value="{{ old('allocated_amount', optional($project->budget)->allocated_amount) }}">
+      </div>
+    @else
+      <div class="field-row" style="margin-bottom:16px;">
+        <span class="k">Budget allocated</span>
+        <span class="v">ETB {{ number_format(optional($project->budget)->allocated_amount ?? 0) }} <span style="font-weight:400; color:var(--ink-faint); font-size:11.5px;">(requires the manage_budgets permission)</span></span>
+      </div>
+    @endif
+    <div style="display:flex; gap:10px; margin-top:20px; justify-content:space-between;">
+      <div style="display:flex; gap:10px;">
+        <button type="submit" class="btn btn-accent">Save changes</button>
+        <a href="{{ route('projects.show', $project) }}" class="btn btn-ghost">Cancel</a>
+      </div>
+      @can('delete_projects')
+        @if ($project->isManagedBy(auth()->user()))
+          <form method="POST" action="{{ route('projects.destroy', $project) }}" onsubmit="return confirm('Delete \'{{ $project->project_name }}\' permanently? This removes all its phases, tasks, and budget data.');">
+            @csrf
+            @method('DELETE')
+            <button type="submit" class="btn btn-ghost" style="color:var(--danger); border-color:var(--danger-soft);">Delete project</button>
+          </form>
+        @endif
+      @endcan
     </div>
   </form>
 </div>

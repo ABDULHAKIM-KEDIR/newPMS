@@ -81,9 +81,16 @@ class Project extends Model
      * either they lead the project's team, or they hold a directorate-wide
      * management role (ICT Director / System Administrator).
      */
+    /**
+     * Blanket "manages this project" access is Director-scoped, not
+     * Director-or-Admin — an Administrator only gets project authority if
+     * a Director explicitly grants edit_projects/delete_projects to their
+     * role from Roles & Access. This is checked alongside a permission gate
+     * in the controller, not instead of one.
+     */
     public function isManagedBy(User $user): bool
     {
-        if ($user->isDirectorOrAdmin()) {
+        if ($user->hasRole('ICT Director')) {
             return true;
         }
 

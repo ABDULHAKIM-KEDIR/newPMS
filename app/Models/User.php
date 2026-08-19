@@ -58,8 +58,38 @@ class User extends Authenticatable
         return $this->roles->contains('role_name', $roleName);
     }
 
+    /** Every permission this user's role(s) grant, as a flat set of slugs. */
+    public function permissionSlugs()
+    {
+        return $this->roles->flatMap->permissions->pluck('permission_name')->unique();
+    }
+
+    public function hasPermission(string $slug): bool
+    {
+        return $this->permissionSlugs()->contains($slug);
+    }
+
+    public function isActive(): bool
+    {
+        return $this->status === 'Active';
+    }
+
     public function isDirectorOrAdmin(): bool
     {
         return $this->hasRole('ICT Director') || $this->hasRole('System Administrator');
+    }
+
+    /** True if the user is allowed to spin up new projects — delegates to
+     *  the create_projects permission rather than a hard-coded role check. */
+    public function canCreateProjects(): bool
+    {
+        return $this->hasPermission('create_projects');
+    }
+
+    /** Team IDs this user belongs to — used to scope the dashboard for
+     *  anyone who isn't a Director/Admin (who see everything). */
+    public function teamIds()
+    {
+        return $this->teamMemberships()->pluck('team_id');
     }
 }

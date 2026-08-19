@@ -5,6 +5,7 @@ namespace App\Support;
 use App\Models\AuditLog;
 use App\Models\Notification;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Request;
 
 /**
  * Small helper so every real action in the app (not just the seeder)
@@ -15,12 +16,22 @@ class Activity
 {
     public static function log(string $action, string $entityType, ?int $entityId, ?string $details = null): void
     {
+        self::logAs(Auth::id(), $action, $entityType, $entityId, $details);
+    }
+
+    /**
+     * Same as log(), but lets the caller specify the acting user explicitly —
+     * needed for logout, where Auth::id() is already null by the time we log.
+     */
+    public static function logAs(?int $userId, string $action, string $entityType, ?int $entityId, ?string $details = null): void
+    {
         AuditLog::create([
-            'user_id' => Auth::id(),
+            'user_id' => $userId,
             'action' => $action,
             'entity_type' => $entityType,
             'entity_id' => $entityId,
             'details' => $details,
+            'ip_address' => Request::ip(),
         ]);
     }
 
