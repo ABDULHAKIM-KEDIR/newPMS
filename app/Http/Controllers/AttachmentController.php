@@ -47,7 +47,7 @@ class AttachmentController extends Controller
             'attachment' => [
                 'id' => $attachment->attachment_id,
                 'file_name' => $attachment->file_name,
-                'file_url' => Storage::disk('public')->url($attachment->file_path),
+                'file_url' => route('tasks.attachments.download', [$task->task_id, $attachment->attachment_id]),
                 'uploader' => $user->full_name,
                 'created_at' => $attachment->created_at->diffForHumans(),
             ]

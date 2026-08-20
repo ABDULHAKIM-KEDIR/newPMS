@@ -32,11 +32,11 @@ class TaskController extends Controller
     $task->load(['subtasks', 'comments.user', 'dependencies', 'assignee', 'phase.project.team']);
 
     // Load attachments with uploader
-    $attachments = $task->attachments()->with('uploader')->get()->map(function ($att) {
+    $attachments = $task->attachments()->with('uploader')->get()->map(function ($att) use ($task) {
         return [
             'id' => $att->attachment_id,
             'file_name' => $att->file_name,
-            'file_url' => Storage::disk('public')->url($att->file_path),
+            'file_url' => route('tasks.attachments.download', [$task->task_id, $att->attachment_id]),
             'uploader' => optional($att->uploader)->full_name,
             'uploader_id' => $att->uploaded_by,  // for permission check
             'created_at' => $att->created_at ? $att->created_at->diffForHumans() : null,
