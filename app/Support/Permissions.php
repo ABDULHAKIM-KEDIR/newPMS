@@ -49,7 +49,9 @@ class Permissions
             'view_projects', 'view_tasks', 'update_task_status',
         ],
         'System Administrator' => [
-            'view_projects', 'view_tasks',
+            'view_projects', 'create_projects', 'edit_projects', 'delete_projects',
+            'view_tasks', 'create_tasks', 'assign_tasks', 'update_task_status',
+            'manage_team', 'approve_change_requests', 'manage_budgets',
             'manage_users', 'manage_roles', 'view_audit_logs', 'manage_system_settings',
         ],
     ];

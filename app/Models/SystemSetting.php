@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class SystemSetting extends Model
 {
     protected $primaryKey = 'setting_id';
+
     public $timestamps = false;
 
     protected $fillable = ['key', 'value', 'updated_at'];

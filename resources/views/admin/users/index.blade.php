@@ -3,10 +3,6 @@
 @section('crumb', '<b>Users</b>')
 
 @section('content')
-@if (session('status'))
-  <div class="status-alert">{{ session('status') }}</div>
-@endif
-
 <div class="page-head">
   <div><h1>Users</h1><div class="page-sub">Everyone with an account, their role, and their status</div></div>
   <a href="{{ route('admin.users.create') }}" class="btn btn-accent">+ New User</a>

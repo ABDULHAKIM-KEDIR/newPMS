@@ -3,10 +3,6 @@
 @section('crumb', '<b>Settings</b>')
 
 @section('content')
-@if (session('status'))
-  <div class="status-alert">{{ session('status') }}</div>
-@endif
-
 <div class="page-head">
   <div><h1>System Settings</h1><div class="page-sub">Directorate-wide configuration — System Administrator only</div></div>
 </div>

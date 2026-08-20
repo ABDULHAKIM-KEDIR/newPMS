@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class Permission extends Model
 {
     protected $primaryKey = 'permission_id';
+
     public $timestamps = false;
 
     protected $fillable = ['permission_name', 'description'];

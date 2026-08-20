@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class TeamMember extends Model
 {
     protected $primaryKey = 'team_member_id';
+
     public $timestamps = false;
 
     protected $fillable = ['team_id', 'user_id', 'joined_date'];

@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class TaskComment extends Model
 {
     protected $primaryKey = 'comment_id';
+
     public $timestamps = false;
 
     protected $fillable = ['task_id', 'user_id', 'comment_text'];

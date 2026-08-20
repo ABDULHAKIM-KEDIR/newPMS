@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class Attachment extends Model
 {
     protected $primaryKey = 'attachment_id';
+
     public $timestamps = false;
 
     protected $fillable = ['entity_type', 'entity_id', 'file_name', 'file_path', 'uploaded_by'];

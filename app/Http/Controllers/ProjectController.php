@@ -16,7 +16,9 @@ use Illuminate\Validation\Rule;
 class ProjectController extends Controller
 {
     private const PHASES = ['Initiation', 'Planning', 'Execution', 'Monitoring', 'Closure'];
+
     private const TYPES = ['Software', 'Network & Infrastructure', 'Training & Consultancy'];
+
     private const STATUSES = ['planning', 'active', 'risk', 'closed'];
 
     public function index(Request $request)
@@ -25,7 +27,7 @@ class ProjectController extends Controller
         // is intentionally broad; it's the write actions that are scoped.
         abort_unless(Auth::user()->can('view_projects'), 403);
 
-        $query = Project::with(['team', 'budget', 'phases', 'memberRoles']);
+        $query = Project::with(['team', 'budget', 'phases.tasks', 'memberRoles']);
 
         if ($type = $request->get('type')) {
             $query->where('project_type', $type);
@@ -36,16 +38,16 @@ class ProjectController extends Controller
         return view('projects.index', compact('projects'));
     }
 
-      public function show(Project $project)
+    public function show(Project $project)
     {
         abort_unless(Auth::user()->can('view_projects'), 403);
 
         $project->load([
-            'team.members.user', 'budget', 'phases.budget', 'phases.tasks.assignee',
+            'team.members.user', 'budget', 'phases.budget', 'phases.tasks.assignee', 'phases.tasks.phase',
             'deliverables', 'changeRequests.requester',
         ]);
 
-        $tasks = collect($project->phases)->flatMap->tasks;
+        $tasks = $project->tasks()->with(['assignee', 'phase'])->orderBy('task_id')->get();
 
         $assignableUsers = collect();
         if ($project->team) {
@@ -78,7 +80,7 @@ class ProjectController extends Controller
         $data = $request->validate([
             'project_name' => ['required', 'string', 'max:150'],
             'description' => ['nullable', 'string', 'max:2000'],
-            'project_type' => ['required', 'in:' . implode(',', self::TYPES)],
+            'project_type' => ['required', 'in:'.implode(',', self::TYPES)],
             // A Team Leader can only create a project under a team they actually
             // lead — a Director/Admin can pick any team. Enforced here, not just
             // in the dropdown, so a forged request can't pick someone else's team.
@@ -124,7 +126,7 @@ class ProjectController extends Controller
         Activity::log('Created project', 'Project', $project->project_id, $project->project_name);
 
         if ($project->team->team_leader_id && $project->team->team_leader_id !== $user->user_id) {
-            Activity::notify($project->team->team_leader_id, $user->full_name . " created a new project: \"{$project->project_name}\"", 'project');
+            Activity::notify($project->team->team_leader_id, $user->full_name." created a new project: \"{$project->project_name}\"", 'project');
         }
 
         return redirect()->route('projects.show', $project)->with('status', 'Project created.');
@@ -154,9 +156,9 @@ class ProjectController extends Controller
         $data = $request->validate([
             'project_name' => ['required', 'string', 'max:150'],
             'description' => ['nullable', 'string', 'max:2000'],
-            'project_type' => ['required', 'in:' . implode(',', self::TYPES)],
+            'project_type' => ['required', 'in:'.implode(',', self::TYPES)],
             'team_id' => ['required', Rule::in($eligibleTeamIds)],
-            'status' => ['required', 'in:' . implode(',', self::STATUSES)],
+            'status' => ['required', 'in:'.implode(',', self::STATUSES)],
             'start_date' => ['nullable', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'allocated_amount' => ['nullable', 'numeric', 'min:0'],
@@ -178,7 +180,7 @@ class ProjectController extends Controller
             $previous = $project->budget->allocated_amount;
             $project->budget->update(['allocated_amount' => $data['allocated_amount']]);
             if ((float) $previous !== (float) $data['allocated_amount']) {
-                Activity::log('Updated project budget', 'Project', $project->project_id, "{$project->project_name}: ETB " . number_format($previous) . ' → ETB ' . number_format($data['allocated_amount']));
+                Activity::log('Updated project budget', 'Project', $project->project_id, "{$project->project_name}: ETB ".number_format($previous).' → ETB '.number_format($data['allocated_amount']));
             }
         }
 
@@ -218,7 +220,7 @@ class ProjectController extends Controller
         Activity::log('Created change request', 'ChangeRequest', $cr->change_request_id, $data['description']);
 
         if (optional($project->team)->team_leader_id) {
-            Activity::notify($project->team->team_leader_id, Auth::user()->full_name . " filed a change request on \"{$project->project_name}\"", 'approval');
+            Activity::notify($project->team->team_leader_id, Auth::user()->full_name." filed a change request on \"{$project->project_name}\"", 'approval');
         }
 
         return back()->with('status', 'Change request submitted.');

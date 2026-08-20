@@ -5,10 +5,6 @@
 @endsection
 
 @section('content')
-@if (session('status'))
-  <div class="status-alert">{{ session('status') }}</div>
-@endif
-
 <div class="page-head">
   <div>
     <h1>{{ $team->team_name }}</h1>

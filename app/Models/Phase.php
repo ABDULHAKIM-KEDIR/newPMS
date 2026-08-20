@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class Phase extends Model
 {
     protected $primaryKey = 'phase_id';
+
     public $timestamps = false;
 
     protected $fillable = [

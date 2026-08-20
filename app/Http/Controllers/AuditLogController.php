@@ -21,7 +21,7 @@ class AuditLogController extends Controller
     {
         abort_unless(Auth::user()->can('view_audit_logs'), 403);
 
-        $filename = 'audit-log-' . now()->format('Y-m-d-His') . '.csv';
+        $filename = 'audit-log-'.now()->format('Y-m-d-His').'.csv';
 
         $callback = function () {
             $handle = fopen('php://output', 'w');
