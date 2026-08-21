@@ -7,6 +7,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 class User extends Authenticatable
 {
     protected $primaryKey = 'user_id';
+
     public $timestamps = false;
 
     protected $fillable = ['full_name', 'email', 'password_hash', 'phone', 'status'];
@@ -45,7 +46,8 @@ class User extends Authenticatable
     public function initials(): string
     {
         $parts = explode(' ', trim($this->full_name));
-        return strtoupper(substr($parts[0] ?? '', 0, 1) . substr($parts[1] ?? '', 0, 1));
+
+        return strtoupper(substr($parts[0] ?? '', 0, 1).substr($parts[1] ?? '', 0, 1));
     }
 
     /**

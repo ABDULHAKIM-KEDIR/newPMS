@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class Task extends Model
 {
     protected $primaryKey = 'task_id';
+
     public $timestamps = false;
 
     protected $fillable = [

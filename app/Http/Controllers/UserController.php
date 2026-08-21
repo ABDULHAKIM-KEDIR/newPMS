@@ -62,7 +62,7 @@ class UserController extends Controller
 
         $user->roles()->attach($data['role_id']);
 
-        Activity::log('Created user', 'User', $user->user_id, $user->full_name . ' (' . $user->email . ')');
+        Activity::log('Created user', 'User', $user->user_id, $user->full_name.' ('.$user->email.')');
 
         return redirect()->route('admin.users.index')->with('status', "{$user->full_name} was created.");
     }

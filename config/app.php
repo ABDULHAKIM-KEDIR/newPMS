@@ -1,7 +1,5 @@
 <?php
 
-use Illuminate\Support\Facades\Facade;
-
 return [
     'name' => env('APP_NAME', 'ICT PMS'),
     'env' => env('APP_ENV', 'production'),

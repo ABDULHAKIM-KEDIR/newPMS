@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class PhaseBudget extends Model
 {
     protected $primaryKey = 'budget_id';
+
     public $timestamps = false;
 
     protected $fillable = ['phase_id', 'allocated_amount', 'spent_amount', 'updated_at'];

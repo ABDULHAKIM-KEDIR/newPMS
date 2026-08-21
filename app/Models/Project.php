@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class Project extends Model
 {
     protected $primaryKey = 'project_id';
+
     public $timestamps = false;
 
     protected $fillable = [
@@ -69,10 +70,11 @@ class Project extends Model
     {
         $phases = $this->phases()->pluck('status')->values();
         foreach ($phases as $i => $status) {
-            if (!in_array($status, ['Done', 'Closed', 'Completed'])) {
+            if (! in_array($status, ['Done', 'Closed', 'Completed'])) {
                 return $i;
             }
         }
+
         return max(0, $phases->count() - 1);
     }
 
@@ -90,7 +92,7 @@ class Project extends Model
      */
     public function isManagedBy(User $user): bool
     {
-        if ($user->hasRole('ICT Director')) {
+        if ($user->hasRole('ICT Director') || $user->hasRole('System Administrator')) {
             return true;
         }
 

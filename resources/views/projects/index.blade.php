@@ -23,21 +23,37 @@
 <div class="card">
   <table>
     <thead><tr>
-      <th style="width:28%">Project</th><th>Team</th><th>Phase</th><th>Status</th><th>Budget</th><th>Due</th>
+      <th style="width:26%">Project</th>
+      <th>Team</th>
+      <th>Phase</th>
+      <th>Tasks Progress</th>
+      <th>Status</th>
+      <th>Budget</th>
+      <th>Due</th>
     </tr></thead>
     <tbody>
       @foreach ($projects as $p)
         @php
           $b = $p->budget; $util = $b ? $b->utilisationPercent() : 0;
           $statusCls = ['active' => 'b-active', 'planning' => 'b-planning', 'risk' => 'b-risk', 'closed' => 'b-closed'][$p->status] ?? 'b-planning';
+          $allTasks = collect($p->phases)->flatMap->tasks;
+          $totalTasksCount = $allTasks->count();
+          $completedTasksCount = $allTasks->where('status', 'Done')->count();
+          $taskPct = $totalTasksCount > 0 ? round(($completedTasksCount / $totalTasksCount) * 100) : 0;
         @endphp
-        <tr onclick="window.location='{{ route('projects.show', $p) }}'">
+        <tr onclick="window.location='{{ route('projects.show', $p) }}'" style="cursor:pointer;">
           <td>
             <div class="cell-primary">{{ $p->project_name }}</div>
             <div class="cell-sub mono">PRJ-{{ str_pad($p->project_id, 3, '0', STR_PAD_LEFT) }} · {{ $p->project_type }}</div>
           </td>
           <td>{{ optional($p->team)->team_name }}</td>
-          <td style="width:150px;">@include('partials.phase-rail', ['currentIndex' => $p->currentPhaseIndex(), 'mini' => true])</td>
+          <td style="width:140px;">@include('partials.phase-rail', ['currentIndex' => $p->currentPhaseIndex(), 'mini' => true])</td>
+          <td>
+            <div class="cell-sub" style="margin-bottom:4px; font-weight:600;">
+              {{ $completedTasksCount }}/{{ $totalTasksCount }} Tasks Done ({{ $taskPct }}%)
+            </div>
+            <div class="progressbar"><div style="width:{{ $taskPct }}%"></div></div>
+          </td>
           <td><span class="badge {{ $statusCls }}"><span class="badge-dot"></span>{{ ucfirst($p->status) }}</span></td>
           <td>
             <div class="cell-sub" style="margin-bottom:4px;">{{ $util }}% · ETB {{ number_format($b->spent_amount ?? 0) }}</div>
@@ -46,6 +62,11 @@
           <td>{{ optional($p->end_date)->format('d M Y') }}</td>
         </tr>
       @endforeach
+      @if ($projects->isEmpty())
+        <tr>
+          <td colspan="7" style="text-align:center; padding:30px; color:var(--ink-faint);">No projects found.</td>
+        </tr>
+      @endif
     </tbody>
   </table>
 </div>

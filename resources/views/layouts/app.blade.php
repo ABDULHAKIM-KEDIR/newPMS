@@ -19,6 +19,7 @@
     @include('partials.topbar')
 
     <div class="content">
+      @include('partials.flash')
       @yield('content')
     </div>
   </div>

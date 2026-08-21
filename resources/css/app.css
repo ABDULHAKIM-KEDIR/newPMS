@@ -222,9 +222,33 @@
   .form-field input:focus, .form-field select:focus, .form-field textarea:focus{outline:none; border-color:var(--primary);}
   .form-grid{display:grid; grid-template-columns:1fr 1fr; gap:16px;}
   .form-error{color:var(--danger); font-size:12px; margin-top:5px;}
-  .form-alert{background:var(--danger-soft); color:var(--danger); border-radius:8px; padding:11px 14px; font-size:12.8px; margin-bottom:18px;}
+  .form-alert{
+    background:var(--danger-soft); color:var(--danger); border:1px solid rgba(220, 38, 38, 0.2);
+    border-radius:8px; padding:11px 16px; font-size:12.8px; margin-bottom:18px;
+    display:flex; justify-content:space-between; align-items:center; width:100%; box-sizing:border-box;
+  }
   .form-alert ul{margin:0; padding-left:16px;}
-  .status-alert{background:var(--success-soft); color:var(--success); border-radius:8px; padding:10px 14px; font-size:12.8px; margin-bottom:16px; font-weight:600;}
+  .status-alert{
+    background:var(--success-soft); color:var(--success); border:1px solid rgba(16, 185, 129, 0.25);
+    border-radius:8px; padding:11px 16px; font-size:12.8px; margin-bottom:18px; font-weight:600;
+    display:flex; justify-content:space-between; align-items:center; width:100%; box-sizing:border-box;
+  }
+  .alert-content{
+    display:flex; align-items:center; gap:10px; flex:1; min-width:0;
+  }
+  .alert-icon{
+    flex-shrink:0;
+  }
+  .alert-close{
+    background:none; border:none; color:inherit; cursor:pointer;
+    padding:0; width:28px; height:28px; line-height:1; opacity:0.75; display:inline-flex;
+    align-items:center; justify-content:center; border-radius:6px;
+    transition:opacity 0.15s ease, background 0.15s ease;
+    margin-left:auto; flex-shrink:0;
+  }
+  .alert-close:hover{
+    opacity:1; background:rgba(0,0,0,0.08);
+  }
 
   /* Role-based access overview cards (Roles & Access page) */
   .rbac-section{text-align:center; max-width:640px; margin:4px auto 28px;}

@@ -3,10 +3,6 @@
 @section('crumb', '<b>Roles &amp; Access</b>')
 
 @section('content')
-@if (session('status'))
-  <div class="status-alert">{{ session('status') }}</div>
-@endif
-
 @php
   $tagFor = ['ICT Director' => 'DIRECTOR', 'Team Leader' => 'LEADER', 'Team Member' => 'MEMBER', 'System Administrator' => 'ADMIN'];
   $myRoleName = optional(auth()->user()->roles->first())->role_name;

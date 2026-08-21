@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class ProjectTemplate extends Model
 {
     protected $primaryKey = 'template_id';
+
     public $timestamps = false;
 
     protected $fillable = ['template_name', 'project_type', 'description'];

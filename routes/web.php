@@ -7,6 +7,7 @@ use App\Http\Controllers\ChangeRequestController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PhaseController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SearchController;
@@ -43,11 +44,17 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::put('/projects/{project}', [ProjectController::class, 'update'])->name('projects.update')->middleware('can:edit_projects');
     Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy')->middleware('can:delete_projects');
     Route::post('/projects/{project}/change-requests', [ProjectController::class, 'storeChangeRequest'])->name('projects.changeRequests.store')->middleware('can:view_projects');
+    Route::post('/projects/{project}/phases', [PhaseController::class, 'store'])->name('phases.store')->middleware('can:edit_projects');
+    Route::put('/phases/{phase}', [PhaseController::class, 'update'])->name('phases.update')->middleware('can:edit_projects');
+    Route::post('/phases/{phase}/status', [PhaseController::class, 'updateStatus'])->name('phases.status')->middleware('can:edit_projects');
+    Route::delete('/phases/{phase}', [PhaseController::class, 'destroy'])->name('phases.destroy')->middleware('can:edit_projects');
     Route::get('/projects/{project}', [ProjectController::class, 'show'])->name('projects.show')->middleware('can:view_projects');
 
     Route::get('/tasks', [TaskController::class, 'index'])->name('tasks.index')->middleware('can:view_tasks');
     Route::post('/tasks', [TaskController::class, 'store'])->name('tasks.store')->middleware('can:create_tasks');
     Route::get('/tasks/{task}', [TaskController::class, 'show'])->name('tasks.show')->middleware('can:view_tasks'); // JSON, used by the slide-over panel
+    Route::put('/tasks/{task}', [TaskController::class, 'update'])->name('tasks.update')->middleware('can:view_tasks');
+    Route::delete('/tasks/{task}', [TaskController::class, 'destroy'])->name('tasks.destroy')->middleware('can:view_tasks');
     Route::post('/tasks/{task}/status', [TaskController::class, 'updateStatus'])->name('tasks.status')->middleware('can:update_task_status');
     Route::post('/tasks/{task}/comments', [TaskController::class, 'addComment'])->name('tasks.comments')->middleware('can:view_tasks');
     Route::post('/tasks/{task}/assign', [TaskController::class, 'assign'])->name('tasks.assign')->middleware('can:assign_tasks');

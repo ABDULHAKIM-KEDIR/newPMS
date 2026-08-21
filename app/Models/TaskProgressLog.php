@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 class TaskProgressLog extends Model
 {
     protected $primaryKey = 'log_id';
+
     public $timestamps = false;
 
     protected $fillable = ['task_id', 'user_id', 'previous_status', 'new_status', 'remarks'];
