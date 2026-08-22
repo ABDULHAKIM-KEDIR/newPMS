@@ -1,5 +1,5 @@
 <?php
-use App\Http\Controllers\AttachmentController;
+
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BudgetController;
@@ -112,8 +112,4 @@ Route::middleware(['auth', 'active'])->group(function () {
 
     Route::get('/admin/settings', [SystemSettingController::class, 'edit'])->name('admin.settings')->middleware('can:manage_system_settings');
     Route::put('/admin/settings', [SystemSettingController::class, 'update'])->name('admin.settings.update')->middleware('can:manage_system_settings');
-
-    Route::post('/tasks/{task}/attachments', [AttachmentController::class, 'upload'])->name('tasks.attachments.upload');
-    Route::get('/tasks/{task}/attachments/{attachment}/download', [AttachmentController::class, 'download'])->name('tasks.attachments.download');
-    Route::delete('/tasks/{task}/attachments/{attachment}', [AttachmentController::class, 'destroy'])->name('tasks.attachments.destroy');
 });
