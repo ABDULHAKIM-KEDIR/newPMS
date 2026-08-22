@@ -23,8 +23,8 @@
 <div class="card">
   <table>
     <thead><tr>
-      <th style="width:26%">Project</th>
-      <th>Team</th>
+      <th style="width:24%">Project</th>
+      <th>Leadership &amp; Team</th>
       <th>Phase</th>
       <th>Tasks Progress</th>
       <th>Status</th>
@@ -36,21 +36,37 @@
         @php
           $b = $p->budget; $util = $b ? $b->utilisationPercent() : 0;
           $statusCls = ['active' => 'b-active', 'planning' => 'b-planning', 'risk' => 'b-risk', 'closed' => 'b-closed'][$p->status] ?? 'b-planning';
-          $allTasks = collect($p->phases)->flatMap->tasks;
-          $totalTasksCount = $allTasks->count();
-          $completedTasksCount = $allTasks->where('status', 'Done')->count();
-          $taskPct = $totalTasksCount > 0 ? round(($completedTasksCount / $totalTasksCount) * 100) : 0;
+          $pTasks = $p->allTasks();
+          $totalTasksCount = $pTasks->count();
+          $completedTasksCount = $pTasks->filter(fn($t) => in_array($t->status, ['Done', 'Completed']))->count();
+          $taskPct = $p->progressPercentage();
+          $allTeams = $p->allTeams();
         @endphp
         <tr onclick="window.location='{{ route('projects.show', $p) }}'" style="cursor:pointer;">
           <td>
-            <div class="cell-primary">{{ $p->project_name }}</div>
-            <div class="cell-sub mono">PRJ-{{ str_pad($p->project_id, 3, '0', STR_PAD_LEFT) }} · {{ $p->project_type }}</div>
+            <div class="cell-primary" style="display:flex; align-items:center; gap:6px;">
+              <span>{{ $p->project_name }}</span>
+              <span class="priority p-{{ strtolower($p->priority ?: 'medium') }}" style="font-size:9.5px;">{{ $p->priority ?: 'Medium' }}</span>
+            </div>
+            <div class="cell-sub mono">
+              PRJ-{{ str_pad($p->project_id, 3, '0', STR_PAD_LEFT) }} · {{ $p->project_type }}
+              @if ($p->client) · <span style="color:var(--accent);">🏢 {{ $p->client }}</span>@endif
+            </div>
           </td>
-          <td>{{ optional($p->team)->team_name }}</td>
+          <td>
+            @if ($p->projectManager)
+              <div style="font-weight:600; font-size:12.5px; color:var(--ink); display:flex; align-items:center; gap:5px;">
+                <span style="color:var(--accent); font-size:11px;">★</span> PM: {{ $p->projectManager->full_name }}
+              </div>
+            @endif
+            <div class="cell-sub" style="margin-top:2px;">
+              {{ $allTeams->pluck('team_name')->implode(', ') ?: 'No Teams' }}
+            </div>
+          </td>
           <td style="width:140px;">@include('partials.phase-rail', ['currentIndex' => $p->currentPhaseIndex(), 'mini' => true])</td>
           <td>
             <div class="cell-sub" style="margin-bottom:4px; font-weight:600;">
-              {{ $completedTasksCount }}/{{ $totalTasksCount }} Tasks Done ({{ $taskPct }}%)
+              {{ $completedTasksCount }}/{{ $totalTasksCount }} Tasks ({{ $taskPct }}%)
             </div>
             <div class="progressbar"><div style="width:{{ $taskPct }}%"></div></div>
           </td>

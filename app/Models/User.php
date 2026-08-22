@@ -10,7 +10,7 @@ class User extends Authenticatable
 
     public $timestamps = false;
 
-    protected $fillable = ['full_name', 'email', 'password_hash', 'phone', 'status'];
+    protected $fillable = ['full_name', 'email', 'password_hash', 'phone', 'department', 'avatar', 'status'];
 
     protected $hidden = ['password_hash'];
 
@@ -26,6 +26,16 @@ class User extends Authenticatable
     public function roles()
     {
         return $this->belongsToMany(Role::class, 'user_roles', 'user_id', 'role_id');
+    }
+
+    public function teams()
+    {
+        return $this->belongsToMany(Team::class, 'team_members', 'user_id', 'team_id')->withPivot('joined_date');
+    }
+
+    public function managedProjects()
+    {
+        return $this->hasMany(Project::class, 'project_manager_id', 'user_id');
     }
 
     public function ledTeams()
@@ -63,7 +73,9 @@ class User extends Authenticatable
     /** Every permission this user's role(s) grant, as a flat set of slugs. */
     public function permissionSlugs()
     {
-        return $this->roles->flatMap->permissions->pluck('permission_name')->unique();
+        return $this->roles->flatMap(function ($role) {
+            return $role->relationLoaded('permissions') ? $role->permissions : $role->permissions()->get();
+        })->pluck('permission_name')->unique();
     }
 
     public function hasPermission(string $slug): bool
@@ -78,7 +90,27 @@ class User extends Authenticatable
 
     public function isDirectorOrAdmin(): bool
     {
-        return $this->hasRole('ICT Director') || $this->hasRole('System Administrator');
+        return $this->hasRole('ICT Director') || $this->hasRole('System Administrator') || $this->hasRole('Admin') || $this->hasRole('Project Manager');
+    }
+
+    public function isAdmin(): bool
+    {
+        return $this->hasRole('Admin') || $this->hasRole('System Administrator');
+    }
+
+    public function isProjectManager(): bool
+    {
+        return $this->hasRole('Project Manager') || $this->hasRole('ICT Director');
+    }
+
+    public function isTeamLead(): bool
+    {
+        return $this->hasRole('Team Lead') || $this->hasRole('Team Leader');
+    }
+
+    public function isTeamMember(): bool
+    {
+        return $this->hasRole('Team Member');
     }
 
     /** True if the user is allowed to spin up new projects — delegates to

@@ -28,9 +28,30 @@
         <table>
           <tbody>
             @foreach ($projects as $p)
-              <tr onclick="window.location='{{ route('projects.show', $p) }}'">
-                <td class="cell-primary">{{ $p->project_name }}<div class="cell-sub">{{ optional($p->team)->team_name }}</div></td>
+              <tr onclick="window.location='{{ route('projects.show', $p) }}'" style="cursor:pointer;">
+                <td class="cell-primary">{{ $p->project_name }}<div class="cell-sub">{{ $p->client ? 'Client: ' . $p->client . ' · ' : '' }}{{ optional($p->team)->team_name }}</div></td>
                 <td style="text-align:right;" class="cell-sub">{{ $p->project_type }}</td>
+              </tr>
+            @endforeach
+          </tbody>
+        </table>
+      @endif
+    </div>
+
+    <div class="card">
+      <div class="card-title-row" style="padding:16px 20px 0;"><h3>Teams ({{ $teams->count() }})</h3></div>
+      @if ($teams->isEmpty())
+        <div class="empty">No matching teams.</div>
+      @else
+        <table>
+          <tbody>
+            @foreach ($teams as $team)
+              <tr onclick="window.location='{{ route('teams.show', $team) }}'" style="cursor:pointer;">
+                <td class="cell-primary">
+                  {{ $team->team_name }}
+                  <div class="cell-sub">Lead: {{ optional($team->leader)->full_name ?? 'Unassigned' }}</div>
+                </td>
+                <td style="text-align:right;" class="cell-sub">{{ $team->members->count() }} members</td>
               </tr>
             @endforeach
           </tbody>

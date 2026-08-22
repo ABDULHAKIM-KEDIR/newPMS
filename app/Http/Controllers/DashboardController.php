@@ -32,8 +32,8 @@ class DashboardController extends Controller
 
         $stats = [
             'active_projects' => (clone $projectQuery)->whereNotIn('status', ['closed'])->count(),
-            'open_tasks' => (clone $taskQuery)->where('status', '!=', 'Done')->count(),
-            'overdue_tasks' => (clone $taskQuery)->where('status', '!=', 'Done')->whereDate('end_date', '<', now())->count(),
+            'open_tasks' => (clone $taskQuery)->whereNotIn('status', ['Done', 'Completed'])->count(),
+            'overdue_tasks' => (clone $taskQuery)->whereNotIn('status', ['Done', 'Completed'])->whereDate('end_date', '<', now())->count(),
             'budget_allocated' => (float) (clone $budgetQuery)->sum('allocated_amount'),
             'budget_spent' => (float) (clone $budgetQuery)->sum('spent_amount'),
             'pending_change_requests' => $scoped
@@ -47,13 +47,35 @@ class DashboardController extends Controller
         $activity = AuditLog::with('user')->orderByDesc('timestamp')->take(6)->get();
 
         $teamLoadQuery = User::withCount(['assignedTasks as open_task_count' => function ($q) {
-            $q->where('status', '!=', 'Done');
+            $q->whereNotIn('status', ['Done', 'Completed']);
         }]);
         if ($scoped) {
             $teamLoadQuery->whereHas('teamMemberships', fn ($q) => $q->whereIn('team_id', $teamIds));
         }
         $teamLoad = $teamLoadQuery->orderByDesc('open_task_count')->take(4)->get();
 
-        return view('dashboard', compact('projects', 'stats', 'activity', 'teamLoad', 'scoped'));
+        // Attention items: my tasks, overdue tasks, blocked tasks
+        $myAssignedTasks = Task::where('assigned_to', $user->user_id)
+            ->whereNotIn('status', ['Done', 'Completed'])
+            ->with(['project', 'phase.project', 'team'])
+            ->orderBy('end_date')
+            ->take(5)
+            ->get();
+
+        $overdueTasksList = Task::whereNotIn('status', ['Done', 'Completed'])
+            ->whereDate('end_date', '<', now())
+            ->with(['project', 'assignee'])
+            ->take(4)
+            ->get();
+
+        $blockedTasksList = Task::where('status', 'Blocked')
+            ->with(['project', 'assignee'])
+            ->take(4)
+            ->get();
+
+        return view('dashboard', compact(
+            'projects', 'stats', 'activity', 'teamLoad', 'scoped',
+            'myAssignedTasks', 'overdueTasksList', 'blockedTasksList'
+        ));
     }
 }

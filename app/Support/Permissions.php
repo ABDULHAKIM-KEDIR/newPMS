@@ -25,34 +25,55 @@ class Permissions
         'manage_team' => 'Add or remove team members',
         'approve_change_requests' => 'Approve or reject change requests',
         'manage_budgets' => 'Edit project and phase budgets',
+        'view_reports' => 'View performance reports and analytics',
+        'view_calendar' => 'View project milestones and task calendar',
         'view_audit_logs' => 'View and export the system audit log',
         'manage_users' => 'Create, edit, deactivate users, and assign roles',
         'manage_roles' => 'Create roles and manage their permissions',
         'manage_system_settings' => 'Manage system-level configuration',
     ];
 
-    // Which permissions each of the four directorate roles is seeded with.
-    // Roles & Access lets a System Administrator adjust these afterwards —
-    // this is just the starting grant, not a hard-coded ceiling.
+    // Which permissions each role is seeded with.
     public const ROLE_GRANTS = [
-        'ICT Director' => [
+        'Admin' => [
             'view_projects', 'create_projects', 'edit_projects', 'delete_projects',
             'view_tasks', 'create_tasks', 'assign_tasks', 'update_task_status',
-            'manage_team', 'approve_change_requests', 'manage_budgets', 'view_audit_logs',
-        ],
-        'Team Leader' => [
-            'view_projects', 'create_projects', 'edit_projects',
-            'view_tasks', 'create_tasks', 'assign_tasks', 'update_task_status',
-            'manage_team',
-        ],
-        'Team Member' => [
-            'view_projects', 'view_tasks', 'update_task_status',
+            'manage_team', 'approve_change_requests', 'manage_budgets',
+            'view_reports', 'view_calendar',
+            'manage_users', 'manage_roles', 'view_audit_logs', 'manage_system_settings',
         ],
         'System Administrator' => [
             'view_projects', 'create_projects', 'edit_projects', 'delete_projects',
             'view_tasks', 'create_tasks', 'assign_tasks', 'update_task_status',
             'manage_team', 'approve_change_requests', 'manage_budgets',
+            'view_reports', 'view_calendar',
             'manage_users', 'manage_roles', 'view_audit_logs', 'manage_system_settings',
+        ],
+        'Project Manager' => [
+            'view_projects', 'create_projects', 'edit_projects', 'delete_projects',
+            'view_tasks', 'create_tasks', 'assign_tasks', 'update_task_status',
+            'manage_team', 'approve_change_requests', 'manage_budgets',
+            'view_reports', 'view_calendar', 'view_audit_logs',
+        ],
+        'ICT Director' => [
+            'view_projects', 'create_projects', 'edit_projects', 'delete_projects',
+            'view_tasks', 'create_tasks', 'assign_tasks', 'update_task_status',
+            'manage_team', 'approve_change_requests', 'manage_budgets',
+            'view_reports', 'view_calendar', 'view_audit_logs',
+        ],
+        'Team Lead' => [
+            'view_projects', 'create_projects', 'edit_projects',
+            'view_tasks', 'create_tasks', 'assign_tasks', 'update_task_status',
+            'manage_team', 'view_reports', 'view_calendar',
+        ],
+        'Team Leader' => [
+            'view_projects', 'create_projects', 'edit_projects',
+            'view_tasks', 'create_tasks', 'assign_tasks', 'update_task_status',
+            'manage_team', 'view_reports', 'view_calendar',
+        ],
+        'Team Member' => [
+            'view_projects', 'view_tasks', 'update_task_status',
+            'view_reports', 'view_calendar',
         ],
     ];
 }

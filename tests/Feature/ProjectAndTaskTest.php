@@ -259,4 +259,276 @@ class ProjectAndTaskTest extends TestCase
         $updateResponse->assertSessionHasNoErrors();
         $this->assertEquals($phase2->phase_id, $task->fresh()->phase_id);
     }
+
+    public function test_can_update_project_and_phase_budgets_and_view_integrated_teams_and_budgets(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $director = User::where('email', 'director@ju.edu.et')->first();
+        $project = Project::first();
+        $team = $project->team;
+        $phase = $project->phases()->first();
+
+        // 1. Update Project Budget
+        $projectBudgetResponse = $this->actingAs($director)->post(route('budgets.projects.update', $project), [
+            'allocated_amount' => 500000,
+            'spent_amount' => 150000,
+        ]);
+        $projectBudgetResponse->assertSessionHasNoErrors();
+        $this->assertEquals(500000, $project->fresh()->budget->allocated_amount);
+        $this->assertEquals(150000, $project->fresh()->budget->spent_amount);
+
+        // 2. Update Phase Budget
+        $phaseBudgetResponse = $this->actingAs($director)->post(route('budgets.phases.update', $phase), [
+            'allocated_amount' => 100000,
+            'spent_amount' => 30000,
+        ]);
+        $phaseBudgetResponse->assertSessionHasNoErrors();
+        $this->assertEquals(100000, $phase->fresh()->budget->allocated_amount);
+        $this->assertEquals(30000, $phase->fresh()->budget->spent_amount);
+
+        // 3. View Budgets page
+        $budgetPageResponse = $this->actingAs($director)->get(route('budgets.index'));
+        $budgetPageResponse->assertOk();
+        $budgetPageResponse->assertSee($project->project_name);
+        $budgetPageResponse->assertSee($team->team_name);
+
+        // 4. View Teams page
+        $teamPageResponse = $this->actingAs($director)->get(route('teams.show', $team));
+        $teamPageResponse->assertOk();
+        $teamPageResponse->assertSee($project->project_name);
+        $teamPageResponse->assertSee('Team Tasks Progress');
+    }
+
+    public function test_add_comment_returns_comment_id_and_details(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $director = User::where('email', 'director@ju.edu.et')->first();
+        $task = Task::first();
+
+        $response = $this->actingAs($director)->postJson(route('tasks.comments', $task), [
+            'comment_text' => 'New test comment text',
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonStructure([
+            'id',
+            'user',
+            'text',
+            'at',
+        ]);
+        $this->assertEquals('New test comment text', $response->json('text'));
+    }
+
+    public function test_update_task_via_json_with_empty_assignee_and_dates(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $director = User::where('email', 'director@ju.edu.et')->first();
+        $task = Task::first();
+
+        $response = $this->actingAs($director)->putJson(route('tasks.update', $task), [
+            'task_name' => 'Updated via JSON Panel',
+            'status' => 'In Progress',
+            'priority' => 'High',
+            'phase_id' => $task->phase_id,
+            'assigned_to' => null,
+            'start_date' => null,
+            'end_date' => null,
+            'description' => 'Updated description',
+        ]);
+
+        $response->assertOk();
+        $this->assertDatabaseHas('tasks', [
+            'task_id' => $task->task_id,
+            'task_name' => 'Updated via JSON Panel',
+            'assigned_to' => null,
+        ]);
+    }
+
+    public function test_can_create_project_with_pm_team_leader_and_flexible_member_roles(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $director = User::where('email', 'director@ju.edu.et')->first();
+        $abebe = User::where('email', 'abebe@ju.edu.et')->first();
+        $chaltu = User::where('email', 'chaltu@ju.edu.et')->first();
+        $caala = User::where('email', 'caala@ju.edu.et')->first();
+        $john = User::where('email', 'john@ju.edu.et')->first();
+        $team = Team::where('team_name', 'Software Engineering')->first();
+
+        $response = $this->actingAs($director)->post(route('projects.store'), [
+            'project_name' => 'Enterprise Resource Planning System',
+            'description' => 'Comprehensive university ERP system',
+            'project_type' => 'Software',
+            'team_id' => $team->team_id,
+            'project_manager_id' => $abebe->user_id,
+            'start_date' => now()->toDateString(),
+            'end_date' => now()->addMonths(12)->toDateString(),
+            'allocated_amount' => 750000,
+            'members' => [
+                ['user_id' => $chaltu->user_id, 'specialty' => 'UI/UX Designer'],
+                ['user_id' => $caala->user_id, 'specialty' => 'Backend Developer'],
+                ['user_id' => $john->user_id, 'specialty' => 'QA / Test Engineer'],
+            ],
+        ]);
+
+        $project = Project::where('project_name', 'Enterprise Resource Planning System')->first();
+        $this->assertNotNull($project);
+        $this->assertEquals($abebe->user_id, $project->project_manager_id);
+        $response->assertRedirect(route('projects.show', $project));
+
+        $this->assertDatabaseHas('project_member_roles', [
+            'project_id' => $project->project_id,
+            'user_id' => $chaltu->user_id,
+            'specialty' => 'UI/UX Designer',
+        ]);
+        $this->assertDatabaseHas('project_member_roles', [
+            'project_id' => $project->project_id,
+            'user_id' => $caala->user_id,
+            'specialty' => 'Backend Developer',
+        ]);
+        $this->assertDatabaseHas('project_member_roles', [
+            'project_id' => $project->project_id,
+            'user_id' => $john->user_id,
+            'specialty' => 'QA / Test Engineer',
+        ]);
+
+        $roster = $project->getProjectRoster();
+        $this->assertTrue($roster->contains('full_name', 'Abebe Bikila'));
+        $this->assertTrue($roster->contains('specialty', 'UI/UX Designer'));
+        $this->assertTrue($roster->contains('specialty', 'Backend Developer'));
+        $this->assertTrue($roster->contains('specialty', 'QA / Test Engineer'));
+    }
+
+    public function test_project_manager_can_manage_project(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $abebe = User::where('email', 'abebe@ju.edu.et')->first();
+        $project = Project::where('project_name', 'Jimma University PMS')->first();
+
+        $this->assertTrue($project->isManagedBy($abebe));
+
+        $phase = $project->phases->first();
+        $response = $this->actingAs($abebe)->post(route('tasks.store'), [
+            'phase_id' => $phase->phase_id,
+            'task_name' => 'PM Created Task',
+            'priority' => 'High',
+            'status' => 'Pending',
+        ]);
+
+        $response->assertSessionHasNoErrors();
+        $this->assertDatabaseHas('tasks', [
+            'task_name' => 'PM Created Task',
+            'phase_id' => $phase->phase_id,
+        ]);
+    }
+
+    public function test_can_dynamically_add_update_and_remove_project_member_roles(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $director = User::where('email', 'director@ju.edu.et')->first();
+        $project = Project::where('project_name', 'Jimma University PMS')->first();
+
+        // 1. Add new member
+        $addResponse = $this->actingAs($director)->post(route('projects.members.add', $project), [
+            'user_id' => $director->user_id,
+            'specialty' => 'Technical Advisor',
+        ]);
+        $addResponse->assertSessionHasNoErrors();
+
+        $memberRole = $project->memberRoles()->where('user_id', $director->user_id)->first();
+        $this->assertNotNull($memberRole);
+        $this->assertEquals('Technical Advisor', $memberRole->specialty);
+
+        // 2. Update member role
+        $updateResponse = $this->actingAs($director)->put(route('projects.members.update', [$project, $memberRole]), [
+            'specialty' => 'Lead Strategic Advisor',
+        ]);
+        $updateResponse->assertSessionHasNoErrors();
+        $this->assertEquals('Lead Strategic Advisor', $memberRole->fresh()->specialty);
+
+        // 3. Remove member role
+        $removeResponse = $this->actingAs($director)->delete(route('projects.members.remove', [$project, $memberRole]));
+        $removeResponse->assertSessionHasNoErrors();
+        $this->assertDatabaseMissing('project_member_roles', [
+            'id' => $memberRole->id,
+        ]);
+    }
+
+    public function test_can_assign_task_by_typing_any_custom_member_name_not_in_selection(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $director = User::where('email', 'director@ju.edu.et')->first();
+        $project = Project::first();
+        $phase = $project->phases->first();
+
+        // Assign to a new person "Dawit Bekele" who was not originally in the database
+        $response = $this->actingAs($director)->post(route('tasks.store'), [
+            'phase_id' => $phase->phase_id,
+            'task_name' => 'Custom Assignee Task',
+            'assigned_to' => 'Dawit Bekele',
+            'priority' => 'High',
+            'status' => 'Pending',
+        ]);
+
+        $response->assertSessionHasNoErrors();
+
+        // The user Dawit Bekele should be automatically created and assigned
+        $createdUser = User::where('full_name', 'Dawit Bekele')->first();
+        $this->assertNotNull($createdUser);
+        $this->assertEquals('Active', $createdUser->status);
+
+        $task = Task::where('task_name', 'Custom Assignee Task')->first();
+        $this->assertNotNull($task);
+        $this->assertEquals($createdUser->user_id, $task->assigned_to);
+    }
+
+    public function test_can_assign_project_manager_by_typing_any_custom_name(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $director = User::where('email', 'director@ju.edu.et')->first();
+        $team = Team::first();
+
+        // Create project typing new PM name "Hana Girma"
+        $response = $this->actingAs($director)->post(route('projects.store'), [
+            'project_name' => 'Custom PM Project',
+            'description' => 'Project with custom PM name',
+            'project_type' => 'Software',
+            'team_id' => $team->team_id,
+            'project_manager_id' => 'Hana Girma',
+        ]);
+
+        $response->assertSessionHasNoErrors();
+
+        $createdPm = User::where('full_name', 'Hana Girma')->first();
+        $this->assertNotNull($createdPm);
+
+        $project = Project::where('project_name', 'Custom PM Project')->first();
+        $this->assertNotNull($project);
+        $this->assertEquals($createdPm->user_id, $project->project_manager_id);
+    }
+
+    public function test_can_reassign_task_using_typed_member_name_via_api(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $director = User::where('email', 'director@ju.edu.et')->first();
+        $task = Task::first();
+
+        $response = $this->actingAs($director)->postJson(route('tasks.assign', $task), [
+            'assigned_to' => 'Tariku Mengistu',
+        ]);
+
+        $response->assertOk();
+
+        $tariku = User::where('full_name', 'Tariku Mengistu')->first();
+        $this->assertNotNull($tariku);
+        $this->assertEquals($tariku->user_id, $task->fresh()->assigned_to);
+    }
 }

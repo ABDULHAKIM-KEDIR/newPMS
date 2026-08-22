@@ -7,33 +7,70 @@ use App\Models\Phase;
 use App\Models\PhaseBudget;
 use App\Models\Project;
 use App\Models\ProjectBudget;
+use App\Models\ProjectDeliverable;
+use App\Models\ProjectMemberRole;
+use App\Models\Role;
+use App\Models\Task;
 use App\Models\Team;
+use App\Models\TeamMember;
+use App\Models\User;
 use App\Support\Activity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class ProjectController extends Controller
 {
     private const PHASES = ['Initiation', 'Planning', 'Execution', 'Monitoring', 'Closure'];
 
-    private const TYPES = ['Software', 'Network & Infrastructure', 'Training & Consultancy'];
+    private const TYPES = ['Software', 'Network & Infrastructure', 'Training & Consultancy', 'Enterprise Systems', 'Research & Development'];
 
     private const STATUSES = ['planning', 'active', 'risk', 'closed'];
 
+    private const PRIORITIES = ['Low', 'Medium', 'High', 'Urgent'];
+
+    public const SPECIALTIES = [
+        'UI/UX Designer',
+        'Frontend Developer',
+        'Backend Developer',
+        'Full Stack Developer',
+        'Mobile App Developer',
+        'QA / Test Engineer',
+        'DevOps Engineer',
+        'Database Administrator',
+        'System Analyst',
+        'Security Specialist',
+        'Technical Writer',
+    ];
+
     public function index(Request $request)
     {
-        // Everyone with view_projects sees the full directory — read access
-        // is intentionally broad; it's the write actions that are scoped.
         abort_unless(Auth::user()->can('view_projects'), 403);
 
-        $query = Project::with(['team', 'budget', 'phases.tasks', 'memberRoles']);
+        $query = Project::with(['team.leader', 'teams.leader', 'projectManager', 'budget', 'tasks', 'phases.tasks', 'memberRoles.user']);
 
         if ($type = $request->get('type')) {
             $query->where('project_type', $type);
         }
 
-        $projects = $query->orderByDesc('project_id')->paginate(15);
+        if ($status = $request->get('status')) {
+            $query->where('status', $status);
+        }
+
+        if ($priority = $request->get('priority')) {
+            $query->where('priority', $priority);
+        }
+
+        if ($search = $request->get('q')) {
+            $query->where(function ($q) use ($search) {
+                $q->where('project_name', 'like', "%{$search}%")
+                    ->orWhere('client', 'like', "%{$search}%")
+                    ->orWhere('description', 'like', "%{$search}%");
+            });
+        }
+
+        $projects = $query->orderByDesc('project_id')->paginate(15)->withQueryString();
 
         return view('projects.index', compact('projects'));
     }
@@ -43,30 +80,50 @@ class ProjectController extends Controller
         abort_unless(Auth::user()->can('view_projects'), 403);
 
         $project->load([
-            'team.members.user', 'budget', 'phases.budget', 'phases.tasks.assignee', 'phases.tasks.phase',
+            'team.leader', 'team.members.user',
+            'teams.leader', 'teams.members.user',
+            'projectManager', 'budget',
+            'phases.budget', 'phases.tasks.assignee', 'phases.tasks.team', 'phases.tasks.phase',
             'deliverables', 'changeRequests.requester',
+            'memberRoles.user', 'memberRoles.role',
         ]);
 
-        $tasks = $project->tasks()->with(['assignee', 'phase'])->orderBy('task_id')->get();
+        $tasks = $project->allTasks();
+        $assignableUsers = $project->getAssignableUsersWithRoles();
+        $projectRoster = $project->getProjectRoster();
+        $taskStats = $project->taskStats();
+        $allTeams = Team::where('status', 'Active')->with('leader')->orderBy('team_name')->get();
 
-        $assignableUsers = collect();
-        if ($project->team) {
-            $assignableUsers = $project->team->members
-                ->pluck('user')->filter()
-                ->map(fn ($u) => ['id' => $u->user_id, 'name' => $u->full_name])
-                ->values();
-        }
-
-        return view('projects.show', compact('project', 'tasks', 'assignableUsers'));
+        return view('projects.show', compact('project', 'tasks', 'assignableUsers', 'projectRoster', 'taskStats', 'allTeams'));
     }
 
     public function create()
     {
         abort_unless(Auth::user()->can('create_projects'), 403);
 
+        $teams = Team::with(['leader', 'members.user'])->orderBy('team_name')->get();
+        $projectManagers = User::where('status', 'Active')->orderBy('full_name')->get();
+
+        $teamsData = $teams->map(function ($t) {
+            return [
+                'id' => $t->team_id,
+                'name' => $t->team_name,
+                'leader_name' => optional($t->leader)->full_name ?? 'Unassigned',
+                'members' => $t->members->map(function ($m) {
+                    return [
+                        'id' => $m->user ? $m->user->user_id : null,
+                        'name' => $m->user ? $m->user->full_name : 'Member',
+                    ];
+                })->filter(fn ($m) => ! is_null($m['id']))->values()->all(),
+            ];
+        })->values()->all();
+
         return view('projects.create', [
-            'teams' => $this->eligibleTeamsFor(Auth::user()),
+            'teams' => $teams,
+            'teamsData' => $teamsData,
             'types' => self::TYPES,
+            'priorities' => self::PRIORITIES,
+            'projectManagers' => $projectManagers,
         ]);
     }
 
@@ -75,31 +132,94 @@ class ProjectController extends Controller
         $user = Auth::user();
         abort_unless($user->can('create_projects'), 403);
 
-        $eligibleTeamIds = $this->eligibleTeamsFor($user)->pluck('team_id');
+        $pmInput = $request->input('project_manager_id') ?? $request->input('project_manager_name');
+        $resolvedPmId = $this->resolveUserId($pmInput, $request->input('team_id'));
 
         $data = $request->validate([
             'project_name' => ['required', 'string', 'max:150'],
             'description' => ['nullable', 'string', 'max:2000'],
-            'project_type' => ['required', 'in:'.implode(',', self::TYPES)],
-            // A Team Leader can only create a project under a team they actually
-            // lead — a Director/Admin can pick any team. Enforced here, not just
-            // in the dropdown, so a forged request can't pick someone else's team.
-            'team_id' => ['required', Rule::in($eligibleTeamIds)],
+            'client' => ['nullable', 'string', 'max:150'],
+            'project_type' => ['nullable', 'string', 'max:100'],
+            'team_id' => ['nullable', 'exists:teams,team_id'],
+            'team_ids' => ['nullable', 'array'],
+            'team_ids.*' => ['exists:teams,team_id'],
+            'teams' => ['nullable', 'array'],
+            'teams.*' => ['exists:teams,team_id'],
+            'priority' => ['nullable', 'string', 'in:Low,Medium,High,Urgent'],
             'start_date' => ['nullable', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'allocated_amount' => ['nullable', 'numeric', 'min:0'],
+            'members' => ['nullable', 'array'],
+            'members.*.user_id' => ['nullable', 'exists:users,user_id'],
+            'members.*.role_id' => ['nullable', 'exists:roles,role_id'],
+            'members.*.specialty' => ['nullable', 'string', 'max:100'],
+            'tasks' => ['nullable', 'array'],
+            'tasks.*.task_name' => ['required_with:tasks', 'string', 'max:150'],
+            'tasks.*.team_id' => ['nullable', 'exists:teams,team_id'],
+            'tasks.*.assigned_to' => ['nullable'],
+            'tasks.*.priority' => ['nullable', 'in:Low,Medium,High,Urgent'],
+            'tasks.*.status' => ['nullable', 'string'],
+            'tasks.*.budget' => ['nullable', 'numeric', 'min:0'],
+            'tasks.*.end_date' => ['nullable', 'date'],
+            'tasks.*.description' => ['nullable', 'string'],
         ]);
+
+        $selectedTeamIds = collect($request->input('team_ids', []))
+            ->merge($request->input('teams', []))
+            ->push($request->input('team_id'))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $primaryTeamId = $selectedTeamIds->first() ?? $request->input('team_id');
 
         $project = Project::create([
             'project_name' => $data['project_name'],
             'description' => $data['description'] ?? null,
-            'project_type' => $data['project_type'],
-            'team_id' => $data['team_id'],
+            'client' => $data['client'] ?? null,
+            'project_type' => $data['project_type'] ?? 'Software',
+            'team_id' => $primaryTeamId,
+            'project_manager_id' => $resolvedPmId,
+            'priority' => $data['priority'] ?? 'Medium',
             'start_date' => $data['start_date'] ?? null,
             'end_date' => $data['end_date'] ?? null,
             'status' => 'planning',
+            'progress' => 0,
             'created_by' => $user->user_id,
         ]);
+
+        // Attach all selected teams in project_teams pivot
+        if ($selectedTeamIds->isNotEmpty()) {
+            foreach ($selectedTeamIds as $tid) {
+                DB::table('project_teams')->insertOrIgnore([
+                    'project_id' => $project->project_id,
+                    'team_id' => $tid,
+                    'assigned_date' => now(),
+                ]);
+            }
+        }
+
+        // Save flexible member assignments
+        if (! empty($data['members']) && is_array($data['members'])) {
+            $assignedUserIds = [];
+            foreach ($data['members'] as $memberData) {
+                if (! empty($memberData['user_id']) && ! in_array($memberData['user_id'], $assignedUserIds)) {
+                    $assignedUserIds[] = $memberData['user_id'];
+                    ProjectMemberRole::create([
+                        'project_id' => $project->project_id,
+                        'user_id' => $memberData['user_id'],
+                        'role_id' => $memberData['role_id'] ?? null,
+                        'specialty' => $memberData['specialty'] ?? null,
+                        'assigned_date' => now()->toDateString(),
+                    ]);
+
+                    if ((int) $memberData['user_id'] !== (int) $user->user_id) {
+                        $roleName = ! empty($memberData['specialty']) ? " as {$memberData['specialty']}" : '';
+                        Activity::notify((int) $memberData['user_id'], "You were assigned to \"{$project->project_name}\"{$roleName}", 'project');
+                    }
+                }
+            }
+        }
 
         ProjectBudget::create([
             'project_id' => $project->project_id,
@@ -108,6 +228,7 @@ class ProjectController extends Controller
             'currency' => 'ETB',
         ]);
 
+        $defaultPhases = [];
         foreach (self::PHASES as $i => $phaseName) {
             $phase = Phase::create([
                 'project_id' => $project->project_id,
@@ -121,12 +242,57 @@ class ProjectController extends Controller
                 'allocated_amount' => round(($data['allocated_amount'] ?? 0) / 5),
                 'spent_amount' => 0,
             ]);
+
+            $defaultPhases[] = $phase;
+        }
+
+        $firstPhase = $defaultPhases[0] ?? null;
+
+        // Step 3: Create initial tasks if provided in workflow
+        if (! empty($data['tasks']) && is_array($data['tasks'])) {
+            foreach ($data['tasks'] as $taskData) {
+                if (empty($taskData['task_name'])) {
+                    continue;
+                }
+
+                $taskTeamId = ! empty($taskData['team_id']) ? (int) $taskData['team_id'] : $primaryTeamId;
+                $assigneeId = null;
+                if (! empty($taskData['assigned_to'])) {
+                    $assigneeId = $this->resolveUserId($taskData['assigned_to'], $taskTeamId);
+                }
+
+                $status = $taskData['status'] ?? 'To Do';
+                if ($status === 'Pending') {
+                    $status = 'To Do';
+                }
+
+                $task = Task::create([
+                    'project_id' => $project->project_id,
+                    'phase_id' => $firstPhase ? $firstPhase->phase_id : null,
+                    'team_id' => $taskTeamId,
+                    'task_name' => $taskData['task_name'],
+                    'description' => $taskData['description'] ?? null,
+                    'assigned_to' => $assigneeId,
+                    'priority' => $taskData['priority'] ?? 'Medium',
+                    'status' => $status,
+                    'budget' => isset($taskData['budget']) ? (float) $taskData['budget'] : 0,
+                    'start_date' => $data['start_date'] ?? now()->toDateString(),
+                    'end_date' => $taskData['end_date'] ?? $data['end_date'] ?? null,
+                    'progress' => in_array($status, ['Done', 'Completed']) ? 100 : 0,
+                ]);
+
+                if ($task->assigned_to && (int) $task->assigned_to !== (int) $user->user_id) {
+                    Activity::notify($task->assigned_to, "You have been assigned: \"{$task->task_name}\" on {$project->project_name}", 'task');
+                }
+            }
+
+            $project->recalculateProgress();
         }
 
         Activity::log('Created project', 'Project', $project->project_id, $project->project_name);
 
-        if ($project->team->team_leader_id && $project->team->team_leader_id !== $user->user_id) {
-            Activity::notify($project->team->team_leader_id, $user->full_name." created a new project: \"{$project->project_name}\"", 'project');
+        if ($project->project_manager_id && (int) $project->project_manager_id !== (int) $user->user_id) {
+            Activity::notify((int) $project->project_manager_id, $user->full_name." assigned you as Project Manager for \"{$project->project_name}\"", 'project');
         }
 
         return redirect()->route('projects.show', $project)->with('status', 'Project created.');
@@ -138,10 +304,11 @@ class ProjectController extends Controller
         abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
 
         return view('projects.edit', [
-            'project' => $project->load('budget'),
+            'project' => $project->load(['budget', 'memberRoles.user', 'memberRoles.role', 'projectManager', 'team.leader']),
             'teams' => $this->eligibleTeamsFor($user, $project),
             'types' => self::TYPES,
             'statuses' => self::STATUSES,
+            'projectManagers' => User::where('status', 'Active')->orderBy('full_name')->get(),
             'canEditBudget' => $user->can('manage_budgets'),
         ]);
     }
@@ -153,6 +320,9 @@ class ProjectController extends Controller
 
         $eligibleTeamIds = $this->eligibleTeamsFor($user, $project)->pluck('team_id');
 
+        $pmInput = $request->input('project_manager_id') ?? $request->input('project_manager_name');
+        $resolvedPmId = $this->resolveUserId($pmInput, $request->input('team_id') ?? $project->team_id);
+
         $data = $request->validate([
             'project_name' => ['required', 'string', 'max:150'],
             'description' => ['nullable', 'string', 'max:2000'],
@@ -162,6 +332,10 @@ class ProjectController extends Controller
             'start_date' => ['nullable', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'allocated_amount' => ['nullable', 'numeric', 'min:0'],
+            'members' => ['nullable', 'array'],
+            'members.*.user_id' => ['nullable', 'exists:users,user_id'],
+            'members.*.role_id' => ['nullable', 'exists:roles,role_id'],
+            'members.*.specialty' => ['nullable', 'string', 'max:100'],
         ]);
 
         $project->update([
@@ -169,10 +343,31 @@ class ProjectController extends Controller
             'description' => $data['description'] ?? null,
             'project_type' => $data['project_type'],
             'team_id' => $data['team_id'],
+            'project_manager_id' => $resolvedPmId,
             'status' => $data['status'],
             'start_date' => $data['start_date'] ?? null,
             'end_date' => $data['end_date'] ?? null,
         ]);
+
+        // Sync flexible member assignments if provided in edit form
+        if ($request->has('members')) {
+            $project->memberRoles()->delete();
+            if (is_array($request->input('members'))) {
+                $assignedUserIds = [];
+                foreach ($request->input('members') as $memberData) {
+                    if (! empty($memberData['user_id']) && ! in_array($memberData['user_id'], $assignedUserIds)) {
+                        $assignedUserIds[] = $memberData['user_id'];
+                        ProjectMemberRole::create([
+                            'project_id' => $project->project_id,
+                            'user_id' => $memberData['user_id'],
+                            'role_id' => $memberData['role_id'] ?? null,
+                            'specialty' => $memberData['specialty'] ?? null,
+                            'assigned_date' => now()->toDateString(),
+                        ]);
+                    }
+                }
+            }
+        }
 
         // Budget figures need manage_budgets specifically (ICT Director by
         // default) — a team leader can edit everything else, not this.
@@ -186,7 +381,180 @@ class ProjectController extends Controller
 
         Activity::log('Updated project', 'Project', $project->project_id, $project->project_name);
 
-        return redirect()->route('projects.show', $project)->with('status', 'Project updated.');
+        return redirect()->route('projects.show', $project)->with('status', 'Project updated successfully.');
+    }
+
+    public function assignTeam(Request $request, Project $project)
+    {
+        $user = Auth::user();
+        abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
+
+        $data = $request->validate([
+            'team_id' => ['required', 'exists:teams,team_id'],
+        ]);
+
+        $team = Team::findOrFail($data['team_id']);
+
+        DB::table('project_teams')->insertOrIgnore([
+            'project_id' => $project->project_id,
+            'team_id' => $team->team_id,
+            'assigned_date' => now(),
+        ]);
+
+        Activity::log('Assigned team to project', 'Project', $project->project_id, "{$team->team_name} → {$project->project_name}");
+
+        if ($team->team_leader_id && (int) $team->team_leader_id !== (int) $user->user_id) {
+            Activity::notify($team->team_leader_id, "Your team ({$team->team_name}) was assigned to project: \"{$project->project_name}\"", 'project');
+        }
+
+        return back()->with('status', "Team \"{$team->team_name}\" assigned to project successfully.");
+    }
+
+    public function removeTeam(Project $project, Team $team)
+    {
+        $user = Auth::user();
+        abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
+
+        DB::table('project_teams')
+            ->where('project_id', $project->project_id)
+            ->where('team_id', $team->team_id)
+            ->delete();
+
+        Activity::log('Removed team from project', 'Project', $project->project_id, "{$team->team_name} removed from {$project->project_name}");
+
+        return back()->with('status', "Team \"{$team->team_name}\" unassigned from this project.");
+    }
+
+    public function addMember(Request $request, Project $project)
+    {
+        $user = Auth::user();
+        abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
+
+        $input = $request->input('user_id') ?? $request->input('user_name') ?? $request->input('name');
+        $resolvedUserId = $this->resolveUserId($input, $project->team_id);
+
+        if (! $resolvedUserId) {
+            return back()->withErrors(['user_id' => 'Please provide a valid member name or select from the list.']);
+        }
+
+        $specialty = $request->input('specialty');
+        $roleId = $request->input('role_id');
+
+        $existing = $project->memberRoles()->where('user_id', $resolvedUserId)->first();
+        if ($existing) {
+            $existing->update([
+                'role_id' => $roleId ?? $existing->role_id,
+                'specialty' => $specialty ?? $existing->specialty,
+            ]);
+        } else {
+            ProjectMemberRole::create([
+                'project_id' => $project->project_id,
+                'user_id' => $resolvedUserId,
+                'role_id' => $roleId ?? null,
+                'specialty' => $specialty ?? null,
+                'assigned_date' => now()->toDateString(),
+            ]);
+        }
+
+        $assignedUser = User::find($resolvedUserId);
+        $roleLabel = $specialty ?: 'Team Member';
+        Activity::log('Added project member', 'Project', $project->project_id, "{$assignedUser->full_name} ({$roleLabel}) → {$project->project_name}");
+
+        if ((int) $resolvedUserId !== (int) $user->user_id) {
+            Activity::notify((int) $resolvedUserId, "You have been added to project \"{$project->project_name}\" as {$roleLabel}", 'project');
+        }
+
+        return back()->with('status', "{$assignedUser->full_name} assigned as {$roleLabel}.");
+    }
+
+    public function storeDeliverable(Request $request, Project $project)
+    {
+        $user = Auth::user();
+        abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
+
+        $data = $request->validate([
+            'deliverable_name' => ['required', 'string', 'max:150'],
+            'description' => ['nullable', 'string', 'max:1000'],
+            'due_date' => ['nullable', 'date'],
+            'status' => ['nullable', 'in:Pending,Delivered'],
+        ]);
+
+        $deliverable = ProjectDeliverable::create([
+            'project_id' => $project->project_id,
+            'deliverable_name' => $data['deliverable_name'],
+            'description' => $data['description'] ?? null,
+            'due_date' => $data['due_date'] ?? null,
+            'status' => $data['status'] ?? 'Pending',
+        ]);
+
+        Activity::log('Added project deliverable', 'Project', $project->project_id, "{$deliverable->deliverable_name} on {$project->project_name}");
+
+        return back()->with('status', "Deliverable \"{$deliverable->deliverable_name}\" added successfully.");
+    }
+
+    public function toggleDeliverable(Project $project, ProjectDeliverable $deliverable)
+    {
+        $user = Auth::user();
+        abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
+        abort_unless((int) $deliverable->project_id === (int) $project->project_id, 404);
+
+        $newStatus = $deliverable->status === 'Delivered' ? 'Pending' : 'Delivered';
+        $deliverable->update(['status' => $newStatus]);
+
+        Activity::log('Updated deliverable status', 'Project', $project->project_id, "{$deliverable->deliverable_name} → {$newStatus}");
+
+        return back()->with('status', "Deliverable marked as {$newStatus}.");
+    }
+
+    public function destroyDeliverable(Project $project, ProjectDeliverable $deliverable)
+    {
+        $user = Auth::user();
+        abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
+        abort_unless((int) $deliverable->project_id === (int) $project->project_id, 404);
+
+        $name = $deliverable->deliverable_name;
+        $deliverable->delete();
+
+        Activity::log('Deleted project deliverable', 'Project', $project->project_id, "{$name} removed from {$project->project_name}");
+
+        return back()->with('status', "Deliverable \"{$name}\" removed.");
+    }
+
+    public function updateMember(Request $request, Project $project, ProjectMemberRole $memberRole)
+    {
+        $user = Auth::user();
+        abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
+        abort_unless((int) $memberRole->project_id === (int) $project->project_id, 404);
+
+        $data = $request->validate([
+            'specialty' => ['nullable', 'string', 'max:100'],
+            'role_id' => ['nullable', 'exists:roles,role_id'],
+        ]);
+
+        $memberRole->update([
+            'specialty' => $data['specialty'] ?? null,
+            'role_id' => $data['role_id'] ?? null,
+        ]);
+
+        $userName = optional($memberRole->user)->full_name ?? 'Member';
+        $specialty = $data['specialty'] ?: 'Member';
+        Activity::log('Updated project member role', 'Project', $project->project_id, "{$userName} role updated to {$specialty}");
+
+        return back()->with('status', "Role updated for {$userName}.");
+    }
+
+    public function removeMember(Project $project, ProjectMemberRole $memberRole)
+    {
+        $user = Auth::user();
+        abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
+        abort_unless((int) $memberRole->project_id === (int) $project->project_id, 404);
+
+        $userName = optional($memberRole->user)->full_name ?? 'A member';
+        $memberRole->delete();
+
+        Activity::log('Removed project member', 'Project', $project->project_id, "{$userName} removed from {$project->project_name}");
+
+        return back()->with('status', "{$userName} was removed from this project roster.");
     }
 
     public function destroy(Project $project)
@@ -224,6 +592,80 @@ class ProjectController extends Controller
         }
 
         return back()->with('status', 'Change request submitted.');
+    }
+
+    /**
+     * Resolve a user ID or typed user name.
+     */
+    private function resolveUserId($input, ?int $teamId = null): ?int
+    {
+        if ($input === null || $input === '') {
+            return null;
+        }
+
+        if (is_numeric($input)) {
+            $user = User::find((int) $input);
+            if ($user) {
+                return $user->user_id;
+            }
+        }
+
+        $trimmed = trim((string) $input);
+        if ($trimmed === '' || $trimmed === '— Select Project Manager —' || $trimmed === 'None') {
+            return null;
+        }
+
+        $user = User::where('email', $trimmed)
+            ->orWhere('full_name', $trimmed)
+            ->orWhereRaw('LOWER(full_name) = ?', [strtolower($trimmed)])
+            ->first();
+
+        if ($user) {
+            return $user->user_id;
+        }
+
+        $user = User::where('full_name', 'LIKE', "%{$trimmed}%")->first();
+        if ($user) {
+            return $user->user_id;
+        }
+
+        $slug = strtolower(preg_replace('/[^a-zA-Z0-9]+/', '.', $trimmed));
+        $slug = trim($slug, '.');
+        if (empty($slug)) {
+            $slug = 'pm.'.rand(100, 999);
+        }
+
+        $email = $slug.'@ju.edu.et';
+        $counter = 1;
+        while (User::where('email', $email)->exists()) {
+            $email = $slug.$counter.'@ju.edu.et';
+            $counter++;
+        }
+
+        $newUser = User::create([
+            'full_name' => $trimmed,
+            'email' => $email,
+            'password_hash' => bcrypt('ChangeMe123!'),
+            'status' => 'Active',
+        ]);
+
+        $role = Role::where('role_name', 'Team Leader')->first() ?: Role::where('role_name', 'Team Member')->first();
+        if ($role) {
+            $newUser->roles()->attach($role->role_id);
+        }
+
+        if ($teamId) {
+            TeamMember::firstOrCreate([
+                'team_id' => $teamId,
+                'user_id' => $newUser->user_id,
+            ], [
+                'joined_date' => now()->toDateString(),
+            ]);
+        }
+
+        Activity::log('Created user for project leadership', 'User', $newUser->user_id, "{$newUser->full_name} ({$email})");
+
+        return $newUser->user_id;
     }
 
     /**

@@ -8,7 +8,7 @@ class ProjectMemberRole extends Model
 {
     public $timestamps = false;
 
-    protected $fillable = ['project_id', 'user_id', 'role_id', 'assigned_date'];
+    protected $fillable = ['project_id', 'user_id', 'role_id', 'specialty', 'assigned_date'];
 
     public function project()
     {

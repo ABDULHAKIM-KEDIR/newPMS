@@ -3,12 +3,14 @@ use App\Http\Controllers\AttachmentController;
 use App\Http\Controllers\AuditLogController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BudgetController;
+use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\ChangeRequestController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PhaseController;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SearchController;
 use App\Http\Controllers\SystemSettingController;
@@ -43,6 +45,14 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/projects/{project}/edit', [ProjectController::class, 'edit'])->name('projects.edit')->middleware('can:edit_projects');
     Route::put('/projects/{project}', [ProjectController::class, 'update'])->name('projects.update')->middleware('can:edit_projects');
     Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy')->middleware('can:delete_projects');
+    Route::post('/projects/{project}/teams', [ProjectController::class, 'assignTeam'])->name('projects.teams.assign')->middleware('can:edit_projects');
+    Route::delete('/projects/{project}/teams/{team}', [ProjectController::class, 'removeTeam'])->name('projects.teams.remove')->middleware('can:edit_projects');
+    Route::post('/projects/{project}/members', [ProjectController::class, 'addMember'])->name('projects.members.add')->middleware('can:edit_projects');
+    Route::put('/projects/{project}/members/{memberRole}', [ProjectController::class, 'updateMember'])->name('projects.members.update')->middleware('can:edit_projects');
+    Route::delete('/projects/{project}/members/{memberRole}', [ProjectController::class, 'removeMember'])->name('projects.members.remove')->middleware('can:edit_projects');
+    Route::post('/projects/{project}/deliverables', [ProjectController::class, 'storeDeliverable'])->name('projects.deliverables.store')->middleware('can:edit_projects');
+    Route::post('/projects/{project}/deliverables/{deliverable}/toggle', [ProjectController::class, 'toggleDeliverable'])->name('projects.deliverables.toggle')->middleware('can:edit_projects');
+    Route::delete('/projects/{project}/deliverables/{deliverable}', [ProjectController::class, 'destroyDeliverable'])->name('projects.deliverables.destroy')->middleware('can:edit_projects');
     Route::post('/projects/{project}/change-requests', [ProjectController::class, 'storeChangeRequest'])->name('projects.changeRequests.store')->middleware('can:view_projects');
     Route::post('/projects/{project}/phases', [PhaseController::class, 'store'])->name('phases.store')->middleware('can:edit_projects');
     Route::put('/phases/{phase}', [PhaseController::class, 'update'])->name('phases.update')->middleware('can:edit_projects');
@@ -58,6 +68,11 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::post('/tasks/{task}/status', [TaskController::class, 'updateStatus'])->name('tasks.status')->middleware('can:update_task_status');
     Route::post('/tasks/{task}/comments', [TaskController::class, 'addComment'])->name('tasks.comments')->middleware('can:view_tasks');
     Route::post('/tasks/{task}/assign', [TaskController::class, 'assign'])->name('tasks.assign')->middleware('can:assign_tasks');
+    Route::post('/tasks/{task}/attachments', [TaskController::class, 'uploadAttachment'])->name('tasks.attachments.upload')->middleware('can:view_tasks');
+    Route::delete('/tasks/{task}/attachments/{attachment}', [TaskController::class, 'deleteAttachment'])->name('tasks.attachments.delete')->middleware('can:view_tasks');
+    Route::get('/attachments/{attachment}/download', [TaskController::class, 'downloadAttachment'])->name('attachments.download')->middleware('can:view_tasks');
+    Route::post('/tasks/{task}/subtasks', [TaskController::class, 'storeSubtask'])->name('tasks.subtasks.store')->middleware('can:view_tasks');
+    Route::post('/tasks/subtasks/{subtask}/toggle', [TaskController::class, 'toggleSubtask'])->name('tasks.subtasks.toggle')->middleware('can:view_tasks');
 
     Route::post('/change-requests/{changeRequest}/approve', [ChangeRequestController::class, 'approve'])->name('changeRequests.approve')->middleware('can:approve_change_requests');
     Route::post('/change-requests/{changeRequest}/reject', [ChangeRequestController::class, 'reject'])->name('changeRequests.reject')->middleware('can:approve_change_requests');
@@ -67,12 +82,18 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/teams', [TeamController::class, 'index'])->name('teams.index')->middleware('can:view_projects');
     Route::post('/teams/{team}/members', [TeamController::class, 'addMember'])->name('teams.members.add')->middleware('can:manage_team');
     Route::delete('/teams/{team}/members/{member}', [TeamController::class, 'removeMember'])->name('teams.members.remove')->middleware('can:manage_team');
+    Route::post('/teams/{team}/leader', [TeamController::class, 'updateLeader'])->name('teams.leader')->middleware('can:manage_team');
     Route::get('/teams/{team}', [TeamController::class, 'show'])->name('teams.show')->middleware('can:view_projects');
 
     Route::get('/budgets', [BudgetController::class, 'index'])->name('budgets.index');
+    Route::post('/budgets/projects/{project}', [BudgetController::class, 'updateProjectBudget'])->name('budgets.projects.update')->middleware('can:manage_budgets');
+    Route::post('/budgets/phases/{phase}', [BudgetController::class, 'updatePhaseBudget'])->name('budgets.phases.update')->middleware('can:manage_budgets');
 
     Route::get('/notifications', [NotificationController::class, 'index'])->name('notifications.index');
     Route::post('/notifications/mark-all-read', [NotificationController::class, 'markAllRead'])->name('notifications.markAllRead');
+
+    Route::get('/reports', [ReportController::class, 'index'])->name('reports.index');
+    Route::get('/calendar', [CalendarController::class, 'index'])->name('calendar.index');
 
     Route::get('/admin/roles', [RoleController::class, 'index'])->name('admin.roles');
     Route::post('/admin/roles', [RoleController::class, 'storeRole'])->name('admin.roles.store')->middleware('can:manage_roles');

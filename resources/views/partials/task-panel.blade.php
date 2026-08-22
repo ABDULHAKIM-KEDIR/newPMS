@@ -5,7 +5,12 @@
   <div class="panel" :class="{ show: open }">
     <div class="panel-head">
       <div style="flex:1; margin-right:12px; min-width:0;">
-        <div class="mono" style="color:var(--ink-faint); font-size:11px;" x-text="'TASK-' + String(task.id || '').padStart(4, '0')"></div>
+        <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+          <span class="mono" style="color:var(--ink-faint); font-size:11px;" x-text="'TASK-' + String(task.id || '').padStart(4, '0')"></span>
+          <template x-if="task.project">
+            <a :href="task.project_url" class="mono" style="color:var(--primary); font-size:11px; text-decoration:none; background:var(--primary-soft); padding:1px 6px; border-radius:4px;" x-text="'📁 ' + task.project"></a>
+          </template>
+        </div>
         <template x-if="editing">
           <input type="text" x-model="task.name" style="width:100%; border:1px solid var(--line); border-radius:6px; padding:6px 10px; font-size:15px; font-weight:700; margin-top:4px; font-family:inherit; background:var(--surface);">
         </template>
@@ -25,43 +30,41 @@
     </div>
 
     <div class="panel-body">
+      <!-- Blocker Banner if Blocked -->
+      <template x-if="task.status === 'Blocked'">
+        <div style="background:#fee2e2; border:1px solid #f87171; border-radius:8px; padding:12px 14px; margin-bottom:16px;">
+          <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+            <div>
+              <div style="font-weight:700; color:#991b1b; font-size:13px; display:flex; align-items:center; gap:6px;">
+                <span>⚠️ TASK BLOCKED</span>
+              </div>
+              <div style="font-size:12.5px; color:#7f1d1d; margin-top:4px; line-height:1.4;" x-text="task.blocker_reason || 'A team member reported a blocker on this task.'"></div>
+            </div>
+            <template x-if="task.can_update_status">
+              <button type="button" class="btn btn-accent" style="padding:4px 10px; font-size:11.5px;" @click="resolveBlocker()">Resolve Blocker</button>
+            </template>
+          </div>
+        </div>
+      </template>
+
       <div class="field-row">
         <span class="k">Status</span>
         <span class="v">
           <template x-if="task.can_update_status || editing">
             <select
               x-model="task.status"
-              @change="updateStatus()"
-              style="border:1px solid var(--line); border-radius:6px; padding:4px 8px; font-size:12.5px; font-family:inherit; font-weight:600; color:inherit; background:var(--surface);"
+              @change="!editing && updateStatus()"
+              style="border:1px solid var(--line); border-radius:6px; padding:4px 8px; font-size:12.5px; font-family:inherit; font-weight:700; color:inherit; background:var(--surface);"
             >
-              <template x-for="s in task.statuses" :key="s">
-                <option :value="s" x-text="s"></option>
-              </template>
+              <option value="To Do">To Do</option>
+              <option value="In Progress">In Progress</option>
+              <option value="In Review">In Review</option>
+              <option value="Completed">Completed</option>
+              <option value="Blocked">Blocked</option>
             </select>
           </template>
           <template x-if="!task.can_update_status && !editing">
-            <span class="badge" :class="task.status === 'Done' ? 'b-active' : (task.status === 'In Progress' ? 'b-planning' : 'b-risk')" x-text="task.status"></span>
-          </template>
-        </span>
-      </div>
-
-      <div class="field-row">
-        <span class="k">Assignee</span>
-        <span class="v">
-          <template x-if="task.can_manage || editing">
-            <select
-              x-model="task.assignee_id"
-              @change="reassign()"
-              style="border:1px solid var(--line); border-radius:6px; padding:4px 8px; font-size:12.5px; font-family:inherit; font-weight:600; color:inherit; background:var(--surface);"
-            >
-              <option value="">— Unassigned —</option>
-              <template x-for="u in task.assignable_users" :key="u.id">
-                <option :value="u.id" x-text="u.name"></option>
-              </template>
-            </select>
-          </template>
-          <template x-if="!task.can_manage && !editing">
-            <span x-text="task.assignee || 'Unassigned'"></span>
+            <span class="badge" :class="task.status === 'Completed' || task.status === 'Done' ? 'b-active' : (task.status === 'In Progress' ? 'b-planning' : (task.status === 'Blocked' ? 'b-blocked' : 'b-risk'))" x-text="task.status"></span>
           </template>
         </span>
       </div>
@@ -69,14 +72,19 @@
       <div class="field-row">
         <span class="k">Priority</span>
         <span class="v">
-          <template x-if="editing">
-            <select x-model="task.priority" style="border:1px solid var(--line); border-radius:6px; padding:4px 8px; font-size:12.5px; font-family:inherit; background:var(--surface);">
+          <template x-if="task.can_manage || editing">
+            <select
+              x-model="task.priority"
+              @change="!editing && savePriority()"
+              style="border:1px solid var(--line); border-radius:6px; padding:4px 8px; font-size:12.5px; font-family:inherit; font-weight:600; background:var(--surface);"
+            >
               <option value="High">High</option>
               <option value="Medium">Medium</option>
               <option value="Low">Low</option>
+              <option value="Urgent">Urgent</option>
             </select>
           </template>
-          <template x-if="!editing">
+          <template x-if="!task.can_manage && !editing">
             <span class="priority" :class="'p-' + (task.priority || '').toLowerCase()" x-text="task.priority"></span>
           </template>
         </span>
@@ -97,6 +105,18 @@
           </template>
           <template x-if="!editing || !task.phases || !task.phases.length">
             <span x-text="task.phase || '—'"></span>
+          </template>
+        </span>
+      </div>
+
+      <div class="field-row">
+        <span class="k">Budget</span>
+        <span class="v">
+          <template x-if="editing">
+            <input type="number" step="0.01" min="0" x-model="task.budget" placeholder="Budget in ETB" style="border:1px solid var(--line); border-radius:6px; padding:4px 8px; font-size:12.5px; font-family:inherit; background:var(--surface);">
+          </template>
+          <template x-if="!editing">
+            <span style="font-weight:700; color:var(--ink);" x-text="task.budget ? 'ETB ' + Number(task.budget).toLocaleString() : 'ETB 0'"></span>
           </template>
         </span>
       </div>
@@ -152,59 +172,98 @@
         x-text="savedMessage"
       ></div>
 
-      <div
-        style="margin-top:20px;"
-        x-show="task.subtasks && task.subtasks.length"
-      >
-        <div class="stat-label" style="margin-bottom:8px;">Subtasks</div>
-        <template x-for="s in task.subtasks" :key="s.name">
-          <div class="list-row">
-            <span x-text="(s.status === 'Done' ? '☑ ' : '☐ ') + s.name"></span>
+      <!-- Subtasks Section -->
+      <div style="margin-top:20px; border-top:1px solid var(--line); padding-top:16px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <div class="stat-label" style="margin:0;">Subtasks</div>
+          <span style="font-size:11.5px; color:var(--ink-soft);" x-text="(task.subtasks ? task.subtasks.filter(s => s.is_completed).length : 0) + ' / ' + (task.subtasks ? task.subtasks.length : 0) + ' completed'"></span>
+        </div>
+
+        <template x-for="s in task.subtasks" :key="s.id">
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 10px; background:var(--bg-subtle); border:1px solid var(--line); border-radius:6px; margin-bottom:6px;">
+            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; flex:1;">
+              <input type="checkbox" :checked="s.is_completed" @change="toggleSubtask(s)" style="accent-color:var(--accent); cursor:pointer;">
+              <span :style="s.is_completed ? 'text-decoration:line-through; color:var(--ink-muted);' : 'color:var(--ink);'" x-text="s.name"></span>
+            </label>
+            <span class="badge" :class="s.is_completed ? 'b-active' : 'b-risk'" style="font-size:10px;" x-text="s.is_completed ? 'Done' : 'Pending'"></span>
+          </div>
+        </template>
+
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <input
+            type="text"
+            x-model="newSubtaskName"
+            @keydown.enter="addSubtask()"
+            placeholder="Add a new subtask..."
+            style="flex:1; border:1px solid var(--line); border-radius:6px; padding:6px 10px; font-size:12.5px; font-family:inherit; background:var(--surface);"
+          >
+          <button type="button" class="btn btn-ghost" style="padding:6px 12px; font-size:12px;" @click="addSubtask()" :disabled="addingSubtask">+ Add</button>
+        </div>
+      </div>
+
+      <!-- File Attachments Section -->
+      <div style="margin-top:20px; border-top:1px solid var(--line); padding-top:16px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <div class="stat-label" style="margin:0;">Attachments</div>
+          <span style="font-size:11.5px; color:var(--ink-soft);" x-text="(task.attachments ? task.attachments.length : 0) + ' file(s)'"></span>
+        </div>
+
+        <template x-for="a in task.attachments" :key="a.id">
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:var(--bg-subtle); border:1px solid var(--line); border-radius:6px; margin-bottom:6px;">
+            <div style="display:flex; align-items:center; gap:8px; overflow:hidden;">
+              <span>📎</span>
+              <div style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                <a :href="'/attachments/' + a.id + '/download'" style="font-weight:600; font-size:13px; color:var(--accent); text-decoration:none;" x-text="a.file_name" target="_blank"></a>
+                <div style="font-size:11px; color:var(--ink-muted);" x-text="'By ' + a.uploader + ' • ' + a.uploaded_at"></div>
+              </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:6px;">
+              <a :href="'/attachments/' + a.id + '/download'" class="btn btn-ghost" style="padding:3px 8px; font-size:11px;" title="Download File">⬇</a>
+              <button type="button" class="btn btn-ghost" style="padding:3px 8px; font-size:11px; color:var(--danger);" @click="deleteAttachment(a.id)" title="Remove Attachment">✕</button>
+            </div>
+          </div>
+        </template>
+
+        <div style="margin-top:8px;">
+          <label class="btn btn-ghost" style="display:inline-flex; align-items:center; gap:6px; font-size:12px; padding:6px 12px; cursor:pointer; width:100%; justify-content:center; border:1px dashed var(--line);">
+            <span>📁 Upload Attachment</span>
+            <input type="file" @change="uploadFile($event)" style="display:none;" :disabled="uploadingFile">
+          </label>
+        </div>
+      </div>
+
+      <!-- Activity & Status Trail -->
+      <div style="margin-top:20px; border-top:1px solid var(--line); padding-top:16px;" x-show="task.activity_logs && task.activity_logs.length">
+        <div class="stat-label" style="margin-bottom:10px;">Activity Trail &amp; Remarks</div>
+        <template x-for="l in task.activity_logs" :key="l.at + l.from + l.to + (l.remarks || '')">
+          <div style="padding:6px 0; border-bottom:1px solid var(--line); font-size:12px;">
+            <div style="display:flex; justify-content:space-between; color:var(--ink);">
+              <span>
+                <strong x-text="l.user"></strong>:
+                <span class="badge" style="font-size:10px;" x-text="l.from"></span> →
+                <span class="badge b-active" style="font-size:10px;" x-text="l.to"></span>
+              </span>
+              <span style="font-size:11px; color:var(--ink-muted);" x-text="l.at"></span>
+            </div>
+            <template x-if="l.remarks">
+              <div style="font-size:11.5px; color:var(--ink-soft); margin-top:3px; font-style:italic;" x-text="'📝 ' + l.remarks"></div>
+            </template>
           </div>
         </template>
       </div>
 
-      <!-- ===== NEW: ATTACHMENTS SECTION ===== -->
-      <div style="margin-top:20px;">
-        <div class="stat-label" style="margin-bottom:10px;">Attachments</div>
-        <div x-show="task.attachments && task.attachments.length" style="margin-bottom:12px;">
-          <template x-for="att in task.attachments" :key="att.id">
-            <div class="attachment-item" style="display:flex; justify-content:space-between; align-items:center; padding:4px 0; border-bottom:1px solid var(--line);">
-              <div>
-                <a :href="att.file_url" target="_blank" x-text="att.file_name" style="color:var(--link); text-decoration:underline;"></a>
-                <span style="font-size:11px; color:var(--ink-faint);" x-text="' by ' + att.uploader + ' ' + att.created_at"></span>
-              </div>
-              <button x-show="task.can_manage || att.uploader_id === task.current_user_id"
-                      @click="deleteAttachment(att.id)"
-                      class="text-danger" style="background:none; border:none; cursor:pointer; font-size:13px; color:var(--danger);">✕</button>
-            </div>
-          </template>
-        </div>
-        <div x-show="!task.attachments || !task.attachments.length" style="font-size:12.5px; color:var(--ink-faint); margin-bottom:12px;">No attachments yet.</div>
-
-        <!-- Upload form -->
-        <div style="display:flex; gap:8px; align-items:center;">
-          <input type="file" id="file-input" @change="fileSelected = $event.target.files[0]" style="flex:1; font-size:12px;">
-          <button class="btn btn-primary" style="padding:6px 14px;" @click="uploadAttachment()" :disabled="!fileSelected || uploading">
-            <span x-show="!uploading">Upload</span>
-            <span x-show="uploading">Uploading…</span>
-          </button>
-        </div>
-      </div>
-      <!-- ===== END ATTACHMENTS ===== -->
-
-      <div style="margin-top:20px;">
-        <div class="stat-label" style="margin-bottom:10px;">
-          Activity &amp; comments
-        </div>
-        <template x-for="c in task.comments" :key="c.text + c.at">
+      <!-- Comments Section -->
+      <div style="margin-top:20px; border-top:1px solid var(--line); padding-top:16px;">
+        <div class="stat-label" style="margin-bottom:10px;">Comments</div>
+        <template x-for="c in task.comments" :key="c.id || (c.user + c.at + c.text)">
           <div class="comment">
             <div
               class="avatar"
               x-text="(c.user || '?').split(' ').map(w => w[0]).join('')"
             ></div>
             <div class="txt">
-              <div class="who" x-text="c.user">
+              <div class="who">
+                <span x-text="c.user"></span>
                 <span class="when" x-text="c.at"></span>
               </div>
               <span x-text="c.text"></span>
@@ -247,6 +306,9 @@
       dirty: false,
       newComment: '',
       posting: false,
+      newSubtaskName: '',
+      addingSubtask: false,
+      uploadingFile: false,
       savedMessage: '',
       fileSelected: null,
       uploading: false,
@@ -315,36 +377,70 @@
       },
 
       async saveTaskChanges() {
-        const res = await fetch(`/tasks/${this.task.id}`, {
-          method: 'PUT',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'X-CSRF-TOKEN': this.csrf()
-          },
-          body: JSON.stringify({
-            task_name: this.task.name,
-            status: this.task.status,
-            priority: this.task.priority,
-            phase_id: this.task.phase_id,
-            assigned_to: this.task.assignee_id,
-            start_date: this.task.start_date,
-            end_date: this.task.end_date,
-            description: this.task.description
-          })
-        });
+        try {
+          const res = await fetch(`/tasks/${this.task.id}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'X-CSRF-TOKEN': this.csrf()
+            },
+            body: JSON.stringify({
+              task_name: this.task.name,
+              status: this.task.status,
+              priority: this.task.priority,
+              phase_id: this.task.phase_id ? Number(this.task.phase_id) : null,
+              assigned_to: this.task.assignee_name || this.task.assignee_id || null,
+              budget: this.task.budget ? Number(this.task.budget) : 0,
+              start_date: this.task.start_date || null,
+              end_date: this.task.end_date || null,
+              description: this.task.description || null
+            })
+          });
 
-        if (!res.ok) {
-          console.error('Failed to update task:', res.status, await res.text());
-          return;
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            console.error('Failed to update task:', res.status, err);
+            alert(err.message || 'Failed to save task changes.');
+            return;
+          }
+
+          const data = await res.json();
+          if (data.task) {
+            this.task.name = data.task.task_name;
+            this.task.status = data.task.status;
+            this.task.priority = data.task.priority;
+            this.task.phase_id = data.task.phase_id;
+            this.task.assignee_id = data.task.assigned_to;
+            this.task.assignee = data.task.assignee ? data.task.assignee.full_name : null;
+            this.task.assignee_name = data.task.assignee ? data.task.assignee.full_name : null;
+            this.task.budget = data.task.budget;
+            this.task.phase = data.task.phase ? data.task.phase.phase_name : null;
+            this.task.description = data.task.description;
+            // Keep the project context in sync if the task moved to another
+            // project's phase — the panel is shared across Projects / My Tasks.
+            if (data.task.phase && data.task.phase.project) {
+              this.task.project = data.task.phase.project_name;
+              this.task.project_id = data.task.phase.project_id;
+              this.task.project_url = '/projects/' + data.task.phase.project_id;
+            }
+          }
+
+          this.editing = false;
+          this.flash('Task updated successfully');
+          this.dirty = true;
+        } catch (e) {
+          console.error('Save changes error:', e);
+          alert('An error occurred while saving task changes.');
         }
-
-        this.editing = false;
-        this.flash('Task updated successfully');
-        this.dirty = true;
       },
 
       async updateStatus() {
+        if (this.task.status === 'Blocked' && !this.task.blocker_reason) {
+          const reason = prompt('Please enter the reason why this task is blocked:');
+          this.task.blocker_reason = reason || 'Blocker reported';
+        }
+
         const res = await fetch(`/tasks/${this.task.id}/status`, {
           method: 'POST',
           headers: {
@@ -352,7 +448,8 @@
             'X-CSRF-TOKEN': this.csrf()
           },
           body: JSON.stringify({
-            status: this.task.status
+            status: this.task.status,
+            blocker_reason: this.task.blocker_reason
           })
         });
         if (!res.ok) {
@@ -363,8 +460,18 @@
           );
           return;
         }
+        const data = await res.json();
+        this.task.status = data.status;
+        this.task.blocker_reason = data.blocker_reason;
         this.flash('Status updated');
         this.dirty = true;
+      },
+
+      async resolveBlocker() {
+        this.task.status = 'In Progress';
+        this.task.blocker_reason = null;
+        await this.updateStatus();
+        this.flash('Blocker resolved');
       },
 
       async reassign() {
@@ -372,10 +479,11 @@
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Accept': 'application/json',
             'X-CSRF-TOKEN': this.csrf()
           },
           body: JSON.stringify({
-            assigned_to: this.task.assignee_id
+            assigned_to: this.task.assignee_name || this.task.assignee_id
           })
         });
         if (!res.ok) {
@@ -386,8 +494,32 @@
           );
           return;
         }
+        const data = await res.json();
+        this.task.assignee_id = data.assignee_id;
+        this.task.assignee = data.assignee;
+        this.task.assignee_name = data.assignee;
         this.flash('Reassigned');
         this.dirty = true;
+      },
+
+      async savePriority() {
+        try {
+          const res = await fetch(`/tasks/${this.task.id}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'X-CSRF-TOKEN': this.csrf()
+            },
+            body: JSON.stringify({ priority: this.task.priority })
+          });
+          if (res.ok) {
+            this.flash('Priority updated');
+            this.dirty = true;
+          }
+        } catch(e) {
+          console.error(e);
+        }
       },
 
       async postComment() {
@@ -425,64 +557,101 @@
         }
       },
 
-      // ===== ATTACHMENT METHODS =====
-      async uploadAttachment() {
-        if (!this.fileSelected) return;
+      async addSubtask() {
+        if (!this.newSubtaskName.trim() || this.addingSubtask) return;
+        this.addingSubtask = true;
+        try {
+          const res = await fetch(`/tasks/${this.task.id}/subtasks`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'X-CSRF-TOKEN': this.csrf()
+            },
+            body: JSON.stringify({ task_name: this.newSubtaskName })
+          });
+          if (res.ok) {
+            const subtask = await res.json();
+            this.task.subtasks = [...(this.task.subtasks || []), subtask];
+            this.newSubtaskName = '';
+            this.flash('Subtask added');
+          }
+        } catch(e) {
+          console.error(e);
+        } finally {
+          this.addingSubtask = false;
+        }
+      },
 
-        this.uploading = true;
+      async toggleSubtask(subtask) {
+        try {
+          const res = await fetch(`/tasks/subtasks/${subtask.id}/toggle`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'X-CSRF-TOKEN': this.csrf()
+            }
+          });
+          if (res.ok) {
+            const data = await res.json();
+            subtask.status = data.status;
+            subtask.is_completed = data.is_completed;
+            this.flash('Subtask updated');
+          }
+        } catch(e) {
+          console.error(e);
+        }
+      },
 
+      async uploadFile(event) {
+        const file = event.target.files[0];
+        if (!file || this.uploadingFile) return;
+        this.uploadingFile = true;
         const formData = new FormData();
-        formData.append('file', this.fileSelected);
+        formData.append('file', file);
 
         try {
           const res = await fetch(`/tasks/${this.task.id}/attachments`, {
             method: 'POST',
-            body: formData,
             headers: {
+              'Accept': 'application/json',
               'X-CSRF-TOKEN': this.csrf()
-            }
+            },
+            body: formData
           });
-
-          const data = await res.json();
-
-          this.task.attachments = [
-            ...(this.task.attachments || []),
-            data.attachment
-          ];
-
-          this.flash('File uploaded');
-          this.dirty = true;
-          this.fileSelected = null;
-          document.getElementById('file-input').value = '';
-        } catch (e) {
-          alert('Upload failed: ' + e.message);
+          if (res.ok) {
+            const data = await res.json();
+            this.task.attachments = [...(this.task.attachments || []), data.attachment];
+            this.flash('File uploaded successfully');
+          } else {
+            alert('Failed to upload file. Max size: 20MB.');
+          }
+        } catch(e) {
+          console.error(e);
+          alert('Upload failed.');
         } finally {
-          this.uploading = false;
+          this.uploadingFile = false;
+          event.target.value = '';
         }
       },
 
       async deleteAttachment(attachmentId) {
-        if (!confirm('Delete this attachment?')) return;
-
+        if (!confirm('Are you sure you want to remove this attachment?')) return;
         try {
           const res = await fetch(`/tasks/${this.task.id}/attachments/${attachmentId}`, {
             method: 'DELETE',
             headers: {
+              'Accept': 'application/json',
               'X-CSRF-TOKEN': this.csrf()
             }
           });
-
-          const data = await res.json();
-
-          if (data.success) {
-            this.task.attachments = this.task.attachments.filter(att => att.id !== attachmentId);
-            this.flash('Attachment deleted');
-            this.dirty = true;
-          } else {
-            alert('Delete failed');
+          if (res.ok) {
+            this.task.attachments = (this.task.attachments || []).filter(a => a.id !== attachmentId);
+            this.flash('Attachment removed');
           }
-        } catch (e) {
-          alert('Delete error: ' + e.message);
+        } catch(e) {
+          console.error(e);
         }
       }
     };
