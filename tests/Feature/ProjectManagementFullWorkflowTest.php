@@ -103,6 +103,43 @@ class ProjectManagementFullWorkflowTest extends TestCase
         $this->assertCount(2, $project->allTasks());
     }
 
+    public function test_project_wizard_saves_each_step_incrementally(): void
+    {
+        $this->seed(DatabaseSeeder::class);
+
+        $pm = User::where('email', 'john.smith@ju.edu.et')->first();
+        $team = Team::where('team_name', 'Frontend Team')->first();
+
+        $stepOne = $this->actingAs($pm)->postJson(route('projects.wizard.save'), [
+            'step' => 1,
+            'project_name' => 'Incremental Wizard Project',
+            'project_type' => 'Software',
+            'project_manager_id' => $pm->user_id,
+            'priority' => 'High',
+            'allocated_amount' => 100000,
+        ]);
+        $stepOne->assertOk()->assertJsonStructure(['project_id']);
+        $projectId = $stepOne->json('project_id');
+
+        $this->assertDatabaseHas('projects', ['project_id' => $projectId, 'project_name' => 'Incremental Wizard Project']);
+
+        $this->actingAs($pm)->postJson(route('projects.wizard.save'), [
+            'step' => 2,
+            'project_id' => $projectId,
+            'teams' => [$team->team_id],
+        ])->assertOk();
+
+        $this->assertDatabaseHas('project_teams', ['project_id' => $projectId, 'team_id' => $team->team_id]);
+
+        $this->actingAs($pm)->postJson(route('projects.wizard.save'), [
+            'step' => 3,
+            'project_id' => $projectId,
+            'tasks' => [['task_name' => 'Build dashboard', 'team_id' => $team->team_id, 'priority' => 'High']],
+        ])->assertOk();
+
+        $this->assertDatabaseHas('tasks', ['project_id' => $projectId, 'task_name' => 'Build dashboard']);
+    }
+
     public function test_task_status_change_automatically_recalculates_project_progress(): void
     {
         $this->seed(DatabaseSeeder::class);

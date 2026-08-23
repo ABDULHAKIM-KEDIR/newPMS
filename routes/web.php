@@ -41,9 +41,11 @@ Route::middleware(['auth', 'active'])->group(function () {
     // Static /projects/create must be registered before the /projects/{project} wildcard.
     Route::get('/projects/create', [ProjectController::class, 'create'])->name('projects.create')->middleware('can:create_projects');
     Route::post('/projects', [ProjectController::class, 'store'])->name('projects.store')->middleware('can:create_projects');
+    Route::post('/projects/wizard/save', [ProjectController::class, 'saveWizardStep'])->name('projects.wizard.save')->middleware('can:create_projects');
     Route::get('/projects', [ProjectController::class, 'index'])->name('projects.index')->middleware('can:view_projects');
     Route::get('/projects/{project}/edit', [ProjectController::class, 'edit'])->name('projects.edit')->middleware('can:edit_projects');
     Route::put('/projects/{project}', [ProjectController::class, 'update'])->name('projects.update')->middleware('can:edit_projects');
+    Route::patch('/projects/{project}/schedule', [ProjectController::class, 'updateSchedule'])->name('projects.schedule.update')->middleware('can:edit_projects');
     Route::delete('/projects/{project}', [ProjectController::class, 'destroy'])->name('projects.destroy')->middleware('can:delete_projects');
     Route::post('/projects/{project}/teams', [ProjectController::class, 'assignTeam'])->name('projects.teams.assign')->middleware('can:edit_projects');
     Route::delete('/projects/{project}/teams/{team}', [ProjectController::class, 'removeTeam'])->name('projects.teams.remove')->middleware('can:edit_projects');

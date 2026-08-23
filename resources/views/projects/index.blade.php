@@ -75,7 +75,7 @@
             <div class="cell-sub" style="margin-bottom:4px;">{{ $util }}% · ETB {{ number_format($b->spent_amount ?? 0) }}</div>
             <div class="progressbar {{ $util>85?'danger':($util>65?'warn':'') }}"><div style="width:{{ $util }}%"></div></div>
           </td>
-          <td>{{ optional($p->end_date)->format('d M Y') }}</td>
+          <td>{{ optional($p->end_date)->format('d M Y') ?: 'Not set' }}</td>
         </tr>
       @endforeach
       @if ($projects->isEmpty())

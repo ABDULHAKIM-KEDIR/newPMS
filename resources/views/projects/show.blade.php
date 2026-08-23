@@ -287,10 +287,6 @@
                   <label for="modal_task_budget">Task Budget (ETB)</label>
                   <input type="number" step="0.01" min="0" id="modal_task_budget" name="budget" value="{{ old('budget') }}" placeholder="e.g. 20000">
                 </div>
-                <div class="form-field">
-                  <label for="end_date">Due Date</label>
-                  <input type="date" id="end_date" name="end_date" value="{{ old('end_date') }}">
-                </div>
               </div>
 
               <div class="form-field">

@@ -415,6 +415,10 @@
             this.task.assignee = data.task.assignee ? data.task.assignee.full_name : null;
             this.task.assignee_name = data.task.assignee ? data.task.assignee.full_name : null;
             this.task.budget = data.task.budget;
+            this.task.start_date = data.task.start_date;
+            this.task.end_date = data.task.end_date;
+            this.task.start_date_formatted = data.task.start_date_formatted;
+            this.task.end_date_formatted = data.task.end_date_formatted;
             this.task.phase = data.task.phase ? data.task.phase.phase_name : null;
             this.task.description = data.task.description;
             // Keep the project context in sync if the task moved to another

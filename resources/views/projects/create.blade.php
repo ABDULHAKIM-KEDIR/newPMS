@@ -60,28 +60,28 @@
   <div class="card card-pad wizard-pane active" id="pane-1">
     <div style="border-bottom:1px solid var(--line); padding-bottom:14px; margin-bottom:20px;">
       <h2 style="font-size:17px; font-weight:700; margin:0;">Step 1 — Project Information</h2>
-      <p style="font-size:13px; color:var(--ink-soft); margin:4px 0 0;">Enter primary project details, client, timeline, and leadership.</p>
     </div>
 
     <div class="form-grid">
       <div class="form-field" style="grid-column:1 / -1;">
         <label for="project_name">Project Name <span style="color:var(--danger);">*</span></label>
-        <input type="text" id="project_name" name="project_name" value="{{ old('project_name', 'E-Commerce Website') }}" required placeholder="e.g. E-Commerce Website">
+        <input type="text" id="project_name" name="project_name" value="{{ old('project_name') }}" required placeholder="e.g. E-Commerce Website">
       </div>
 
       <div class="form-field" style="grid-column:1 / -1;">
         <label for="description">Description</label>
-        <textarea id="description" name="description" rows="3" placeholder="Project goals, requirements, scope...">{{ old('description', 'A modern, responsive e-commerce web platform with integrated product catalog, cart, and payment processing.') }}</textarea>
+        <textarea id="description" name="description" rows="3" placeholder="Briefly describe the project...">{{ old('description') }}</textarea>
       </div>
 
       <div class="form-field">
         <label for="client">Client / Organization</label>
-        <input type="text" id="client" name="client" value="{{ old('client', 'Global Retail Corporation') }}" placeholder="e.g. Retail Corp, Ministry of Health">
+        <input type="text" id="client" name="client" value="{{ old('client') }}" placeholder="e.g. Jimma University">
       </div>
 
       <div class="form-field">
         <label for="project_type">Project Type <span style="color:var(--danger);">*</span></label>
-        <select id="project_type" name="project_type" required>
+        <select id="project_type" name="project_type">
+          <option value="">Select Project Type</option>
           @foreach ($types as $t)
             <option value="{{ $t }}" {{ old('project_type') === $t ? 'selected' : '' }}>{{ $t }}</option>
           @endforeach
@@ -92,10 +92,10 @@
         <label for="project_manager_id">
           Project Manager <span style="color:var(--danger);">*</span>
         </label>
-        <select id="project_manager_id" name="project_manager_id" required>
+        <select id="project_manager_id" name="project_manager_id">
           <option value="">— Select Project Manager —</option>
           @foreach ($projectManagers as $pm)
-            <option value="{{ $pm->user_id }}" {{ (string) old('project_manager_id') === (string) $pm->user_id || $pm->full_name === 'John Smith' ? 'selected' : '' }}>
+            <option value="{{ $pm->user_id }}" {{ (string) old('project_manager_id') === (string) $pm->user_id ? 'selected' : '' }}>
               {{ $pm->full_name }} ({{ $pm->department ?: 'PM' }})
             </option>
           @endforeach
@@ -104,32 +104,33 @@
 
       <div class="form-field">
         <label for="priority">Priority <span style="color:var(--danger);">*</span></label>
-        <select id="priority" name="priority" required>
+        <select id="priority" name="priority">
+          <option value="">Select Priority</option>
           @foreach ($priorities as $p)
-            <option value="{{ $p }}" {{ (old('priority', 'High') === $p) ? 'selected' : '' }}>{{ $p }}</option>
+            <option value="{{ $p }}" {{ old('priority') === $p ? 'selected' : '' }}>{{ $p }}</option>
           @endforeach
         </select>
       </div>
 
       <div class="form-field">
         <label for="start_date">Start Date</label>
-        <input type="date" id="start_date" name="start_date" value="{{ old('start_date', now()->toDateString()) }}">
+        <input type="date" id="start_date" name="start_date" value="{{ old('start_date') }}">
       </div>
 
       <div class="form-field">
         <label for="end_date">Deadline (Target End Date)</label>
-        <input type="date" id="end_date" name="end_date" value="{{ old('end_date', now()->addMonths(3)->toDateString()) }}">
+        <input type="date" id="end_date" name="end_date" value="{{ old('end_date') }}">
       </div>
 
       <div class="form-field">
         <label for="allocated_amount">Allocated Budget (ETB)</label>
-        <input type="number" step="0.01" min="0" id="allocated_amount" name="allocated_amount" value="{{ old('allocated_amount', 750000) }}" placeholder="e.g. 750000">
+        <input type="number" step="0.01" min="0" id="allocated_amount" name="allocated_amount" value="{{ old('allocated_amount') }}" placeholder="e.g. 750,000 ETB">
       </div>
     </div>
 
     <div class="wizard-actions">
       <div></div>
-      <button type="button" class="btn btn-accent" onclick="validateStep1AndNext()">Next: Assign Teams →</button>
+      <button type="button" class="btn btn-accent" onclick="validateStep1AndNext()">Continue to Teams →</button>
     </div>
   </div>
 
@@ -139,7 +140,6 @@
   <div class="card card-pad wizard-pane" id="pane-2">
     <div style="border-bottom:1px solid var(--line); padding-bottom:14px; margin-bottom:20px;">
       <h2 style="font-size:17px; font-weight:700; margin:0;">Step 2 — Assign Teams</h2>
-      <p style="font-size:13px; color:var(--ink-soft); margin:4px 0 0;">Select one or more specialized teams responsible for delivering this project.</p>
     </div>
 
     <div class="teams-selection-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:16px; margin-bottom:20px;">
@@ -153,7 +153,7 @@
             class="team-checkbox"
             style="margin-top:4px; width:18px; height:18px; accent-color:var(--accent); cursor:pointer;"
             onchange="toggleTeamSelection({{ $team->team_id }})"
-            {{ in_array($team->team_name, ['UI/UX Team', 'Frontend Team', 'Backend Team', 'Software Engineering']) ? 'checked' : '' }}
+            {{ in_array((string) $team->team_id, array_map('strval', old('teams', [])), true) ? 'checked' : '' }}
           >
           <div style="flex:1;">
             <div style="display:flex; align-items:center; justify-content:space-between;">
@@ -173,7 +173,7 @@
 
     <div class="wizard-actions">
       <button type="button" class="btn btn-ghost" onclick="goToStep(1)">← Back to Info</button>
-      <button type="button" class="btn btn-accent" onclick="validateStep2AndNext()">Next: Create Tasks →</button>
+      <button type="button" class="btn btn-accent" onclick="validateStep2AndNext()">Continue to Tasks →</button>
     </div>
   </div>
 
@@ -182,8 +182,7 @@
     <div style="border-bottom:1px solid var(--line); padding-bottom:14px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;">
       <div>
         <h2 style="font-size:17px; font-weight:700; margin:0;">Step 3 — Create Tasks by Team</h2>
-        <p style="font-size:13px; color:var(--ink-soft); margin:4px 0 0;">Define initial tasks for each assigned team and assign them to individual members.</p>
-      </div>
+        </div>
     </div>
 
     <!-- Dynamic container for task creation sections per selected team -->
@@ -193,21 +192,20 @@
 
     <div class="wizard-actions">
       <button type="button" class="btn btn-ghost" onclick="goToStep(2)">← Back to Teams</button>
-      <button type="button" class="btn btn-accent" onclick="buildReviewAndNext()">Next: Review & Confirm →</button>
+      <button type="button" class="btn btn-accent" onclick="buildReviewAndNext()">Review Project →</button>
     </div>
   </div>
 
   <!-- STEP 4: Review & Confirm -->
   <div class="card card-pad wizard-pane" id="pane-4">
     <div style="border-bottom:1px solid var(--line); padding-bottom:14px; margin-bottom:20px;">
-      <h2 style="font-size:17px; font-weight:700; margin:0;">Step 4 — Review & Launch Project</h2>
-      <p style="font-size:13px; color:var(--ink-soft); margin:4px 0 0;">Verify project scope, assigned teams, and configured tasks before launching.</p>
+      <h2 style="font-size:17px; font-weight:700; margin:0;">Step 4 — Review & Confirm Project</h2>
     </div>
 
     <!-- Review Metrics Grid -->
     <div class="review-stats-grid" style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:14px; margin-bottom:24px;">
       <div class="stat-box" style="background:var(--bg-subtle); padding:14px; border-radius:8px; border:1px solid var(--line);">
-        <div style="font-size:11px; text-transform:uppercase; font-weight:700; color:var(--ink-muted); margin-bottom:4px;">Project Name</div>
+        <div style="display:flex; justify-content:space-between; align-items:center;"><div style="font-size:11px; text-transform:uppercase; font-weight:700; color:var(--ink-muted);">Project Name</div><button type="button" class="btn btn-ghost" onclick="editWizardStep(1)">Edit</button></div>
         <div id="review-proj-name" style="font-size:15px; font-weight:700; color:var(--ink);">-</div>
       </div>
       <div class="stat-box" style="background:var(--bg-subtle); padding:14px; border-radius:8px; border:1px solid var(--line);">
@@ -234,7 +232,7 @@
 
     <!-- Structured Breakdown of Teams & Tasks -->
     <div style="margin-bottom:24px;">
-      <h3 style="font-size:14px; font-weight:700; text-transform:uppercase; color:var(--ink-soft); margin-bottom:12px;">Team & Task Breakdown</h3>
+     <div style="display:flex; justify-content:space-between; align-items:center;"><h3 style="font-size:14px; font-weight:700; text-transform:uppercase; color:var(--ink-soft); margin-bottom:12px;">Team & Task Breakdown</h3><button type="button" class="btn btn-ghost" onclick="editWizardStep(3)">Edit Tasks</button></div>
       <div id="review-teams-tasks-list" style="display:flex; flex-direction:column; gap:16px;">
         <!-- Populated via JS -->
       </div>
@@ -242,7 +240,7 @@
 
     <div class="wizard-actions">
       <button type="button" class="btn btn-ghost" onclick="goToStep(3)">← Back to Tasks</button>
-      <button type="submit" class="btn btn-accent" style="font-size:14px; padding:9px 24px; font-weight:700;">Create Project & Launch Tasks</button>
+      <button type="button" class="btn btn-accent" style="font-size:14px; padding:9px 24px; font-weight:700;" onclick="finalizeWizard()">Create Project & Launch Tasks</button>
     </div>
   </div>
 </form>
@@ -261,7 +259,7 @@
   .wizard-line { flex:1; height:2px; background:var(--line); margin:0 14px; }
   .wizard-actions { display:flex; justify-content:space-between; align-items:center; margin-top:24px; padding-top:16px; border-top:1px solid var(--line); }
   .team-task-card { background:var(--bg-subtle); border:1px solid var(--line); border-radius:8px; padding:16px; margin-bottom:16px; }
-  .task-row-item { display:grid; grid-template-columns:2fr 1.3fr 1fr 1fr 1fr auto; gap:8px; align-items:center; background:var(--bg-card); border:1px solid var(--line); border-radius:6px; padding:10px 12px; margin-bottom:8px; }
+  .task-row-item { display:grid; grid-template-columns:2fr 1.3fr 1fr 1fr 1fr 1fr auto; gap:8px; align-items:center; background:var(--bg-card); border:1px solid var(--line); border-radius:6px; padding:10px 12px; margin-bottom:8px; }
   @media (max-width: 768px) {
     .wizard-stepper { flex-direction:column; gap:12px; align-items:flex-start; }
     .wizard-line { display:none; }
@@ -274,11 +272,80 @@
 
   let currentStep = 1;
   let taskCounter = 0;
+  let savedProjectId = null;
+
+  let saveInProgress = false;
+
+  async function saveWizardStep(step) {
+    const form = document.getElementById('project-wizard-form');
+    const formData = new FormData(form);
+    formData.set('step', step);
+    if (savedProjectId) formData.set('project_id', savedProjectId);
+    const response = await fetch('{{ route('projects.wizard.save') }}', {
+      method: 'POST', body: formData,
+      headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      showInlineErrors(result.errors || { wizard: [result.message || 'Unable to save this step.'] });
+      throw new Error('save failed');
+    }
+    clearInlineErrors();
+    savedProjectId = result.project_id || savedProjectId;
+    return result;
+  }
+
+  function clearInlineErrors() {
+    document.querySelectorAll('.wizard-inline-error').forEach(error => error.remove());
+  }
+
+  function showInlineErrors(errors) {
+    clearInlineErrors();
+    const error = document.createElement('div');
+    error.className = 'form-alert wizard-inline-error';
+    error.textContent = Object.values(errors).flat().join(' ');
+    document.getElementById('project-wizard-form').prepend(error);
+  }
+
+  function saveAndGoToStep(step) {
+    goToStep(step);
+  }
+
+  function finalizeWizard() {
+    if (saveInProgress) return;
+    clearInlineErrors();
+    if (!validateFinalWizard()) return;
+    document.querySelectorAll('.task-row-item').forEach(row => {
+      if (!row.querySelector('[name*="[task_name]"]')?.value.trim()) row.remove();
+    });
+    let index = 0;
+    document.querySelectorAll('.task-row-item').forEach(row => {
+      index++;
+      row.querySelectorAll('[name^="tasks["]').forEach(input => {
+        input.name = input.name.replace(/tasks\\[\\d+\\]/, `tasks[${index}]`);
+      });
+    });
+    saveInProgress = true;
+    const button = document.querySelector('#pane-4 button[onclick="finalizeWizard()"]');
+    if (button) { button.disabled = true; button.textContent = 'Creating…'; }
+    document.getElementById('project-wizard-form').submit();
+  }
+
+  function validateFinalWizard() {
+    const name = document.getElementById('project_name').value.trim();
+    if (!name) { goToStep(1); showInlineErrors({ project_name: ['Project Name is required.'] }); return false; }
+    if (!document.querySelectorAll('.team-checkbox:checked').length) {
+      goToStep(2); showInlineErrors({ teams: ['Select at least one team.'] }); return false;
+    }
+    return true;
+  }
+
+  function editWizardStep(step) {
+    goToStep(step);
+  }
 
   function goToStep(step) {
-    if (step === 2 && !validateStep1()) return;
-    if (step === 3 && (!validateStep1() || !validateStep2())) return;
-    if (step === 4 && (!validateStep1() || !validateStep2())) return;
+    clearInlineErrors();
 
     currentStep = step;
     document.querySelectorAll('.wizard-pane').forEach(p => p.classList.remove('active'));
@@ -298,25 +365,20 @@
 
   function validateStep1() {
     const name = document.getElementById('project_name').value.trim();
-    if (!name) { alert('Please provide a Project Name.'); return false; }
+    if (!name) { showInlineErrors({ project_name: ['Project Name is required.'] }); return false; }
     return true;
   }
 
   function validateStep1AndNext() {
-    if (validateStep1()) goToStep(2);
+    saveAndGoToStep(2);
   }
 
   function validateStep2() {
-    const checked = document.querySelectorAll('.team-checkbox:checked');
-    if (checked.length === 0) {
-      alert('Please select at least one team for this project.');
-      return false;
-    }
-    return true;
+    return document.querySelectorAll('.team-checkbox:checked').length > 0;
   }
 
   function validateStep2AndNext() {
-    if (validateStep2()) goToStep(3);
+    saveAndGoToStep(3);
   }
 
   function toggleTeamSelection(teamId) {
@@ -333,17 +395,18 @@
     const checkedBoxes = Array.from(document.querySelectorAll('.team-checkbox:checked'));
     const selectedTeamIds = checkedBoxes.map(cb => parseInt(cb.value));
 
-    // Preserve existing task rows if any
+    // Preserve every row, including temporarily empty rows.
     const existingValues = [];
     document.querySelectorAll('.task-row-item').forEach(row => {
-      const tName = row.querySelector('[name*="[task_name]"]')?.value;
-      const tTeam = row.querySelector('[name*="[team_id]"]')?.value;
-      const tAssigned = row.querySelector('[name*="[assigned_to]"]')?.value;
-      const tPriority = row.querySelector('[name*="[priority]"]')?.value;
-      const tDue = row.querySelector('[name*="[end_date]"]')?.value;
-      if (tName) {
-        existingValues.push({ task_name: tName, team_id: parseInt(tTeam), assigned_to: tAssigned, priority: tPriority, end_date: tDue });
-      }
+      existingValues.push({
+        task_name: row.querySelector('[name*="[task_name]"]')?.value || '',
+        team_id: parseInt(row.querySelector('[name*="[team_id]"]')?.value),
+        assigned_to: row.querySelector('[name*="[assigned_to]"]')?.value || '',
+        priority: row.querySelector('[name*="[priority]"]')?.value || 'Medium',
+        budget: row.querySelector('[name*="[budget]"]')?.value || '',
+        start_date: row.querySelector('[name*="[start_date]"]')?.value || '',
+        end_date: row.querySelector('[name*="[end_date]"]')?.value || ''
+      });
     });
 
     container.innerHTML = '';
@@ -374,18 +437,7 @@
         teamExisting.forEach(v => addTaskRow(teamId, v));
       } else {
         // Provide sample starter tasks based on team
-        if (team.name.includes('UI/UX')) {
-          addTaskRow(teamId, { task_name: 'Create Wireframes', priority: 'High', status: 'To Do' });
-          addTaskRow(teamId, { task_name: 'Design Product Page', priority: 'High', status: 'To Do' });
-        } else if (team.name.includes('Frontend')) {
-          addTaskRow(teamId, { task_name: 'Build Homepage Interface', priority: 'High', status: 'To Do' });
-          addTaskRow(teamId, { task_name: 'Build Product Listing & Cart', priority: 'Medium', status: 'To Do' });
-        } else if (team.name.includes('Backend')) {
-          addTaskRow(teamId, { task_name: 'Create Authentication API', priority: 'High', status: 'To Do' });
-          addTaskRow(teamId, { task_name: 'Create Product Catalog API', priority: 'High', status: 'To Do' });
-        } else {
-          addTaskRow(teamId);
-        }
+        addTaskRow(teamId);
       }
     });
   }
@@ -412,10 +464,10 @@
     row.innerHTML = `
       <input type="hidden" name="tasks[${idx}][team_id]" value="${teamId}">
       <div>
-        <input type="text" name="tasks[${idx}][task_name]" value="${prefill.task_name || ''}" placeholder="Task title (e.g. Build API)" required style="width:100%;">
+        <input type="text" name="tasks[${idx}][task_name]" value="${prefill.task_name || ''}" placeholder="e.g. Create Authentication API" style="width:100%;">
       </div>
       <div>
-        <input type="text" name="tasks[${idx}][assigned_to]" list="task-member-datalist-${idx}" value="${prefill.assigned_to || ''}" placeholder="Assignee (pick or type name)..." style="width:100%;" autocomplete="off">
+        <input type="text" name="tasks[${idx}][assigned_to]" list="task-member-datalist-${idx}" value="${prefill.assigned_to || ''}" placeholder="Select or enter assignee" style="width:100%;" autocomplete="off">
         <datalist id="task-member-datalist-${idx}">
           ${memberOptions}
         </datalist>
@@ -429,22 +481,42 @@
         </select>
       </div>
       <div>
-        <input type="number" step="0.01" min="0" name="tasks[${idx}][budget]" value="${prefill.budget || ''}" placeholder="Budget (ETB)" style="width:100%;">
+        <input type="number" step="0.01" min="0" name="tasks[${idx}][budget]" value="${prefill.budget || ''}" placeholder="e.g. 25,000 ETB" style="width:100%;">
       </div>
       <div>
-        <input type="date" name="tasks[${idx}][end_date]" value="${prefill.end_date || document.getElementById('end_date').value || ''}" style="width:100%;">
+        <label style="font-size:11px; color:var(--ink-muted);">Start date</label>
+        <input type="date" name="tasks[${idx}][start_date]" value="${prefill.start_date || ''}" onchange="validateTaskDates(this)" style="width:100%;">
       </div>
       <div>
-        <button type="button" class="btn btn-ghost" style="padding:4px 8px; color:var(--danger);" onclick="document.getElementById('task-row-${idx}').remove()">✕</button>
+        <label style="font-size:11px; color:var(--ink-muted);">End date</label>
+        <input type="date" name="tasks[${idx}][end_date]" value="${prefill.end_date || ''}" onchange="validateTaskDates(this)" style="width:100%;">
+      </div>
+      <div>
+        <button type="button" class="btn btn-ghost" style="padding:4px 8px; color:var(--danger);" onclick="removeTaskRow(this)">✕</button>
       </div>
     `;
 
     rowsContainer.appendChild(row);
   }
 
+  function validateTaskDates(input) {
+    const row = input.closest('.task-row-item');
+    const start = row?.querySelector('[name*="[start_date]"]')?.value;
+    const end = row?.querySelector('[name*="[end_date]"]')?.value;
+    if (start && end && end < start) {
+      input.setCustomValidity('End date must be on or after the start date.');
+    } else {
+      input.setCustomValidity('');
+    }
+  }
+
+  function removeTaskRow(button) {
+    button.closest('.task-row-item')?.remove();
+  }
+
   function buildReviewAndNext() {
     buildReviewSummary();
-    goToStep(4);
+    saveAndGoToStep(4);
   }
 
   function buildReviewSummary() {
@@ -454,7 +526,7 @@
     document.getElementById('review-deadline').innerText = document.getElementById('end_date').value || 'Not set';
 
     const pri = document.getElementById('priority').value;
-    document.getElementById('review-priority-badge').innerHTML = `<span class="badge p-${pri.toLowerCase()}">${pri}</span>`;
+    document.getElementById('review-priority-badge').innerHTML = pri ? `<span class="badge p-${pri.toLowerCase()}">${pri}</span>` : 'Not set';
 
     const selectedTeams = Array.from(document.querySelectorAll('.team-checkbox:checked'));
     document.getElementById('review-teams-count').innerText = selectedTeams.length;
@@ -511,7 +583,8 @@
             <div style="display:flex; align-items:center; gap:10px;">
               <span style="font-size:12px; color:var(--ink-soft);">👤 ${t.assignee}</span>
               <span class="badge p-${t.priority.toLowerCase()}">${t.priority}</span>
-              ${t.due ? `<span style="font-size:11.5px; color:var(--ink-muted);">Due ${t.due}</span>` : ''}
+              ${t.start ? `<span style="font-size:11.5px; color:var(--ink-muted);">Start ${t.start}</span>` : ''}
+              ${t.due ? `<span style="font-size:11.5px; color:var(--ink-muted);">End ${t.due}</span>` : ''}
             </div>
           </div>
         `).join('');

@@ -62,7 +62,9 @@ class Task extends Model
 
     public function isOverdue(): bool
     {
-        return ! in_array($this->status, ['Done', 'Completed']) && $this->end_date && $this->end_date->isPast();
+        return ! in_array($this->status, ['Done', 'Completed'])
+            && $this->end_date
+            && $this->end_date->isBefore(today());
     }
 
     public function statusBadgeClass(): string

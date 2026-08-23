@@ -33,7 +33,7 @@ class DashboardController extends Controller
         $stats = [
             'active_projects' => (clone $projectQuery)->whereNotIn('status', ['closed'])->count(),
             'open_tasks' => (clone $taskQuery)->whereNotIn('status', ['Done', 'Completed'])->count(),
-            'overdue_tasks' => (clone $taskQuery)->whereNotIn('status', ['Done', 'Completed'])->whereDate('end_date', '<', now())->count(),
+            'overdue_tasks' => (clone $taskQuery)->whereNotNull('end_date')->whereDate('end_date', '<', today())->whereNotIn('status', ['Done', 'Completed'])->count(),
             'budget_allocated' => (float) (clone $budgetQuery)->sum('allocated_amount'),
             'budget_spent' => (float) (clone $budgetQuery)->sum('spent_amount'),
             'pending_change_requests' => $scoped
@@ -62,8 +62,9 @@ class DashboardController extends Controller
             ->take(5)
             ->get();
 
-        $overdueTasksList = Task::whereNotIn('status', ['Done', 'Completed'])
-            ->whereDate('end_date', '<', now())
+        $overdueTasksList = Task::whereNotNull('end_date')
+            ->whereDate('end_date', '<', today())
+            ->whereNotIn('status', ['Done', 'Completed'])
             ->with(['project', 'assignee'])
             ->take(4)
             ->get();
