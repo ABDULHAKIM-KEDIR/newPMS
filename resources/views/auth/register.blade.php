@@ -1,23 +1,8 @@
 @extends('layouts.guest')
 
-@section('title', 'Sign in')
+@section('title', 'Create account')
 
 @section('content')
-
-@if (session('status'))
-    <div
-        style="
-            background:var(--success-soft);
-            color:var(--success);
-            border-radius:8px;
-            padding:10px 12px;
-            font-size:12.6px;
-            margin-bottom:16px;
-        "
-    >
-        {{ session('status') }}
-    </div>
-@endif
 
     <div
         style="
@@ -59,7 +44,6 @@
                 font-weight:700;
                 font-size:16px;
                 color:var(--primary);
-                letter-spacing:-.01em;
             "
         >
             ICT PMS
@@ -83,7 +67,7 @@
             margin-bottom:4px;
         "
     >
-        Sign in
+        Create an account
     </h1>
 
     <div
@@ -93,11 +77,10 @@
             margin-bottom:22px;
         "
     >
-        Use your directorate account to continue.
+        Submit your account request for administrator approval.
     </div>
 
     @if ($errors->any())
-
         <div
             style="
                 background:var(--danger-soft);
@@ -108,20 +91,34 @@
                 margin-bottom:16px;
             "
         >
-            {{ $errors->first() }}
+            <ul style="margin:0; padding-left:18px;">
+                @foreach ($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
         </div>
-
     @endif
 
-    <form
-        method="POST"
-        action="{{ route('login.attempt') }}"
-    >
-
+    <form method="POST" action="{{ route('register.attempt') }}">
         @csrf
 
         <div class="field">
+            <label for="full_name">
+                Full name
+            </label>
 
+            <input
+                type="text"
+                id="full_name"
+                name="full_name"
+                value="{{ old('full_name') }}"
+                placeholder="Your full name"
+                required
+                autofocus
+            >
+        </div>
+
+        <div class="field">
             <label for="email">
                 Email
             </label>
@@ -133,13 +130,27 @@
                 value="{{ old('email') }}"
                 placeholder="you@ju.edu.et"
                 required
-                autofocus
             >
-
         </div>
 
         <div class="field">
+            <label for="phone">
+                Phone
+                <span style="font-weight:400; color:var(--ink-faint);">
+                    (optional)
+                </span>
+            </label>
 
+            <input
+                type="text"
+                id="phone"
+                name="phone"
+                value="{{ old('phone') }}"
+                placeholder="+251..."
+            >
+        </div>
+
+        <div class="field">
             <label for="password">
                 Password
             </label>
@@ -148,10 +159,23 @@
                 type="password"
                 id="password"
                 name="password"
-                placeholder="••••••••"
+                placeholder="At least 8 characters"
                 required
             >
+        </div>
 
+        <div class="field">
+            <label for="password_confirmation">
+                Confirm password
+            </label>
+
+            <input
+                type="password"
+                id="password_confirmation"
+                name="password_confirmation"
+                placeholder="Repeat your password"
+                required
+            >
         </div>
 
         <button
@@ -163,31 +187,30 @@
                 padding:11px;
             "
         >
-            Sign in
+            Submit registration
         </button>
 
     </form>
 
     <div
-    style="
-        text-align:center;
-        margin-top:18px;
-        font-size:12.6px;
-        color:var(--ink-soft);
-    "
->
-    Don't have an account?
-
-    <a
-        href="{{ route('register') }}"
         style="
-            color:var(--primary);
-            font-weight:600;
-            text-decoration:none;
+            text-align:center;
+            margin-top:18px;
+            font-size:12.6px;
+            color:var(--ink-soft);
         "
     >
-        Create one
-    </a>
-</div>
+        Already have an account?
+        <a
+            href="{{ route('login') }}"
+            style="
+                color:var(--primary);
+                font-weight:600;
+                text-decoration:none;
+            "
+        >
+            Sign in
+        </a>
+    </div>
 
 @endsection
