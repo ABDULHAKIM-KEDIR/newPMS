@@ -205,8 +205,8 @@
                 $currentUser->can('manage_users')
             )
 
-                <a 
-    href="{{ route('admin.roles.index') }}" 
+                <a
+    href="{{ route('admin.roles.index') }}"
     class="nav-item {{ request()->routeIs('admin.roles.*') ? 'active' : '' }}"
 >
                     <svg width="16" height="16" viewBox="0 0 24 24"
@@ -290,7 +290,12 @@
             $currentUser = auth()->user();
         @endphp
 
-        <div class="user-chip">
+        <a
+            href="{{ route('profile.edit') }}"
+            class="user-chip"
+            style="text-decoration:none; color:inherit;"
+            title="Edit profile"
+        >
 
             <div class="avatar">
                 {{ $currentUser->initials() }}
@@ -306,7 +311,7 @@
                 </div>
             </div>
 
-        </div>
+        </a>
 
         <form
             method="POST"

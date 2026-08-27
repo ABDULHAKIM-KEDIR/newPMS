@@ -7,8 +7,8 @@ use App\Support\Activity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
@@ -30,7 +30,7 @@ class AuthController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        if (! Auth::attempt($credentials)) {
+        if (! Auth::attempt($credentials, $request->boolean('remember'))) {
             throw ValidationException::withMessages([
                 'email' => 'Those credentials don\'t match any account.',
             ]);
@@ -143,7 +143,7 @@ class AuthController extends Controller
             'Submitted registration',
             'User',
             $user->user_id,
-            $user->full_name . ' (' . $user->email . ') is awaiting approval'
+            $user->full_name.' ('.$user->email.') is awaiting approval'
         );
 
         return redirect()

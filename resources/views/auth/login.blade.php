@@ -154,6 +154,34 @@
 
         </div>
 
+        <div
+            style="
+                display:flex;
+                align-items:center;
+                margin-bottom:16px;
+                font-size:12.6px;
+                color:var(--ink-soft);
+            "
+        >
+            <label
+                style="
+                    display:flex;
+                    align-items:center;
+                    gap:7px;
+                    cursor:pointer;
+                "
+            >
+                <input
+                    type="checkbox"
+                    name="remember"
+                    value="1"
+                    style="accent-color:var(--primary); cursor:pointer;"
+                >
+
+                Remember me
+            </label>
+        </div>
+
         <button
             type="submit"
             class="btn btn-primary"
