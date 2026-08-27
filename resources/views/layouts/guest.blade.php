@@ -42,13 +42,7 @@
 </head>
 <body class="guest-body">
   <div class="card guest-card">
-    <div class="guest-brand">
-      <div class="brand-mark">JU</div>
-      <div>
-        <div class="t1">ICT PMS</div>
-        <div class="t2">Jimma University</div>
-      </div>
-    </div>
+    
     @yield('content')
   </div>
 </body>
