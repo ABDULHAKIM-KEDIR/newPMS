@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\Permission;
 use App\Models\Phase;
 use App\Models\PhaseBudget;
 use App\Models\Project;
@@ -23,28 +22,13 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         // ---- Roles & permissions ----
-        // Permission slugs and default role grants are the single source of
-        // truth in App\Support\Permissions — the same list AppServiceProvider
-        // reads to register a Gate per slug. permission_name IS the slug
-        // (e.g. 'edit_projects'), and its description is stored separately.
-        $roles = collect(array_keys(Permissions::ROLE_GRANTS))->mapWithKeys(
-            fn ($name) => [$name => Role::create(['role_name' => $name, 'description' => "$name role"])]
-        );
+        // The dynamic RBAC catalogue: permissions + default roles (with
+        // inheritance and scopes) live in RbacSeeder, which also aliases
+        // legacy directorate role names onto canonical ones.
+        $this->call(RbacSeeder::class);
 
-        $permissions = collect(Permissions::ALL)->mapWithKeys(
-            fn ($description, $slug) => [
-                $slug => Permission::create([
-                    'permission_name' => $slug,
-                    'description' => $description,
-                ]),
-            ]
-        );
-
-        foreach (Permissions::ROLE_GRANTS as $roleName => $slugs) {
-            foreach ($slugs as $slug) {
-                $roles[$roleName]->permissions()->attach($permissions[$slug]->permission_id);
-            }
-        }
+        $roles = Role::whereIn('role_name', ['Administrator', 'Project Manager', 'Team Lead', 'Team Member'])
+            ->get()->keyBy('role_name');
 
         // ---- The one bootstrap account ----
         // No demo users, teams, or projects — this is a clean install. The
@@ -59,7 +43,7 @@ class DatabaseSeeder extends Seeder
             'phone' => null,
             'status' => 'Active',
         ]);
-        $admin->roles()->attach($roles['System Administrator']->role_id);
+        $admin->roles()->attach($roles['Administrator']->role_id);
 
         // ---- Demo Accounts & Sample Data ----
         $director = User::create([
@@ -70,7 +54,7 @@ class DatabaseSeeder extends Seeder
             'department' => 'ICT Directorate',
             'status' => 'Active',
         ]);
-        $director->roles()->attach($roles['ICT Director']->role_id);
+        $director->roles()->attach($roles['Administrator']->role_id);
 
         $leader = User::create([
             'full_name' => 'Team Leader',
@@ -80,7 +64,7 @@ class DatabaseSeeder extends Seeder
             'department' => 'Software Engineering',
             'status' => 'Active',
         ]);
-        $leader->roles()->attach($roles['Team Leader']->role_id);
+        $leader->roles()->attach($roles['Team Lead']->role_id);
 
         // Project Manager - John Smith
         $johnSmith = User::create([
@@ -185,7 +169,7 @@ class DatabaseSeeder extends Seeder
             'department' => 'Network & Infrastructure',
             'status' => 'Active',
         ]);
-        $abebe->roles()->attach($roles['Team Leader']->role_id);
+        $abebe->roles()->attach($roles['Team Lead']->role_id);
 
         $kebede = User::create([
             'full_name' => 'Kebede Michael',
@@ -195,7 +179,7 @@ class DatabaseSeeder extends Seeder
             'department' => 'Software Engineering',
             'status' => 'Active',
         ]);
-        $kebede->roles()->attach($roles['Team Leader']->role_id);
+        $kebede->roles()->attach($roles['Team Lead']->role_id);
 
         $chaltu = User::create([
             'full_name' => 'Chaltu Dibaba',

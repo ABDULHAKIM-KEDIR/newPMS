@@ -10,7 +10,7 @@ class Permission extends Model
 
     public $timestamps = false;
 
-    protected $fillable = ['permission_name', 'description'];
+    protected $fillable = ['permission_name', 'description', 'group'];
 
     public function roles()
     {

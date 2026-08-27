@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\RbacService;
 use Illuminate\Database\Eloquent\Model;
 
 class Project extends Model
@@ -15,6 +16,9 @@ class Project extends Model
         'project_manager_id', 'scope_statement', 'start_date', 'end_date', 'priority', 'status', 'progress', 'created_by',
     ];
 
+    /** Valid access levels for teams assigned to this project. */
+    public const TEAM_ACCESS_LEVELS = ['view', 'contribute', 'manage'];
+
     protected $casts = [
         'start_date' => 'date',
         'end_date' => 'date',
@@ -27,7 +31,16 @@ class Project extends Model
 
     public function teams()
     {
-        return $this->belongsToMany(Team::class, 'project_teams', 'project_id', 'team_id')->withPivot('assigned_date');
+        return $this->belongsToMany(Team::class, 'project_teams', 'project_id', 'team_id')
+            ->withPivot('assigned_date', 'access_level', 'project_role_id');
+    }
+
+    /**
+     * Pivots with access metadata, for the multi-team collaboration UI.
+     */
+    public function teamAssignments()
+    {
+        return $this->hasMany(ProjectTeam::class, 'project_id', 'project_id');
     }
 
     /**
@@ -348,20 +361,14 @@ class Project extends Model
     }
 
     /**
-     * True if the user can manage this project's tasks/assignments —
-     * either they lead the project's team, or they hold a directorate-wide
-     * management role (ICT Director / System Administrator).
-     */
-    /**
-     * Blanket "manages this project" access is Director-scoped, not
-     * Director-or-Admin — an Administrator only gets project authority if
-     * a Director explicitly grants edit_projects/delete_projects to their
-     * role from Roles & Access. This is checked alongside a permission gate
-     * in the controller, not instead of one.
+     * Blanket "manages this project" authority is resolved through the
+     * RBAC engine (org roles, the PM of record, team leaders with a
+     * manage-level team assignment, or explicit project roles) rather
+     * than hard-coded role names.
      */
     public function isManagedBy(User $user): bool
     {
-        if ($user->hasRole('ICT Director') || $user->hasRole('System Administrator') || $user->hasRole('Admin') || $user->hasRole('Project Manager')) {
+        if ($user->hasPermission('edit_projects')) {
             return true;
         }
 
@@ -369,14 +376,10 @@ class Project extends Model
             return true;
         }
 
-        if (optional($this->team)->team_leader_id === $user->user_id) {
-            return true;
-        }
+        $rbac = app(RbacService::class);
 
-        if ($this->teams()->where('team_leader_id', $user->user_id)->exists()) {
-            return true;
-        }
-
-        return false;
+        // A team leader whose team is assigned with manage access manages
+        // the project; a direct project role granting edit_projects too.
+        return $rbac->can($user, 'edit_projects', $this);
     }
 }

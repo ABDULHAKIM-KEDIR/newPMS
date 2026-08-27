@@ -205,10 +205,10 @@
                 $currentUser->can('manage_users')
             )
 
-                <a
-                    href="{{ route('admin.roles') }}"
-                    class="nav-item {{ request()->routeIs('admin.roles') ? 'active' : '' }}"
-                >
+                <a 
+    href="{{ route('admin.roles.index') }}" 
+    class="nav-item {{ request()->routeIs('admin.roles.*') ? 'active' : '' }}"
+>
                     <svg width="16" height="16" viewBox="0 0 24 24"
                         fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M12 3l1.6 3.2 3.5.4-2.6 2.5.7 3.5L12 10.9 8.8 12.6l.7-3.5-2.6-2.5 3.5-.4L12 3Z" />
