@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('title', 'Budgets')
-@section('crumb', '<b>Budgets</b>')
+@section('crumb', 'Budgets')
 
 @section('content')
 <div x-data="{ editModal: false, selectedProject: null, allocated: 0, spent: 0 }">

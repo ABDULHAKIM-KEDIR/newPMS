@@ -1,7 +1,11 @@
 <div class="topbar">
 
     <div class="crumb">
-        @yield('crumb', '<b>Dashboard</b>')
+        @php
+            $crumb = trim(strip_tags($__env->yieldContent('crumb', 'Dashboard')));
+        @endphp
+
+        <strong class="font-bold">{{ $crumb ?: 'Dashboard' }}</strong>
     </div>
 
     <form

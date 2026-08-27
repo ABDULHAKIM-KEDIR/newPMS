@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('title', 'Search')
-@section('crumb', '<b>Search</b>')
+@section('crumb', 'Search')
 
 @section('content')
 <div class="page-head">

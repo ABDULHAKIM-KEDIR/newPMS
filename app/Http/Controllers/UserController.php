@@ -7,7 +7,9 @@ use App\Models\User;
 use App\Support\Activity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class UserController extends Controller
@@ -147,7 +149,7 @@ class UserController extends Controller
             'Created user',
             'User',
             $user->user_id,
-            $user->full_name . ' (' . $user->email . ')'
+            $user->full_name.' ('.$user->email.')'
         );
 
         return redirect()
@@ -350,7 +352,7 @@ class UserController extends Controller
             'Rejected user registration',
             'User',
             $user->user_id,
-            $user->full_name . ' (' . $user->email . ')'
+            $user->full_name.' ('.$user->email.')'
         );
 
         Activity::notify(
@@ -416,5 +418,47 @@ class UserController extends Controller
             'status',
             "{$user->full_name} is now {$user->status}."
         );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Reset User Password
+    |--------------------------------------------------------------------------
+    */
+
+    public function resetPassword(Request $request, User $user)
+    {
+        Gate::authorize('users.reset-password');
+
+        $validated = $request->validate([
+            'password' => ['nullable', 'string', 'min:8', 'max:64'],
+        ]);
+
+        $newPassword = $validated['password']
+            ?? Str::password(10, symbols: false);
+
+        $user->password_hash = Hash::make($newPassword);
+        $user->save();
+
+        $actor = Auth::user();
+
+        Activity::log(
+            'Reset user password',
+            'User',
+            $user->user_id,
+            "Password reset by {$actor->full_name}"
+        );
+
+        Activity::notify(
+            $user->user_id,
+            'Your password was reset by an administrator. '
+                .'Please change it after signing in.',
+            'general'
+        );
+
+        return redirect()
+            ->route('admin.users.index')
+            ->with('temp_password', $newPassword)
+            ->with('reset_user', $user->full_name);
     }
 }

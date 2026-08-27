@@ -29,6 +29,7 @@ class Permissions
         'view_calendar' => ['View project milestones and task calendar', 'Insights'],
         'view_audit_logs' => ['View and export the system audit log', 'Administration'],
         'manage_users' => ['Create, edit, deactivate users, and assign roles', 'Administration'],
+        'users.reset-password' => ['Reset a user\'s password to a temporary default', 'Administration'],
         'manage_roles' => ['Create roles and manage their permissions', 'Administration'],
         'manage_system_settings' => ['Manage system-level configuration', 'Administration'],
     ];
@@ -40,7 +41,7 @@ class Permissions
         'Teams' => ['manage_team'],
         'Governance' => ['approve_change_requests', 'manage_budgets'],
         'Insights' => ['view_reports', 'view_calendar'],
-        'Administration' => ['view_audit_logs', 'manage_users', 'manage_roles', 'manage_system_settings'],
+        'Administration' => ['view_audit_logs', 'manage_users', 'users.reset-password', 'manage_roles', 'manage_system_settings'],
     ];
 
     /**

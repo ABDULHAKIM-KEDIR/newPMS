@@ -2,7 +2,7 @@
 
 @section('title', 'Users')
 
-@section('crumb', '<b>Users</b>')
+@section('crumb', 'Users')
 
 @section('content')
 
@@ -38,6 +38,124 @@
         "
     >
         {{ session('status') }}
+    </div>
+
+@endif
+
+@if (session('temp_password'))
+
+    <div
+        id="resetPasswordModal"
+        class="pms-modal-overlay"
+    >
+        <div
+            class="pms-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="resetModalTitle"
+        >
+
+            <div class="pms-modal-top">
+
+                <div
+                    class="pms-modal-icon"
+                    style="
+                        background:var(--success-soft);
+                        color:var(--success);
+                    "
+                >
+                    <svg width="21" height="21" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M9 11l3 3L22 4" />
+                        <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+                    </svg>
+                </div>
+
+                <div>
+                    <h3
+                        id="resetModalTitle"
+                        class="pms-modal-title"
+                    >
+                        Password reset
+                    </h3>
+
+                    <div class="pms-modal-subtitle">
+                        Share this temporary password with the user.
+                    </div>
+                </div>
+
+                <button
+                    type="button"
+                    class="pms-modal-close"
+                    id="resetModalClose"
+                    aria-label="Close"
+                >
+                    &times;
+                </button>
+
+            </div>
+
+            <div class="pms-modal-body">
+
+                <div class="pms-modal-warning">
+
+                    <strong>
+                        {{ session('reset_user') }}
+                    </strong>
+
+                    <span>
+                        's password has been reset to:
+                    </span>
+
+                    <div
+                        style="
+                            display:flex;
+                            align-items:center;
+                            gap:8px;
+                            margin-top:8px;
+                        "
+                    >
+
+                        <code
+                            id="resetTempPassword"
+                            style="
+                                font-size:15px;
+                                font-weight:600;
+                                letter-spacing:1px;
+                                user-select:all;
+                            "
+                        >
+                            {{ session('temp_password') }}
+                        </code>
+
+                        <button
+                            type="button"
+                            id="resetCopyBtn"
+                            class="pms-modal-btn pms-modal-btn-cancel"
+                            style="padding:5px 10px; font-size:12px;"
+                        >
+                            Copy
+                        </button>
+
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div class="pms-modal-actions">
+
+                <button
+                    type="button"
+                    class="pms-modal-btn pms-modal-btn-confirm"
+                    id="resetModalDone"
+                >
+                    Done
+                </button>
+
+            </div>
+
+        </div>
     </div>
 
 @endif
@@ -281,18 +399,18 @@
                             method="POST"
                             action="{{ route('admin.users.toggleStatus', $u) }}"
                             style="display:inline;"
-                            onsubmit="
-                                return confirm(
-                                    '{{ $u->status === 'Active' ? 'Deactivate' : 'Activate' }} {{ $u->full_name }}?'
-                                );
-                            "
                         >
 
                             @csrf
 
                             <button
-                                type="submit"
-                                class="link-small"
+                                type="button"
+                                class="link-small confirm-action-btn"
+                                data-confirm-title="{{ $u->status === 'Active' ? 'Deactivate user' : 'Activate user' }}"
+                                data-confirm-warning="{{ $u->status === 'Active' ? 'This user will immediately lose access to the system until reactivated.' : 'This user will regain access to the system with their current role and permissions.' }}"
+                                data-confirm-button="{{ $u->status === 'Active' ? 'Deactivate' : 'Activate' }}"
+                                data-confirm-tone="{{ $u->status === 'Active' ? 'danger' : 'success' }}"
+                                data-confirm-user="{{ $u->full_name }}"
                                 style="
                                     background:none;
                                     border:none;
@@ -304,6 +422,36 @@
                             </button>
 
                         </form>
+
+                        @can('users.reset-password')
+                            <form
+                                method="POST"
+                                action="{{ route('admin.users.resetPassword', $u) }}"
+                                style="display:inline; margin-left:14px;"
+                            >
+
+                                @csrf
+
+                                <button
+                                    type="button"
+                                    class="link-small confirm-action-btn"
+                                    data-confirm-title="Reset password"
+                                    data-confirm-warning="A secure random password will be generated. You will see it once — share it with the user so they can change it on next login."
+                                    data-confirm-button="Reset password"
+                                    data-confirm-tone="warn"
+                                    data-confirm-user="{{ $u->full_name }}"
+                                    style="
+                                        background:none;
+                                        border:none;
+                                        cursor:pointer;
+                                        color:var(--primary-dark);
+                                    "
+                                >
+                                    Reset Password
+                                </button>
+
+                            </form>
+                        @endcan
 
                     @else
 
@@ -658,6 +806,102 @@
 </div>
 
 
+{{-- =========================================================
+     DYNAMIC CONFIRMATION MODAL (Deactivate / Activate /
+     Reset Password — populated per-row at click time)
+     ========================================================= --}}
+
+<div
+    id="confirmActionModal"
+    class="pms-modal-overlay"
+    style="display:none;"
+    aria-hidden="true"
+>
+    <div
+        class="pms-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="confirmActionTitle"
+    >
+
+        <div class="pms-modal-top">
+
+            <div
+                class="pms-modal-icon"
+                id="confirmActionIcon"
+                style="
+                    background:var(--danger-soft);
+                    color:var(--danger);
+                "
+            >
+
+                <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                >
+                    <path d="M12 9v4" />
+                    <path d="M12 17h.01" />
+                    <path d="M10.3 3.9L1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+                </svg>
+
+            </div>
+
+            <div>
+
+                <h3
+                    id="confirmActionTitle"
+                    class="pms-modal-title"
+                >
+                    Are you sure?
+                </h3>
+
+            </div>
+
+        </div>
+
+        <div class="pms-modal-body">
+
+            <div class="pms-modal-warning">
+
+                <strong id="confirmActionHeadline">
+                    Are you sure you want to proceed?
+                </strong>
+
+                <br>
+
+                <span id="confirmActionWarning">
+                    This action cannot be undone.
+                </span>
+
+            </div>
+
+        </div>
+
+        <div class="pms-modal-actions">
+
+            <button
+                type="button"
+                class="pms-modal-btn pms-modal-btn-cancel"
+                id="confirmActionCancel"
+            >
+                Cancel
+            </button>
+
+            <button
+                type="button"
+                class="pms-modal-btn pms-modal-btn-confirm"
+                id="confirmActionConfirm"
+            >
+                Confirm
+            </button>
+
+        </div>
+
+    </div>
+</div>
+
 <script>
 document.addEventListener('DOMContentLoaded', function () {
 
@@ -960,6 +1204,155 @@ document.addEventListener('DOMContentLoaded', function () {
 
     /*
     |--------------------------------------------------------------------------
+    | Dynamic confirmation modal
+    | (Deactivate / Activate / Reset Password)
+    |--------------------------------------------------------------------------
+    */
+
+    const confirmModal =
+        document.getElementById('confirmActionModal');
+
+    const confirmTitle =
+        document.getElementById('confirmActionTitle');
+
+    const confirmHeadline =
+        document.getElementById('confirmActionHeadline');
+
+    const confirmWarning =
+        document.getElementById('confirmActionWarning');
+
+    const confirmIcon =
+        document.getElementById('confirmActionIcon');
+
+    const confirmCancel =
+        document.getElementById('confirmActionCancel');
+
+    const confirmButton =
+        document.getElementById('confirmActionConfirm');
+
+    const TONES = {
+        danger: {
+            background: 'var(--danger-soft)',
+            color: 'var(--danger)',
+        },
+        warn: {
+            background: 'var(--accent-soft, #FEF3C7)',
+            color: 'var(--accent-dark, #B45309)',
+        },
+        success: {
+            background: 'var(--success-soft, #DCFCE7)',
+            color: 'var(--success, #16A34A)',
+        },
+    };
+
+    let activeConfirmForm = null;
+
+
+    function closeConfirmModal() {
+
+        confirmModal.style.display = 'none';
+        confirmModal.setAttribute('aria-hidden', 'true');
+
+        activeConfirmForm = null;
+
+        confirmButton.disabled = false;
+        confirmButton.textContent = 'Confirm';
+
+        document.body.style.overflow = '';
+
+    }
+
+
+    document.querySelectorAll('.confirm-action-btn')
+        .forEach(function (button) {
+
+            button.addEventListener('click', function () {
+
+                activeConfirmForm =
+                    button.closest('form');
+
+                const tone =
+                    TONES[button.dataset.confirmTone]
+                    || TONES.danger;
+
+                const title =
+                    button.dataset.confirmTitle;
+
+                const user =
+                    button.dataset.confirmUser;
+
+                confirmTitle.textContent = title;
+
+                confirmHeadline.textContent =
+                    'Are you sure you want '
+                    + title.toLowerCase()
+                    + ' for ' + user + '?';
+
+                confirmWarning.textContent =
+                    button.dataset.confirmWarning;
+
+                confirmIcon.style.background =
+                    tone.background;
+
+                confirmIcon.style.color =
+                    tone.color;
+
+                confirmButton.textContent =
+                    button.dataset.confirmButton;
+
+                confirmButton.style.background =
+                    tone.color;
+
+                confirmModal.style.display = 'flex';
+                confirmModal.setAttribute('aria-hidden', 'false');
+
+                document.body.style.overflow = 'hidden';
+
+                setTimeout(function () {
+                    confirmButton.focus();
+                }, 50);
+
+            });
+
+        });
+
+
+    confirmButton.addEventListener(
+        'click',
+        function () {
+
+            if (!activeConfirmForm) {
+                return;
+            }
+
+            confirmButton.disabled = true;
+
+            activeConfirmForm.submit();
+
+        }
+    );
+
+
+    confirmCancel.addEventListener(
+        'click',
+        closeConfirmModal
+    );
+
+
+    confirmModal.addEventListener(
+        'click',
+        function (event) {
+
+            if (event.target === confirmModal) {
+                closeConfirmModal();
+            }
+
+        }
+    );
+
+
+    /*
+    |--------------------------------------------------------------------------
     | Close on background click
     |--------------------------------------------------------------------------
     */
@@ -1004,9 +1397,86 @@ document.addEventListener('DOMContentLoaded', function () {
 
             closeApproveModal();
             closeRejectModal();
+            closeConfirmModal();
 
         }
     );
+
+    // Password reset success modal
+
+    const resetModal = document.getElementById('resetPasswordModal');
+
+    if (resetModal) {
+
+        resetModal.style.display = 'flex';
+        resetModal.setAttribute('aria-hidden', 'false');
+
+        const closeResetModal = () => {
+
+            resetModal.style.display = 'none';
+            resetModal.setAttribute('aria-hidden', 'true');
+
+        };
+
+        document
+            .getElementById('resetModalClose')
+            .addEventListener('click', closeResetModal);
+
+        document
+            .getElementById('resetModalDone')
+            .addEventListener('click', closeResetModal);
+
+        resetModal.addEventListener(
+            'click',
+            (event) => {
+
+                if (event.target === resetModal) {
+                    closeResetModal();
+                }
+            }
+        );
+
+        document
+            .getElementById('resetCopyBtn')
+            .addEventListener(
+                'click',
+                async () => {
+
+                    const password = document
+                        .getElementById('resetTempPassword')
+                        .textContent
+                        .trim();
+
+                    try {
+
+                        await navigator.clipboard.writeText(password);
+
+                    } catch {
+
+                        const range = document.createRange();
+                        range.selectNodeContents(
+                            document.getElementById('resetTempPassword')
+                        );
+
+                        const selection = window.getSelection();
+                        selection.removeAllRanges();
+                        selection.addRange(range);
+                        document.execCommand('copy');
+                        selection.removeAllRanges();
+
+                    }
+
+                    const copyBtn = document.getElementById('resetCopyBtn');
+                    copyBtn.textContent = 'Copied!';
+
+                    setTimeout(() => {
+                        copyBtn.textContent = 'Copy';
+                    }, 1500);
+
+                }
+            );
+
+    }
 
 });
 </script>

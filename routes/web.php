@@ -682,6 +682,19 @@ Route::middleware(['auth', 'active'])->group(function () {
 
     /*
     |--------------------------------------------------------------------------
+    | Reset User Password
+    |--------------------------------------------------------------------------
+    */
+
+    Route::post(
+        '/admin/users/{user}/reset-password',
+        [UserController::class, 'resetPassword']
+    )
+        ->name('admin.users.resetPassword')
+        ->middleware('can:users.reset-password');
+
+    /*
+    |--------------------------------------------------------------------------
     | Toggle User Status
     |--------------------------------------------------------------------------
     */

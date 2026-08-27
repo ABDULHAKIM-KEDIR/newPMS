@@ -2,7 +2,7 @@
 
 @section('title', 'Roles & Permissions')
 
-@section('crumb', '<b>Roles &amp; Permissions</b>')
+@section('crumb', 'Roles &amp; Permissions')
 
 @section('content')
 

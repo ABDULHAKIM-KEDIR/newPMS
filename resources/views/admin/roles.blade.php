@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('title', 'Roles & Access')
-@section('crumb', '<b>Roles &amp; Access</b>')
+@section('crumb', 'Roles &amp; Access')
 
 @section('content')
 @php
