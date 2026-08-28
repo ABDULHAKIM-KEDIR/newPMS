@@ -28,6 +28,8 @@ Route::middleware('guest')->group(function () {
     Route::post('/register', [AuthController::class, 'register'])->name('register.attempt');
 });
 
+// run
+
 // 'active' runs alongside 'auth' on every one of these — a session for a
 // user a System Administrator just deactivated is killed on the very next
 // request, not just blocked at the next login.
