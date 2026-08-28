@@ -46,7 +46,7 @@
                 color:var(--primary);
             "
         >
-            ICT PMS
+            PMS
         </div>
 
         <div

@@ -9,7 +9,7 @@
         </div>
 
         <div class="brand-text">
-            <div class="t1">ICT PMS</div>
+            <div class="t1">PMS</div>
             <div class="t2">Jimma University</div>
         </div>
     </div>

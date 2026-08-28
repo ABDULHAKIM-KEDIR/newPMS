@@ -13,7 +13,7 @@
                 class="lp-logo"
             >
             <div class="lp-brand-text">
-                <div class="name">ICT PMS</div>
+                <div class="name">PMS</div>
                 <div class="university">Jimma University</div>
             </div>
         </a>
@@ -86,13 +86,13 @@
 
             <div class="lp-badge">
                 <span class="dot"></span>
-                Built for Jimma University's ICT Directorate
+                Built for Jimma University
             </div>
 
             <h1>
                 <span class="word"><span>Run</span></span>
                 <span class="word"><span>every</span></span>
-                <span class="word"><span>ICT</span></span>
+                
                 <span class="word"><span>project</span></span>
                 <span class="word"><span>with</span></span>
                 <span class="word accent-word"><span>total</span></span>

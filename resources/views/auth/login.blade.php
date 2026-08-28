@@ -62,7 +62,7 @@
                 letter-spacing:-.01em;
             "
         >
-            ICT PMS
+            PMS
         </div>
 
         <div
