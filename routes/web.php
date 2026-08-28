@@ -12,6 +12,7 @@ use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PhaseController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\ProjectTypeController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SearchController;
@@ -764,6 +765,57 @@ Route::middleware(['auth', 'active', 'approved'])->group(function () {
         [SystemSettingController::class, 'update']
     )
         ->name('admin.settings.update')
+        ->middleware('can:manage_system_settings');
+
+    /*
+    |--------------------------------------------------------------------------
+    | Project Types (Settings)
+    |--------------------------------------------------------------------------
+    |
+    | Database-managed catalogue used by the project creation wizard.
+    |
+    */
+
+    Route::get(
+        '/settings/project-types',
+        [ProjectTypeController::class, 'index']
+    )
+        ->name('admin.project-types.index')
+        ->middleware('can:manage_system_settings');
+
+    Route::get(
+        '/settings/project-types/{projectType}/edit',
+        [ProjectTypeController::class, 'edit']
+    )
+        ->name('admin.project-types.edit')
+        ->middleware('can:manage_system_settings');
+
+    Route::post(
+        '/settings/project-types',
+        [ProjectTypeController::class, 'store']
+    )
+        ->name('admin.project-types.store')
+        ->middleware('can:manage_system_settings');
+
+    Route::put(
+        '/settings/project-types/{projectType}',
+        [ProjectTypeController::class, 'update']
+    )
+        ->name('admin.project-types.update')
+        ->middleware('can:manage_system_settings');
+
+    Route::post(
+        '/settings/project-types/{projectType}/toggle',
+        [ProjectTypeController::class, 'toggleActive']
+    )
+        ->name('admin.project-types.toggle')
+        ->middleware('can:manage_system_settings');
+
+    Route::delete(
+        '/settings/project-types/{projectType}',
+        [ProjectTypeController::class, 'destroy']
+    )
+        ->name('admin.project-types.destroy')
         ->middleware('can:manage_system_settings');
 
 });

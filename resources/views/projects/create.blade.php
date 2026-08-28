@@ -80,10 +80,11 @@
 
       <div class="form-field">
         <label for="project_type">Project Type <span style="color:var(--danger);">*</span></label>
-        <select id="project_type" name="project_type">
+        <select id="project_type" name="project_type_id" required>
           <option value="">Select Project Type</option>
-          @foreach ($types as $t)
-            <option value="{{ $t }}" {{ old('project_type') === $t ? 'selected' : '' }}>{{ $t }}</option>
+          @foreach ($projectTypes as $type)
+            <option value="{{ $type->project_type_id }}" {{ (string) old('project_type_id') === (string) $type->project_type_id ? 'selected' : '' }}>
+              {{ $type->name }}</option>
           @endforeach
         </select>
       </div>

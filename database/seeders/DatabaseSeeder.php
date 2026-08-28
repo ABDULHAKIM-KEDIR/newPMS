@@ -26,6 +26,7 @@ class DatabaseSeeder extends Seeder
         // inheritance and scopes) live in RbacSeeder, which also aliases
         // legacy directorate role names onto canonical ones.
         $this->call(RbacSeeder::class);
+        $this->call(ProjectTypeSeeder::class);
 
         $roles = Role::whereIn('role_name', ['Administrator', 'Project Manager', 'Team Lead', 'Team Member'])
             ->get()->keyBy('role_name');

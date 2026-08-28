@@ -12,7 +12,7 @@ class Project extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'project_name', 'description', 'client', 'project_type', 'team_id', 'template_id',
+        'project_name', 'description', 'client', 'project_type', 'project_type_id', 'team_id', 'template_id',
         'project_manager_id', 'scope_statement', 'start_date', 'end_date', 'priority', 'status', 'progress', 'created_by',
     ];
 
@@ -27,6 +27,11 @@ class Project extends Model
     public function team()
     {
         return $this->belongsTo(Team::class, 'team_id', 'team_id');
+    }
+
+    public function projectType()
+    {
+        return $this->belongsTo(ProjectType::class, 'project_type_id', 'project_type_id');
     }
 
     public function teams()
