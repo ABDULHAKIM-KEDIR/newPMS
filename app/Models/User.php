@@ -11,7 +11,7 @@ class User extends Authenticatable
 
     public $timestamps = false;
 
-    protected $fillable = ['full_name', 'email', 'password_hash', 'phone', 'department', 'avatar', 'status'];
+    protected $fillable = ['full_name', 'email', 'password_hash', 'phone', 'department', 'avatar', 'status', 'role'];
 
     protected $hidden = ['password_hash'];
 
@@ -94,6 +94,21 @@ class User extends Authenticatable
     public function isActive(): bool
     {
         return $this->status === 'Active';
+    }
+
+    /** True if this account is still an unassigned public registrant.
+     *  A user with any RBAC role attached is never a guest, even if the
+     *  column was not updated by older code paths. */
+    public function isGuest(): bool
+    {
+        return $this->role === 'guest'
+            && $this->roles()->exists() === false;
+    }
+
+    /** True if the registration has not been approved/rejected yet. */
+    public function isPending(): bool
+    {
+        return strtolower((string) $this->status) === 'pending';
     }
 
     public function isDirectorOrAdmin(): bool

@@ -10,7 +10,7 @@ class Notification extends Model
 
     public $timestamps = false;
 
-    protected $fillable = ['user_id', 'message', 'is_read', 'type'];
+    protected $fillable = ['user_id', 'message', 'is_read', 'type', 'link'];
 
     protected $casts = ['is_read' => 'boolean', 'created_at' => 'datetime'];
 

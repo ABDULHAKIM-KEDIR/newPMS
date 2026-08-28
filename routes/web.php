@@ -6,6 +6,7 @@ use App\Http\Controllers\BudgetController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\ChangeRequestController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\GuestController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PhaseController;
@@ -82,7 +83,7 @@ Route::middleware('guest')->group(function () {
 |
 */
 
-Route::middleware(['auth', 'active'])->group(function () {
+Route::middleware(['auth', 'active', 'approved'])->group(function () {
 
     /*
     |--------------------------------------------------------------------------
@@ -94,6 +95,23 @@ Route::middleware(['auth', 'active'])->group(function () {
         '/logout',
         [AuthController::class, 'logout']
     )->name('logout');
+
+    /*
+    |--------------------------------------------------------------------------
+    | Guest Onboarding (Restricted)
+    |--------------------------------------------------------------------------
+    |
+    | Pending guest registrations are kept on this read-only landing
+    | page. The 'approved' middleware ensures they cannot reach any
+    | other authenticated route, and that approved users are bounced
+    | back to the dashboard if they try to visit it.
+    |
+    */
+
+    Route::get(
+        '/pending-approval',
+        [GuestController::class, 'pendingApproval']
+    )->name('guest.pending');
 
     /*
     |--------------------------------------------------------------------------
