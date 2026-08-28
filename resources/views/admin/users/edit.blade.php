@@ -1,7 +1,7 @@
 @extends('layouts.app')
 @section('title', 'Edit User')
 @section('crumb')
-  <a class="link-small" style="cursor:pointer;" href="{{ route('admin.users.index') }}">Users</a> <b>/ {{ $user->full_name }}</b>
+  <a class="link-small" style="cursor:pointer;" href="{{ route('admin.users.index') }}">Users</a> / {{ $user->full_name }}
 @endsection
 
 @section('content')

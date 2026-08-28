@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('title', $filter === 'all' ? 'All Tasks' : 'My Tasks')
-@section('crumb', '<b>' . ($filter === 'all' ? 'All Tasks' : 'My Tasks') . '</b>')
+@section('crumb', $filter === 'all' ? 'All Tasks' : 'My Tasks')
 
 @section('content')
 <div x-data="{ viewMode: '{{ $view }}' }">

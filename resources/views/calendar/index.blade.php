@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('title', 'Calendar')
-@section('crumb', '<b>Calendar</b>')
+@section('crumb', 'Calendar')
 
 @section('content')
 @php

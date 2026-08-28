@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('title', 'Audit Log')
-@section('crumb', '<b>Audit Log</b>')
+@section('crumb', 'Audit Log')
 
 @section('content')
 <div class="page-head">

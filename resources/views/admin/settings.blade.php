@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('title', 'System Settings')
-@section('crumb', '<b>Settings</b>')
+@section('crumb', 'Settings')
 
 @section('content')
 <div class="page-head">

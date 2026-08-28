@@ -1,7 +1,7 @@
 @extends('layouts.app')
 @section('title', $team->team_name)
 @section('crumb')
-  <a class="link-small" style="cursor:pointer;" href="{{ route('teams.index') }}">Teams</a> <b>/ {{ $team->team_name }}</b>
+  <a class="link-small" style="cursor:pointer;" href="{{ route('teams.index') }}">Teams</a> / {{ $team->team_name }}
 @endsection
 
 @section('content')
@@ -18,9 +18,19 @@
       {{ $allProjects->count() }} Assigned Project(s)
     </div>
   </div>
-  @if (auth()->user()->canCreateProjects())
-    <a href="{{ route('projects.create') }}" class="btn btn-accent">+ New Project</a>
-  @endif
+ <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+    @if (auth()->user()->canCreateProjects())
+      <a href="{{ route('projects.create') }}" class="btn btn-accent">+ New Project</a>
+    @endif
+    @if ($canManage)
+      <a href="{{ route('teams.edit', $team) }}" class="btn btn-primary">Edit Team</a>
+      <form method="POST" action="{{ route('teams.destroy', $team) }}" onsubmit="return confirm('Delete \'{{ $team->team_name }}\' permanently? Its projects will be detached and its members removed.');" style="display:inline;">
+        @csrf
+        @method('DELETE')
+        <button type="submit" class="btn btn-ghost" style="color:var(--danger); border-color:var(--danger-soft);">Delete Team</button>
+      </form>
+    @endif
+ </div>
 </div>
 
 <!-- Team Progress Overview Metric Card -->

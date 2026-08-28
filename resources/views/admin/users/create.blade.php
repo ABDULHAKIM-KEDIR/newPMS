@@ -1,7 +1,7 @@
 @extends('layouts.app')
 @section('title', 'New User')
 @section('crumb')
-  <a class="link-small" style="cursor:pointer;" href="{{ route('admin.users.index') }}">Users</a> <b>/ New</b>
+  <a class="link-small" style="cursor:pointer;" href="{{ route('admin.users.index') }}">Users</a> / New
 @endsection
 
 @section('content')

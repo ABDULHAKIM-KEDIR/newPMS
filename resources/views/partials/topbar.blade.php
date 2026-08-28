@@ -1,7 +1,7 @@
 <div class="topbar">
 
     <div class="crumb">
-        @yield('crumb', '<b>Dashboard</b>')
+        @yield('crumb', 'Dashboard')
     </div>
 
     <form

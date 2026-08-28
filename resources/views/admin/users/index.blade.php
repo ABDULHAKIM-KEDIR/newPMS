@@ -2,7 +2,7 @@
 
 @section('title', 'Users')
 
-@section('crumb', '<b>Users</b>')
+@section('crumb', 'Users')
 
 @section('content')
 

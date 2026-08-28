@@ -1,7 +1,7 @@
 @extends('layouts.app')
 @section('title', $project->project_name)
 @section('crumb')
-  <a class="link-small" style="cursor:pointer;" href="{{ route('projects.index') }}">Projects</a> <b>/ {{ $project->project_name }}</b>
+  <a class="link-small" style="cursor:pointer;" href="{{ route('projects.index') }}">Projects</a> / {{ $project->project_name }}
 @endsection
 
 @section('content')

@@ -1,6 +1,6 @@
 @extends('layouts.app')
 @section('title', 'Teams')
-@section('crumb', '<b>Teams</b>')
+@section('crumb', 'Teams')
 
 @section('content')
 <div class="page-head">
@@ -67,7 +67,12 @@
             @endif
           @endforeach
         </div>
-        <a class="btn btn-ghost" href="{{ route('teams.show', $t) }}" style="font-size:12px; padding:4px 10px;">Dashboard →</a>
+        <div style="display:flex; gap:6px;">
+          <a class="btn btn-ghost" href="{{ route('teams.show', $t) }}" style="font-size:12px; padding:4px 10px;">Dashboard →</a>
+          @if (auth()->user()->can('manage_team') || auth()->user()->isAdmin() || auth()->user()->isDirectorOrAdmin())
+            <a class="btn btn-ghost" href="{{ route('teams.edit', $t) }}" style="font-size:12px; padding:4px 10px;">Edit</a>
+          @endif
+        </div>
       </div>
     </div>
   @endforeach

@@ -19,7 +19,6 @@ use App\Http\Controllers\TeamController;
 use App\Http\Controllers\UserController;
 use Illuminate\Support\Facades\Route;
 
-
 /*
 |--------------------------------------------------------------------------
 | Public Landing Page
@@ -30,7 +29,6 @@ Route::get(
     '/',
     [LandingController::class, 'index']
 )->name('landing');
-
 
 /*
 |--------------------------------------------------------------------------
@@ -56,7 +54,6 @@ Route::middleware('guest')->group(function () {
         [AuthController::class, 'login']
     )->name('login.attempt');
 
-
     /*
      * Public Registration
      */
@@ -72,7 +69,6 @@ Route::middleware('guest')->group(function () {
 
 });
 
-
 /*
 |--------------------------------------------------------------------------
 | Authenticated Application
@@ -87,7 +83,6 @@ Route::middleware('guest')->group(function () {
 
 Route::middleware(['auth', 'active'])->group(function () {
 
-
     /*
     |--------------------------------------------------------------------------
     | Authentication
@@ -98,7 +93,6 @@ Route::middleware(['auth', 'active'])->group(function () {
         '/logout',
         [AuthController::class, 'logout']
     )->name('logout');
-
 
     /*
     |--------------------------------------------------------------------------
@@ -111,7 +105,6 @@ Route::middleware(['auth', 'active'])->group(function () {
         [DashboardController::class, 'index']
     )->name('dashboard');
 
-
     /*
     |--------------------------------------------------------------------------
     | Search
@@ -122,7 +115,6 @@ Route::middleware(['auth', 'active'])->group(function () {
         '/search',
         [SearchController::class, 'index']
     )->name('search');
-
 
     /*
     |--------------------------------------------------------------------------
@@ -253,7 +245,6 @@ Route::middleware(['auth', 'active'])->group(function () {
         ->name('projects.changeRequests.store')
         ->middleware('can:view_projects');
 
-
     /*
     |--------------------------------------------------------------------------
     | Project Phases
@@ -288,7 +279,6 @@ Route::middleware(['auth', 'active'])->group(function () {
         ->name('phases.destroy')
         ->middleware('can:edit_projects');
 
-
     /*
     |--------------------------------------------------------------------------
     | Project Details
@@ -301,7 +291,6 @@ Route::middleware(['auth', 'active'])->group(function () {
     )
         ->name('projects.show')
         ->middleware('can:view_projects');
-
 
     /*
     |--------------------------------------------------------------------------
@@ -400,7 +389,6 @@ Route::middleware(['auth', 'active'])->group(function () {
         ->name('tasks.subtasks.toggle')
         ->middleware('can:view_tasks');
 
-
     /*
     |--------------------------------------------------------------------------
     | Change Requests
@@ -420,7 +408,6 @@ Route::middleware(['auth', 'active'])->group(function () {
     )
         ->name('changeRequests.reject')
         ->middleware('can:approve_change_requests');
-
 
     /*
     |--------------------------------------------------------------------------
@@ -471,12 +458,32 @@ Route::middleware(['auth', 'active'])->group(function () {
         ->middleware('can:manage_team');
 
     Route::get(
+        '/teams/{team}/edit',
+        [TeamController::class, 'edit']
+    )
+        ->name('teams.edit')
+        ->middleware('can:manage_team');
+
+    Route::put(
+        '/teams/{team}',
+        [TeamController::class, 'update']
+    )
+        ->name('teams.update')
+        ->middleware('can:manage_team');
+
+    Route::delete(
+        '/teams/{team}',
+        [TeamController::class, 'destroy']
+    )
+        ->name('teams.destroy')
+        ->middleware('can:manage_team');
+
+    Route::get(
         '/teams/{team}',
         [TeamController::class, 'show']
     )
         ->name('teams.show')
         ->middleware('can:view_projects');
-
 
     /*
     |--------------------------------------------------------------------------
@@ -503,7 +510,6 @@ Route::middleware(['auth', 'active'])->group(function () {
         ->name('budgets.phases.update')
         ->middleware('can:manage_budgets');
 
-
     /*
     |--------------------------------------------------------------------------
     | Notifications
@@ -520,7 +526,6 @@ Route::middleware(['auth', 'active'])->group(function () {
         [NotificationController::class, 'markAllRead']
     )->name('notifications.markAllRead');
 
-
     /*
     |--------------------------------------------------------------------------
     | Reports
@@ -532,7 +537,6 @@ Route::middleware(['auth', 'active'])->group(function () {
         [ReportController::class, 'index']
     )->name('reports.index');
 
-
     /*
     |--------------------------------------------------------------------------
     | Calendar
@@ -543,7 +547,6 @@ Route::middleware(['auth', 'active'])->group(function () {
         '/calendar',
         [CalendarController::class, 'index']
     )->name('calendar.index');
-
 
     /*
     |--------------------------------------------------------------------------
@@ -577,7 +580,6 @@ Route::middleware(['auth', 'active'])->group(function () {
         ->name('admin.roles.togglePermission')
         ->middleware('can:manage_roles');
 
-
     /*
     |--------------------------------------------------------------------------
     | Audit Log
@@ -597,7 +599,6 @@ Route::middleware(['auth', 'active'])->group(function () {
     )
         ->name('admin.audit.export')
         ->middleware('can:view_audit_logs');
-
 
     /*
     |--------------------------------------------------------------------------
@@ -630,7 +631,6 @@ Route::middleware(['auth', 'active'])->group(function () {
         ->name('admin.users.store')
         ->middleware('can:manage_users');
 
-
     /*
     |--------------------------------------------------------------------------
     | Registration Approval
@@ -655,7 +655,6 @@ Route::middleware(['auth', 'active'])->group(function () {
         ->name('admin.users.reject')
         ->middleware('can:manage_users');
 
-
     /*
     |--------------------------------------------------------------------------
     | Edit User
@@ -676,7 +675,6 @@ Route::middleware(['auth', 'active'])->group(function () {
         ->name('admin.users.update')
         ->middleware('can:manage_users');
 
-
     /*
     |--------------------------------------------------------------------------
     | Toggle User Status
@@ -689,7 +687,6 @@ Route::middleware(['auth', 'active'])->group(function () {
     )
         ->name('admin.users.toggleStatus')
         ->middleware('can:manage_users');
-
 
     /*
     |--------------------------------------------------------------------------
