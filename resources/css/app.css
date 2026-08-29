@@ -2232,3 +2232,26 @@ tbody tr:hover{
         transform: translateY(0) scale(1);
     }
 }
+/* =========================================================
+   META ROWS (read-only profile attributes)
+   ========================================================= */
+
+.meta-row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:12px;
+  padding:10px 0 0;
+  margin-bottom:10px;
+  border-top:1px solid var(--line);
+  font-size:13px;
+}
+
+.meta-row .k{
+  color:var(--ink-soft);
+}
+
+.meta-row .v{
+  font-weight:600;
+  color:var(--ink);
+}
