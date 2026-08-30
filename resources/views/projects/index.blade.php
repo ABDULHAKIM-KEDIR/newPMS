@@ -35,7 +35,6 @@
       @foreach ($projects as $p)
         @php
           $b = $p->budget; $util = $b ? $b->utilisationPercent() : 0;
-          $statusCls = ['active' => 'b-active', 'planning' => 'b-planning', 'risk' => 'b-risk', 'closed' => 'b-closed'][$p->status] ?? 'b-planning';
           $pTasks = $p->allTasks();
           $totalTasksCount = $pTasks->count();
           $completedTasksCount = $pTasks->filter(fn($t) => in_array($t->status, ['Done', 'Completed']))->count();
@@ -70,7 +69,7 @@
             </div>
             <div class="progressbar"><div style="width:{{ $taskPct }}%"></div></div>
           </td>
-          <td><span class="badge {{ $statusCls }}"><span class="badge-dot"></span>{{ ucfirst($p->status) }}</span></td>
+          <td><x-status-badge :status="$p->status" /></td>
           <td>
             <div class="cell-sub" style="margin-bottom:4px;">{{ $util }}% · ETB {{ number_format($b->spent_amount ?? 0) }}</div>
             <div class="progressbar {{ $util>85?'danger':($util>65?'warn':'') }}"><div style="width:{{ $util }}%"></div></div>

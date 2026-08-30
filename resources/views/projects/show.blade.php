@@ -26,18 +26,7 @@
         <span class="priority p-{{ strtolower($project->priority ?: 'medium') }}" style="font-size:11px;">
           {{ $project->priority ?: 'Medium' }} Priority
         </span>
-        @php
-          $statusCls = match($project->status) {
-            'active', 'In Progress' => 'b-active',
-            'planning', 'To Do' => 'b-planning',
-            'risk', 'Blocked' => 'b-risk',
-            'closed', 'Completed' => 'b-closed',
-            default => 'b-planning'
-          };
-        @endphp
-        <span class="badge {{ $statusCls }}" style="font-size:11px;">
-          <span class="badge-dot"></span>{{ ucfirst($project->status) }}
-        </span>
+        <x-status-badge :status="$project->status" class="badge-sm" />
       </div>
 
       <h1 style="margin:0 0 4px; font-size:24px; font-weight:800;">{{ $project->project_name }}</h1>
@@ -412,9 +401,7 @@
                 <td><span class="priority p-{{ strtolower($t->priority) }}">{{ $t->priority }}</span></td>
                 <td><span class="mono" style="font-weight:600; font-size:12px; color:var(--ink);">ETB {{ number_format($t->budget ?: 0) }}</span></td>
                 <td>
-                  <span class="badge {{ $t->statusBadgeClass() }}">
-                    <span class="badge-dot"></span>{{ $t->status }}
-                  </span>
+                  <x-status-badge :status="$t->status" />
                 </td>
                 <td><span class="{{ $late ? 'late' : '' }}">{{ optional($t->end_date)->format('d M Y') ?: '—' }}</span></td>
                 <td style="text-align:right;">
@@ -696,9 +683,7 @@
                 <td><span style="font-size:12px; color:var(--ink-soft);">{{ $d->description ?: '—' }}</span></td>
                 <td><span class="cell-sub">{{ optional($d->due_date)->format('d M Y') ?: 'Not set' }}</span></td>
                 <td>
-                  <span class="badge {{ $d->status === 'Delivered' ? 'b-active' : 'b-planning' }}">
-                    <span class="badge-dot"></span>{{ $d->status }}
-                  </span>
+                  <x-status-badge :status="$d->status" />
                 </td>
                 <td style="text-align:right;">
                   @if (auth()->user()->can('edit_projects') && $project->isManagedBy(auth()->user()))

@@ -16,6 +16,7 @@ use App\Models\Task;
 use App\Models\Team;
 use App\Models\User;
 use App\Services\ProjectWizardService;
+use App\Services\RosterService;
 use App\Support\Activity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -25,11 +26,12 @@ use Illuminate\Support\Facades\Gate;
 
 class ProjectController extends Controller
 {
-    public function __construct(private ProjectWizardService $projectWizardService) {}
+    public function __construct(
+        private ProjectWizardService $projectWizardService,
+        private RosterService $rosterService,
+    ) {}
 
     private const PHASES = ['Initiation', 'Planning', 'Execution', 'Monitoring', 'Closure'];
-
-    private const TYPES = ['Software', 'Network & Infrastructure', 'Training & Consultancy', 'Enterprise Systems', 'Research & Development'];
 
     private const STATUSES = ['planning', 'active', 'risk', 'closed'];
 
@@ -103,7 +105,7 @@ class ProjectController extends Controller
 
         $tasks = $project->allTasks();
         $assignableUsers = $project->getAssignableUsersWithRoles();
-        $projectRoster = $project->getProjectRoster();
+        $projectRoster = $this->rosterService->getFormattedRoster($project);
         $taskStats = $project->taskStats();
         $allTeams = Team::where('status', 'Active')->with('leader')->orderBy('team_name')->get();
 
@@ -135,7 +137,6 @@ class ProjectController extends Controller
         return view('projects.create', [
             'teams' => $teams,
             'teamsData' => $teamsData,
-            'types' => self::TYPES,
             'projectTypes' => $projectTypes,
             'priorities' => self::PRIORITIES,
             'projectManagers' => $projectManagers,
@@ -309,7 +310,7 @@ class ProjectController extends Controller
         return view('projects.edit', [
             'project' => $project->load(['budget', 'memberRoles.user', 'memberRoles.role', 'projectManager', 'team.leader']),
             'teams' => $this->eligibleTeamsFor($user, $project),
-            'types' => self::TYPES,
+            'projectTypes' => ProjectType::where('is_active', true)->orderBy('name')->get(),
             'statuses' => self::STATUSES,
             'projectManagers' => User::where('status', 'Active')->orderBy('full_name')->get(),
             'canEditBudget' => $user->can('manage_budgets'),
