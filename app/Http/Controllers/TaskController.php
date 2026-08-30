@@ -103,6 +103,9 @@ class TaskController extends Controller
             'attachments.uploader', 'dependencies', 'assignee', 'phase.project.team', 'progressLogs.user',
         ]);
 
+        $this->authorize('view', $task);
+
+        /** @var User $user */
         $user = Auth::user();
         $project = $task->project ?? optional($task->phase)->project;
 
@@ -272,6 +275,7 @@ class TaskController extends Controller
         $user = Auth::user();
 
         $isAssignee = (int) $task->assigned_to === (int) $user->user_id;
+        $this->authorize('updateStatus', $task);
         abort_unless($user->can('update_task_status') && ($isAssignee || ($project && $project->isManagedBy($user)) || $user->isDirectorOrAdmin()), 403);
 
         $data = $request->validate([
@@ -510,6 +514,16 @@ class TaskController extends Controller
 
     public function downloadAttachment(Attachment $attachment)
     {
+        // IDOR guard: the attachment must belong to a task the current user
+        // can view (entity_type 'Task'), or belong to an unknown type and be
+        // rejected outright.
+        abort_unless($attachment->entity_type === 'Task', 404);
+
+        $task = Task::find((int) $attachment->entity_id);
+        abort_unless($task !== null, 404);
+
+        $this->authorize('view', $task);
+
         abort_unless(Storage::disk('public')->exists($attachment->file_path), 404);
 
         return Storage::disk('public')->download($attachment->file_path, $attachment->file_name);

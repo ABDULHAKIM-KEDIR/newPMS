@@ -4,7 +4,10 @@ namespace App\Providers;
 
 use App\Models\Phase;
 use App\Models\Project;
+use App\Models\Task;
 use App\Models\User;
+use App\Policies\ProjectPolicy;
+use App\Policies\TaskPolicy;
 use App\Services\RbacService;
 use App\Support\Permissions;
 use Illuminate\Support\Facades\Gate;
@@ -34,5 +37,9 @@ class AppServiceProvider extends ServiceProvider
                 return $rbac->can($user, $slug, $project);
             });
         }
+
+        // Explicit policy registrations for object-level authorization.
+        Gate::policy(Project::class, ProjectPolicy::class);
+        Gate::policy(Task::class, TaskPolicy::class);
     }
 }

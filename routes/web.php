@@ -514,7 +514,9 @@ Route::middleware(['auth', 'active', 'approved'])->group(function () {
     Route::get(
         '/budgets',
         [BudgetController::class, 'index']
-    )->name('budgets.index');
+    )
+        ->name('budgets.index')
+        ->middleware('can:view_budgets');
 
     Route::post(
         '/budgets/projects/{project}',
@@ -539,12 +541,16 @@ Route::middleware(['auth', 'active', 'approved'])->group(function () {
     Route::get(
         '/notifications',
         [NotificationController::class, 'index']
-    )->name('notifications.index');
+    )
+        ->name('notifications.index')
+        ->middleware('can:view_notifications');
 
     Route::post(
         '/notifications/mark-all-read',
         [NotificationController::class, 'markAllRead']
-    )->name('notifications.markAllRead');
+    )
+        ->name('notifications.markAllRead')
+        ->middleware('can:view_notifications');
 
     /*
     |--------------------------------------------------------------------------
@@ -555,7 +561,9 @@ Route::middleware(['auth', 'active', 'approved'])->group(function () {
     Route::get(
         '/reports',
         [ReportController::class, 'index']
-    )->name('reports.index');
+    )
+        ->name('reports.index')
+        ->middleware('can:view_reports');
 
     /*
     |--------------------------------------------------------------------------
@@ -566,7 +574,9 @@ Route::middleware(['auth', 'active', 'approved'])->group(function () {
     Route::get(
         '/calendar',
         [CalendarController::class, 'index']
-    )->name('calendar.index');
+    )
+        ->name('calendar.index')
+        ->middleware('can:view_calendar');
 
     /*
     |--------------------------------------------------------------------------

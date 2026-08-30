@@ -25,8 +25,10 @@ class Permissions
         'manage_team' => ['Add or remove team members', 'Teams'],
         'approve_change_requests' => ['Approve or reject change requests', 'Governance'],
         'manage_budgets' => ['Edit project and phase budgets', 'Governance'],
+        'view_budgets' => ['View project and phase budgets', 'Governance'],
         'view_reports' => ['View performance reports and analytics', 'Insights'],
         'view_calendar' => ['View project milestones and task calendar', 'Insights'],
+        'view_notifications' => ['View and manage personal notifications', 'Insights'],
         'view_audit_logs' => ['View and export the system audit log', 'Administration'],
         'manage_users' => ['Create, edit, deactivate users, and assign roles', 'Administration'],
         'users.reset-password' => ['Reset a user\'s password to a temporary default', 'Administration'],
@@ -39,8 +41,8 @@ class Permissions
         'Projects' => ['view_projects', 'create_projects', 'edit_projects', 'delete_projects'],
         'Tasks' => ['view_tasks', 'create_tasks', 'assign_tasks', 'update_task_status'],
         'Teams' => ['manage_team'],
-        'Governance' => ['approve_change_requests', 'manage_budgets'],
-        'Insights' => ['view_reports', 'view_calendar'],
+        'Governance' => ['approve_change_requests', 'manage_budgets', 'view_budgets'],
+        'Insights' => ['view_reports', 'view_calendar', 'view_notifications'],
         'Administration' => ['view_audit_logs', 'manage_users', 'users.reset-password', 'manage_roles', 'manage_system_settings'],
     ];
 
@@ -64,7 +66,7 @@ class Permissions
             'parent' => 'Team Lead',
             'permissions' => [
                 'create_projects', 'delete_projects', 'approve_change_requests',
-                'manage_budgets', 'view_reports', 'view_audit_logs',
+                'manage_budgets', 'view_budgets', 'view_reports', 'view_audit_logs',
             ],
         ],
         'Team Lead' => [
@@ -73,6 +75,7 @@ class Permissions
             'parent' => 'Team Member',
             'permissions' => [
                 'edit_projects', 'create_tasks', 'assign_tasks', 'manage_team',
+                'view_budgets',
             ],
         ],
         'Team Member' => [
@@ -81,7 +84,7 @@ class Permissions
             'parent' => null,
             'permissions' => [
                 'view_projects', 'view_tasks', 'update_task_status',
-                'view_reports', 'view_calendar',
+                'view_reports', 'view_calendar', 'view_notifications',
             ],
         ],
         'Project Contributor' => [
@@ -94,7 +97,7 @@ class Permissions
             'scope' => 'project',
             'rank' => 80,
             'parent' => null,
-            'permissions' => ['view_projects', 'view_tasks', 'view_calendar'],
+            'permissions' => ['view_projects', 'view_tasks', 'view_calendar', 'view_notifications'],
         ],
     ];
 
