@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreTaskCommentRequest;
+use App\Http\Requests\StoreTaskRequest;
+use App\Http\Requests\UpdateTaskRequest;
 use App\Models\Attachment;
 use App\Models\Phase;
 use App\Models\Project;
@@ -201,7 +204,7 @@ class TaskController extends Controller
         ]);
     }
 
-    public function store(Request $request)
+    public function store(StoreTaskRequest $request)
     {
         $user = Auth::user();
         abort_unless($user->can('create_tasks'), 403);
@@ -227,27 +230,7 @@ class TaskController extends Controller
         $assigneeInput = $request->input('assigned_to') ?? $request->input('assignee_name') ?? $request->input('assignee_input');
         $resolvedAssigneeId = $this->resolveAssigneeId($assigneeInput, $project);
 
-        $data = $request->validate([
-            'project_id' => ['nullable', 'exists:projects,project_id'],
-            'phase_id' => ['nullable', 'exists:phases,phase_id'],
-            'team_id' => ['nullable', 'exists:teams,team_id'],
-            'task_name' => ['required', 'string', 'max:150'],
-            'description' => ['nullable', 'string', 'max:2000'],
-            'priority' => ['required', 'in:High,Medium,Low,Urgent'],
-            'status' => ['nullable', 'in:'.implode(',', self::STATUSES)],
-            'progress' => ['nullable', 'integer', 'min:0', 'max:100'],
-            'budget' => ['nullable', 'numeric', 'min:0'],
-            'start_date' => ['nullable', 'date'],
-            'end_date' => [
-                'nullable',
-                'date',
-                function ($attribute, $value, $fail) use ($request) {
-                    if ($value && $request->filled('start_date') && $value < $request->input('start_date')) {
-                        $fail('The end date must be a date after or equal to start date.');
-                    }
-                },
-            ],
-        ]);
+        $data = $request->validated();
 
         $status = $data['status'] ?? 'To Do';
         $taskProjectId = $project ? $project->project_id : ($data['project_id'] ?? null);
@@ -394,7 +377,7 @@ class TaskController extends Controller
         ]);
     }
 
-    public function update(Request $request, Task $task)
+    public function update(UpdateTaskRequest $request, Task $task)
     {
         $task->load('phase.project', 'project');
         $project = $task->project ?? optional($task->phase)->project;
@@ -405,28 +388,7 @@ class TaskController extends Controller
 
         abort_unless($user->can('create_tasks') || $canManage || $isAssignee || $user->isDirectorOrAdmin(), 403);
 
-        if ($request->has('start_date') && $request->input('start_date') === '') {
-            $request->merge(['start_date' => null]);
-        }
-        if ($request->has('end_date') && $request->input('end_date') === '') {
-            $request->merge(['end_date' => null]);
-        }
-        if ($request->has('description') && $request->input('description') === '') {
-            $request->merge(['description' => null]);
-        }
-
-        $data = $request->validate([
-            'task_name' => ['sometimes', 'required', 'string', 'max:150'],
-            'description' => ['nullable', 'string', 'max:2000'],
-            'phase_id' => ['nullable', 'exists:phases,phase_id'],
-            'team_id' => ['nullable', 'exists:teams,team_id'],
-            'priority' => ['sometimes', 'required', 'in:High,Medium,Low,Urgent'],
-            'status' => ['sometimes', 'required', 'in:'.implode(',', self::STATUSES)],
-            'progress' => ['nullable', 'integer', 'min:0', 'max:100'],
-            'budget' => ['nullable', 'numeric', 'min:0'],
-            'start_date' => ['nullable', 'date'],
-            'end_date' => ['nullable', 'date'],
-        ]);
+        $data = $request->validated();
 
         if ($request->has('assigned_to') || $request->has('assignee_name')) {
             $assigneeInput = $request->input('assigned_to') ?? $request->input('assignee_name');
@@ -459,11 +421,9 @@ class TaskController extends Controller
         return back()->with('status', 'Task updated successfully.');
     }
 
-    public function addComment(Request $request, Task $task)
+    public function addComment(StoreTaskCommentRequest $request, Task $task)
     {
-        $data = $request->validate([
-            'comment_text' => ['required', 'string', 'max:2000'],
-        ]);
+        $data = $request->validated();
 
         $user = Auth::user();
 

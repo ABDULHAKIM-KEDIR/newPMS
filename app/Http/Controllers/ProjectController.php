@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreProjectRequest;
+use App\Http\Requests\UpdateProjectRequest;
 use App\Models\ChangeRequest;
 use App\Models\Phase;
 use App\Models\PhaseBudget;
@@ -10,21 +12,21 @@ use App\Models\ProjectBudget;
 use App\Models\ProjectDeliverable;
 use App\Models\ProjectMemberRole;
 use App\Models\ProjectType;
-use App\Models\Role;
 use App\Models\Task;
 use App\Models\Team;
-use App\Models\TeamMember;
 use App\Models\User;
+use App\Services\ProjectWizardService;
 use App\Support\Activity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Validation\Rule;
 
 class ProjectController extends Controller
 {
+    public function __construct(private ProjectWizardService $projectWizardService) {}
+
     private const PHASES = ['Initiation', 'Planning', 'Execution', 'Monitoring', 'Closure'];
 
     private const TYPES = ['Software', 'Network & Infrastructure', 'Training & Consultancy', 'Enterprise Systems', 'Research & Development'];
@@ -289,177 +291,11 @@ class ProjectController extends Controller
             ->value('project_type_id');
     }
 
-    public function store(Request $request)
+    public function store(StoreProjectRequest $request)
     {
         Gate::authorize('create_projects');
 
-        /** @var User $user */
-        $user = Auth::user();
-
-        $pmInput = $request->input('project_manager_id') ?? $request->input('project_manager_name');
-        $resolvedPmId = $this->resolveUserId($pmInput, $request->input('team_id'));
-
-        $data = $request->validate([
-            'project_name' => ['required', 'string', 'max:150'],
-            'description' => ['nullable', 'string', 'max:2000'],
-            'client' => ['nullable', 'string', 'max:150'],
-            'project_type' => ['nullable', 'string', 'max:100'],
-            'project_type_id' => ['nullable', 'exists:project_types,project_type_id'],
-            'team_id' => ['nullable', 'exists:teams,team_id'],
-            'team_ids' => ['nullable', 'array'],
-            'team_ids.*' => ['exists:teams,team_id'],
-            'teams' => ['nullable', 'array'],
-            'teams.*' => ['exists:teams,team_id'],
-            'priority' => ['nullable', 'string', 'in:Low,Medium,High,Urgent'],
-            'start_date' => ['nullable', 'date'],
-            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
-            'allocated_amount' => ['nullable', 'numeric', 'min:0'],
-            'members' => ['nullable', 'array'],
-            'members.*.user_id' => ['nullable', 'exists:users,user_id'],
-            'members.*.role_id' => ['nullable', 'exists:roles,role_id'],
-            'members.*.specialty' => ['nullable', 'string', 'max:100'],
-            'tasks' => ['nullable', 'array'],
-            'tasks.*.task_name' => ['nullable', 'string', 'max:150'],
-            'tasks.*.team_id' => ['nullable', 'exists:teams,team_id'],
-            'tasks.*.assigned_to' => ['nullable'],
-            'tasks.*.priority' => ['nullable', 'in:Low,Medium,High,Urgent'],
-            'tasks.*.status' => ['nullable', 'string'],
-            'tasks.*.budget' => ['nullable', 'numeric', 'min:0'],
-            'tasks.*.end_date' => ['nullable', 'date'],
-            'tasks.*.description' => ['nullable', 'string'],
-        ]);
-
-        $selectedTeamIds = collect($request->input('team_ids', []))
-            ->merge($request->input('teams', []))
-            ->push($request->input('team_id'))
-            ->filter()
-            ->unique()
-            ->values();
-
-        $primaryTeamId = $selectedTeamIds->first() ?? $request->input('team_id');
-
-        $project = Project::create([
-            'project_name' => $data['project_name'],
-            'description' => $data['description'] ?? null,
-            'client' => $data['client'] ?? null,
-            'project_type' => $data['project_type'] ?? optional(ProjectType::find($data['project_type_id'] ?? null))->name ?? 'Software',
-            'project_type_id' => $this->resolveProjectTypeId($data),
-            'team_id' => $primaryTeamId,
-            'project_manager_id' => $resolvedPmId,
-            'priority' => $data['priority'] ?? 'Medium',
-            'start_date' => $data['start_date'] ?? null,
-            'end_date' => $data['end_date'] ?? null,
-            'status' => 'planning',
-            'progress' => 0,
-            'created_by' => $user->user_id,
-        ]);
-
-        // Attach all selected teams in project_teams pivot
-        if ($selectedTeamIds->isNotEmpty()) {
-            foreach ($selectedTeamIds as $tid) {
-                DB::table('project_teams')->insertOrIgnore([
-                    'project_id' => $project->project_id,
-                    'team_id' => $tid,
-                    'assigned_date' => now(),
-                ]);
-            }
-        }
-
-        // Save flexible member assignments
-        if (! empty($data['members']) && is_array($data['members'])) {
-            $assignedUserIds = [];
-            foreach ($data['members'] as $memberData) {
-                if (! empty($memberData['user_id']) && ! in_array($memberData['user_id'], $assignedUserIds)) {
-                    $assignedUserIds[] = $memberData['user_id'];
-                    ProjectMemberRole::create([
-                        'project_id' => $project->project_id,
-                        'user_id' => $memberData['user_id'],
-                        'role_id' => $memberData['role_id'] ?? null,
-                        'specialty' => $memberData['specialty'] ?? null,
-                        'assigned_date' => now()->toDateString(),
-                    ]);
-
-                    if ((int) $memberData['user_id'] !== (int) $user->user_id) {
-                        $roleName = ! empty($memberData['specialty']) ? " as {$memberData['specialty']}" : '';
-                        Activity::notify((int) $memberData['user_id'], "You were assigned to \"{$project->project_name}\"{$roleName}", 'project');
-                    }
-                }
-            }
-        }
-
-        ProjectBudget::create([
-            'project_id' => $project->project_id,
-            'allocated_amount' => $data['allocated_amount'] ?? 0,
-            'spent_amount' => 0,
-            'currency' => 'ETB',
-        ]);
-
-        $defaultPhases = [];
-        foreach (self::PHASES as $i => $phaseName) {
-            $phase = Phase::create([
-                'project_id' => $project->project_id,
-                'phase_name' => $phaseName,
-                'status' => $i === 0 ? 'In Progress' : 'Not started',
-                'sequence_order' => $i,
-            ]);
-
-            PhaseBudget::create([
-                'phase_id' => $phase->phase_id,
-                'allocated_amount' => round(($data['allocated_amount'] ?? 0) / 5),
-                'spent_amount' => 0,
-            ]);
-
-            $defaultPhases[] = $phase;
-        }
-
-        $firstPhase = $defaultPhases[0] ?? null;
-
-        // Step 3: Create initial tasks if provided in workflow
-        if (! empty($data['tasks']) && is_array($data['tasks'])) {
-            foreach ($data['tasks'] as $taskData) {
-                if (empty($taskData['task_name'])) {
-                    continue;
-                }
-
-                $taskTeamId = ! empty($taskData['team_id']) ? (int) $taskData['team_id'] : $primaryTeamId;
-                $assigneeId = null;
-                if (! empty($taskData['assigned_to'])) {
-                    $assigneeId = $this->resolveUserId($taskData['assigned_to'], $taskTeamId);
-                }
-
-                $status = $taskData['status'] ?? 'To Do';
-                if ($status === 'Pending') {
-                    $status = 'To Do';
-                }
-
-                $task = Task::create([
-                    'project_id' => $project->project_id,
-                    'phase_id' => $firstPhase ? $firstPhase->phase_id : null,
-                    'team_id' => $taskTeamId,
-                    'task_name' => $taskData['task_name'],
-                    'description' => $taskData['description'] ?? null,
-                    'assigned_to' => $assigneeId,
-                    'priority' => $taskData['priority'] ?? 'Medium',
-                    'status' => $status,
-                    'budget' => isset($taskData['budget']) ? (float) $taskData['budget'] : 0,
-                    'start_date' => $data['start_date'] ?? now()->toDateString(),
-                    'end_date' => $taskData['end_date'] ?? $data['end_date'] ?? null,
-                    'progress' => in_array($status, ['Done', 'Completed']) ? 100 : 0,
-                ]);
-
-                if ($task->assigned_to && (int) $task->assigned_to !== (int) $user->user_id) {
-                    Activity::notify($task->assigned_to, "You have been assigned: \"{$task->task_name}\" on {$project->project_name}", 'task');
-                }
-            }
-
-            $project->recalculateProgress();
-        }
-
-        Activity::log('Created project', 'Project', $project->project_id, $project->project_name);
-
-        if ($project->project_manager_id && (int) $project->project_manager_id !== (int) $user->user_id) {
-            Activity::notify((int) $project->project_manager_id, $user->full_name." assigned you as Project Manager for \"{$project->project_name}\"", 'project');
-        }
+        $project = $this->projectWizardService->handleWizardSave($request);
 
         return redirect()->route('projects.show', $project)->with('status', 'Project created.');
     }
@@ -480,31 +316,16 @@ class ProjectController extends Controller
         ]);
     }
 
-    public function update(Request $request, Project $project)
+    public function update(UpdateProjectRequest $request, Project $project)
     {
         $this->authorize('update', $project);
         /** @var User $user */
         $user = Auth::user();
 
-        $eligibleTeamIds = $this->eligibleTeamsFor($user, $project)->pluck('team_id');
-
         $pmInput = $request->input('project_manager_id') ?? $request->input('project_manager_name');
-        $resolvedPmId = $this->resolveUserId($pmInput, $request->input('team_id') ?? $project->team_id);
+        $resolvedPmId = $this->projectWizardService->resolveUserId($pmInput, $request->input('team_id') ?? $project->team_id);
 
-        $data = $request->validate([
-            'project_name' => ['required', 'string', 'max:150'],
-            'description' => ['nullable', 'string', 'max:2000'],
-            'project_type' => ['required', 'in:'.implode(',', self::TYPES)],
-            'team_id' => ['required', Rule::in($eligibleTeamIds)],
-            'status' => ['required', 'in:'.implode(',', self::STATUSES)],
-            'start_date' => ['nullable', 'date'],
-            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
-            'allocated_amount' => ['nullable', 'numeric', 'min:0'],
-            'members' => ['nullable', 'array'],
-            'members.*.user_id' => ['nullable', 'exists:users,user_id'],
-            'members.*.role_id' => ['nullable', 'exists:roles,role_id'],
-            'members.*.specialty' => ['nullable', 'string', 'max:100'],
-        ]);
+        $data = $request->validated();
 
         $project->update([
             'project_name' => $data['project_name'],
@@ -628,7 +449,7 @@ class ProjectController extends Controller
         $user = Auth::user();
 
         $input = $request->input('user_id') ?? $request->input('user_name') ?? $request->input('name');
-        $resolvedUserId = $this->resolveUserId($input, $project->team_id);
+        $resolvedUserId = $this->projectWizardService->resolveUserId($input, $project->team_id);
 
         if (! $resolvedUserId) {
             return back()->withErrors(['user_id' => 'Please provide a valid member name or select from the list.']);
@@ -785,78 +606,9 @@ class ProjectController extends Controller
         return back()->with('status', 'Change request submitted.');
     }
 
-    /**
-     * Resolve a user ID or typed user name.
-     */
     private function resolveUserId(string|int|null $input, ?int $teamId = null): ?int
     {
-        if ($input === null || $input === '') {
-            return null;
-        }
-
-        if (is_numeric($input)) {
-            $user = User::find((int) $input);
-            if ($user) {
-                return $user->user_id;
-            }
-        }
-
-        $trimmed = trim((string) $input);
-        if ($trimmed === '' || $trimmed === '— Select Project Manager —' || $trimmed === 'None') {
-            return null;
-        }
-
-        $user = User::where('email', $trimmed)
-            ->orWhere('full_name', $trimmed)
-            ->orWhereRaw('LOWER(full_name) = ?', [strtolower($trimmed)])
-            ->first();
-
-        if ($user) {
-            return $user->user_id;
-        }
-
-        $user = User::where('full_name', 'LIKE', "%{$trimmed}%")->first();
-        if ($user) {
-            return $user->user_id;
-        }
-
-        $slug = strtolower(preg_replace('/[^a-zA-Z0-9]+/', '.', $trimmed));
-        $slug = trim($slug, '.');
-        if (empty($slug)) {
-            $slug = 'pm.'.rand(100, 999);
-        }
-
-        $email = $slug.'@ju.edu.et';
-        $counter = 1;
-        while (User::where('email', $email)->exists()) {
-            $email = $slug.$counter.'@ju.edu.et';
-            $counter++;
-        }
-
-        $newUser = User::create([
-            'full_name' => $trimmed,
-            'email' => $email,
-            'password_hash' => bcrypt('ChangeMe123!'),
-            'status' => 'Active',
-        ]);
-
-        $role = Role::where('role_name', 'Team Leader')->first() ?: Role::where('role_name', 'Team Member')->first();
-        if ($role) {
-            $newUser->roles()->attach($role->role_id);
-        }
-
-        if ($teamId) {
-            TeamMember::firstOrCreate([
-                'team_id' => $teamId,
-                'user_id' => $newUser->user_id,
-            ], [
-                'joined_date' => now()->toDateString(),
-            ]);
-        }
-
-        Activity::log('Created user for project leadership', 'User', $newUser->user_id, "{$newUser->full_name} ({$email})");
-
-        return $newUser->user_id;
+        return $this->projectWizardService->resolveUserId($input, $teamId);
     }
 
     /**
