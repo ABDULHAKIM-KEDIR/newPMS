@@ -16,6 +16,7 @@ use App\Support\Activity;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class TaskController extends Controller
@@ -82,6 +83,25 @@ class TaskController extends Controller
 
         $tasks = $query->get();
 
+        // Status counts computed in SQL (single GROUP BY) instead of counting
+        // the loaded collection in PHP — keeps memory flat for large tables.
+        $countQuery = Task::query();
+        if ($filter === 'mine' || ! $user->can('view_projects')) {
+            $countQuery->where('assigned_to', $user->user_id);
+        }
+        $statusCounts = $countQuery->select('status', DB::raw('COUNT(*) as total'))
+            ->groupBy('status')
+            ->pluck('total', 'status')
+            ->all();
+
+        $kanbanCounts = [
+            'todo' => ($statusCounts['To Do'] ?? 0) + ($statusCounts['Pending'] ?? 0) + ($statusCounts['Not started'] ?? 0),
+            'in-progress' => $statusCounts['In Progress'] ?? 0,
+            'in-review' => $statusCounts['In Review'] ?? 0,
+            'completed' => ($statusCounts['Completed'] ?? 0) + ($statusCounts['Done'] ?? 0),
+            'blocked' => $statusCounts['Blocked'] ?? 0,
+        ];
+
         $myCount = Task::where('assigned_to', $user->user_id)->count();
         $allCount = Task::count();
 
@@ -92,7 +112,7 @@ class TaskController extends Controller
         return view('tasks.index', compact(
             'tasks', 'filter', 'view', 'status', 'priority', 'search',
             'projectId', 'teamId', 'assigneeId', 'dueDate',
-            'myCount', 'allCount', 'projects', 'teams', 'assignableUsers'
+            'myCount', 'allCount', 'projects', 'teams', 'assignableUsers', 'kanbanCounts'
         ));
     }
 

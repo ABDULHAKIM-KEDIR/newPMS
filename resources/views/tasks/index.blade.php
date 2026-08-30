@@ -208,6 +208,9 @@
         @foreach ($columns as $statusKey => $col)
           @php
             $colTasks = $tasks->filter(fn($t) => in_array($t->status, $col['match']));
+            // Column counts come precomputed from SQL (see TaskController@index);
+            // fall back to the collection only when the aggregate is unavailable.
+            $colCount = $kanbanCounts[Str::slug($statusKey)] ?? $colTasks->count();
           @endphp
           <div
             class="kcol"
@@ -218,7 +221,7 @@
           >
             <div class="kcol-head" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; padding-bottom:8px; border-bottom:1px solid var(--line);">
               <h4 style="margin:0; font-size:12.5px; font-weight:700; text-transform:uppercase; letter-spacing:0.5px; color:var(--ink);">{{ $col['label'] }}</h4>
-              <span class="kcol-count badge" id="count-{{ Str::slug($statusKey) }}" style="font-size:11px; font-weight:700;">{{ $colTasks->count() }}</span>
+              <span class="kcol-count badge" id="count-{{ Str::slug($statusKey) }}" style="font-size:11px; font-weight:700;">{{ $colCount }}</span>
             </div>
 
             <div class="kcol-body" id="col-tasks-{{ Str::slug($statusKey) }}" style="display:flex; flex-direction:column; gap:10px; min-height:350px;">

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Services\RbacService;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 
 class Project extends Model
 {
@@ -288,10 +289,15 @@ class Project extends Model
     }
 
     /**
-     * Get all tasks associated with this project (via direct project_id or via phases)
+     * Get all tasks associated with this project (via direct project_id or via phases).
+     * Reuses an already-eager-loaded `tasks` relation to avoid re-querying.
      */
     public function allTasks()
     {
+        if ($this->relationLoaded('tasks') && $this->tasks->isNotEmpty()) {
+            return $this->tasks;
+        }
+
         $direct = $this->tasks()->with(['assignee', 'phase', 'team', 'comments', 'attachments'])->get();
         if ($direct->isNotEmpty()) {
             return $direct;
@@ -301,18 +307,20 @@ class Project extends Model
     }
 
     /**
-     * Calculate dynamic progress percentage from completed tasks
+     * Calculate dynamic progress percentage from completed tasks.
+     * Uses a SQL aggregate instead of loading task models into memory.
      */
     public function progressPercentage(): int
     {
-        $tasks = $this->allTasks();
-        if ($tasks->isEmpty()) {
+        $stats = $this->taskCountByStatus();
+        $total = array_sum($stats);
+        if ($total === 0) {
             return (int) ($this->progress ?: 0);
         }
 
-        $done = $tasks->filter(fn ($t) => in_array($t->status, ['Done', 'Completed']))->count();
+        $done = ($stats['Done'] ?? 0) + ($stats['Completed'] ?? 0);
 
-        return (int) round(($done / $tasks->count()) * 100);
+        return (int) round(($done / $total) * 100);
     }
 
     /**
@@ -327,18 +335,52 @@ class Project extends Model
     }
 
     /**
-     * Comprehensive task stats for dashboard cards
+     * Task counts grouped by status in a single SQL aggregate query,
+     * covering tasks linked directly or through phases. Returns an
+     * associative array of [status => count].
+     *
+     * @return array<string, int>
+     */
+    public function taskCountByStatus(): array
+    {
+        $rows = DB::table('tasks')
+            ->leftJoin('phases', 'phases.phase_id', '=', 'tasks.phase_id')
+            ->where(function ($q) {
+                $q->where('tasks.project_id', $this->project_id)
+                    ->orWhere('phases.project_id', $this->project_id);
+            })
+            ->groupBy('tasks.status')
+            ->select('tasks.status', DB::raw('COUNT(*) as total'))
+            ->pluck('total', 'status')
+            ->all();
+
+        return array_map('intval', $rows);
+    }
+
+    /**
+     * Comprehensive task stats for dashboard cards, aggregated in SQL
+     * instead of filtering a loaded collection in PHP.
      */
     public function taskStats(): array
     {
-        $tasks = $this->allTasks();
-        $total = $tasks->count();
-        $completed = $tasks->filter(fn ($t) => in_array($t->status, ['Done', 'Completed']))->count();
-        $inProgress = $tasks->filter(fn ($t) => $t->status === 'In Progress')->count();
-        $inReview = $tasks->filter(fn ($t) => $t->status === 'In Review')->count();
-        $toDo = $tasks->filter(fn ($t) => in_array($t->status, ['Pending', 'To Do', 'Not started']))->count();
-        $blocked = $tasks->filter(fn ($t) => $t->status === 'Blocked')->count();
-        $overdue = $tasks->filter(fn ($t) => ! in_array($t->status, ['Done', 'Completed']) && $t->end_date && $t->end_date->isPast())->count();
+        $byStatus = $this->taskCountByStatus();
+        $total = array_sum($byStatus);
+        $completed = ($byStatus['Done'] ?? 0) + ($byStatus['Completed'] ?? 0);
+        $inProgress = $byStatus['In Progress'] ?? 0;
+        $inReview = $byStatus['In Review'] ?? 0;
+        $toDo = ($byStatus['Pending'] ?? 0) + ($byStatus['To Do'] ?? 0) + ($byStatus['Not started'] ?? 0);
+        $blocked = $byStatus['Blocked'] ?? 0;
+
+        $overdue = (int) DB::table('tasks')
+            ->leftJoin('phases', 'phases.phase_id', '=', 'tasks.phase_id')
+            ->where(function ($q) {
+                $q->where('tasks.project_id', $this->project_id)
+                    ->orWhere('phases.project_id', $this->project_id);
+            })
+            ->whereNotIn('tasks.status', ['Done', 'Completed'])
+            ->whereNotNull('tasks.end_date')
+            ->where('tasks.end_date', '<', now()->toDateString())
+            ->count();
 
         return [
             'total' => $total,
