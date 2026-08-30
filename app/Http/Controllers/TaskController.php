@@ -12,6 +12,7 @@ use App\Models\TaskProgressLog;
 use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\User;
+use App\Services\MentionService;
 use App\Support\Activity;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -346,6 +347,8 @@ class TaskController extends Controller
         }
 
         return response()->json([
+            'success' => true,
+            'message' => 'Status updated',
             'status' => $task->status,
             'progress' => $task->progress,
             'blocker_reason' => $task->blocker_reason,
@@ -475,6 +478,13 @@ class TaskController extends Controller
         if ($task->assigned_to && (int) $task->assigned_to !== (int) $user->user_id) {
             Activity::notify((int) $task->assigned_to, $user->full_name." commented on \"{$task->task_name}\"", 'mention');
         }
+
+        // @mention parsing: notify every active user tagged in the comment
+        // body (never the author) with a deep link back to the task.
+        $mentioned = app(MentionService::class)
+            ->extractMentionedUsers($comment->comment_text, (int) $user->user_id);
+        app(MentionService::class)
+            ->notifyMentionedUsers($task, $mentioned, $comment->comment_text);
 
         return response()->json([
             'id' => $comment->comment_id,

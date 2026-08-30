@@ -360,11 +360,13 @@
 
 <script>
   let draggedTaskId = null;
+  let sourceColumnBody = null;
 
   function handleDragStart(e, taskId) {
     draggedTaskId = taskId;
+    sourceColumnBody = document.getElementById('task-card-' + taskId)?.parentElement || null;
     e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', taskId);
+    e.dataTransfer.setData('text/plain', String(taskId));
     e.target.style.opacity = '0.5';
   }
 
@@ -373,11 +375,40 @@
     e.dataTransfer.dropEffect = 'move';
   }
 
+  function showToast(message, isError = false) {
+    let container = document.getElementById('toast-container');
+    if (!container) {
+      container = document.createElement('div');
+      container.id = 'toast-container';
+      container.style.cssText = 'position:fixed; top:18px; right:18px; z-index:9999; display:flex; flex-direction:column; gap:8px;';
+      document.body.appendChild(container);
+    }
+
+    const toast = document.createElement('div');
+    toast.style.cssText = 'background:' + (isError ? '#b91c1c' : '#14532d') + '; color:#fff; padding:10px 16px; border-radius:8px; font-size:13px; font-weight:600; box-shadow:0 6px 18px rgba(0,0,0,0.18); opacity:0; transition:opacity 0.2s ease;';
+    toast.textContent = message;
+    container.appendChild(toast);
+    requestAnimationFrame(() => { toast.style.opacity = '1'; });
+    setTimeout(() => {
+      toast.style.opacity = '0';
+      setTimeout(() => toast.remove(), 250);
+    }, 3200);
+  }
+
+  function returnCardToSource(card) {
+    if (card && sourceColumnBody) {
+      sourceColumnBody.appendChild(card);
+    }
+  }
+
   async function handleDrop(e, targetStatus) {
     e.preventDefault();
     if (!draggedTaskId) return;
 
     const card = document.getElementById('task-card-' + draggedTaskId);
+    const originBody = sourceColumnBody;
+
+    // Optimistic move into the target column.
     if (card) {
       card.style.opacity = '1';
       const targetColBody = document.getElementById('col-tasks-' + slugify(targetStatus));
@@ -400,11 +431,25 @@
 
       if (res.ok) {
         updateKanbanCounts();
+        showToast('Status updated');
+      } else if (res.status === 403) {
+        // Not authorized — put the card back where it came from.
+        returnCardToSource(card);
+        updateKanbanCounts();
+        showToast('You are not allowed to move this task', true);
+      } else {
+        returnCardToSource(card);
+        updateKanbanCounts();
+        showToast('Could not update task status', true);
       }
-    } catch(err) {
+    } catch (err) {
       console.error('Failed to update status:', err);
+      if (originBody && card) originBody.appendChild(card);
+      updateKanbanCounts();
+      showToast('Network error — task not moved', true);
     } finally {
       draggedTaskId = null;
+      sourceColumnBody = null;
     }
   }
 
