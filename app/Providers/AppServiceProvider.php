@@ -22,12 +22,26 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // System Administrators bypass all permission checks. Note: we must
+        // not call $user->can() here — that re-enters the Gate and causes
+        // infinite recursion. Check the RBAC engine / role directly instead.
+        $rbac = app(RbacService::class);
+
+        Gate::before(function (User $user, string $ability) use ($rbac): ?bool {
+            if (
+                $rbac->can($user, 'manage_system_settings')
+                || (method_exists($user, 'hasRole') && $user->hasRole('System Administrator'))
+            ) {
+                return true;
+            }
+
+            return null;
+        });
+
         // One Gate per permission slug. Gate callbacks receive optional
         // model arguments, so `can:edit_projects` on routes resolves the
         // project from the route binding when present and delegates to the
         // RBAC engine (org + project + team scopes, inheritance-aware).
-        $rbac = app(RbacService::class);
-
         foreach (array_keys(Permissions::ALL) as $slug) {
             Gate::define($slug, function (User $user, $model = null) use ($rbac, $slug) {
                 $project = $model instanceof Project

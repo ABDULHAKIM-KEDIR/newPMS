@@ -541,16 +541,12 @@ Route::middleware(['auth', 'active', 'approved'])->group(function () {
     Route::get(
         '/notifications',
         [NotificationController::class, 'index']
-    )
-        ->name('notifications.index')
-        ->middleware('can:view_notifications');
+    )->name('notifications.index');
 
     Route::post(
         '/notifications/mark-all-read',
         [NotificationController::class, 'markAllRead']
-    )
-        ->name('notifications.markAllRead')
-        ->middleware('can:view_notifications');
+    )->name('notifications.markAllRead');
 
     /*
     |--------------------------------------------------------------------------
