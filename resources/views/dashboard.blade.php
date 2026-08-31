@@ -17,35 +17,22 @@
 </div>
 
 <!-- Key Stat Cards -->
-<div class="grid grid-4" style="margin-bottom:20px;">
-  <div class="card stat-card">
-    <div class="stat-label">Active Projects</div>
-    <div class="stat-value">{{ $stats['active_projects'] }}</div>
-    <div class="stat-delta">{{ $scoped ? "Across your team(s)" : "Across all departments" }}</div>
-  </div>
+<div class="grid grid-4 stat-card-grid">
+  <x-stat-card title="Active Projects" :value="$stats['active_projects']" icon="📁" :delta="$scoped ? 'Across your team(s)' : 'Across all departments'" />
 
-  <div class="card stat-card">
-    <div class="stat-label">Open Tasks</div>
-    <div class="stat-value">{{ $stats['open_tasks'] }}</div>
-    <div class="stat-delta {{ $stats['overdue_tasks'] > 0 ? 'down' : '' }}">
-      {{ $stats['overdue_tasks'] }} overdue
-    </div>
-  </div>
+  <x-stat-card title="Open Tasks" :value="$stats['open_tasks']" icon="🗒️" :delta="$stats['overdue_tasks'].' overdue'" :delta-class="$stats['overdue_tasks'] > 0 ? 'down' : ''" />
 
-  <div class="card stat-card">
-    <div class="stat-label">Budget Utilised</div>
-    @php $util = $stats['budget_allocated'] > 0 ? round($stats['budget_spent'] / $stats['budget_allocated'] * 100) : 0; @endphp
-    <div class="stat-value">{{ $util }}%</div>
-    <div class="stat-delta">ETB {{ number_format($stats['budget_spent']) }} of {{ number_format($stats['budget_allocated']) }}</div>
-  </div>
+  @php $util = $stats['budget_allocated'] > 0 ? round($stats['budget_spent'] / $stats['budget_allocated'] * 100) : 0; @endphp
+  <x-stat-card title="Budget Utilised" :value="$util.'%'" icon="💰" :delta="'ETB '.number_format($stats['budget_spent']).' of '.number_format($stats['budget_allocated'])" />
 
-  <div class="card stat-card">
-    <div class="stat-label">Action Items</div>
-    <div class="stat-value" style="color:{{ ($stats['overdue_tasks'] + $stats['pending_change_requests']) > 0 ? 'var(--danger)' : 'var(--success)' }};">
-      {{ $stats['overdue_tasks'] + $stats['pending_change_requests'] }}
-    </div>
-    <div class="stat-delta down">{{ $stats['pending_change_requests'] }} change requests pending</div>
-  </div>
+  <x-stat-card
+    title="Action Items"
+    :value="$stats['overdue_tasks'] + $stats['pending_change_requests']"
+    icon="⚠️"
+    :color="($stats['overdue_tasks'] + $stats['pending_change_requests']) > 0 ? 'var(--danger)' : 'var(--success)'"
+    :delta="$stats['pending_change_requests'].' change requests pending'"
+    delta-class="down"
+  />
 </div>
 
 <!-- Attention Required Alert (If overdue or blocked tasks exist) -->
@@ -99,7 +86,6 @@
             @php
               $pProg = $p->progressPercentage();
               $b = $p->budget;
-              $statusCls = ['active' => 'b-active', 'planning' => 'b-planning', 'risk' => 'b-risk', 'closed' => 'b-closed'][$p->status] ?? 'b-planning';
             @endphp
             <tr onclick="window.location='{{ route('projects.show', $p) }}'" style="cursor:pointer;">
               <td>
@@ -116,8 +102,8 @@
                 <div style="font-size:11.5px; font-weight:600; color:var(--ink-soft); margin-bottom:3px;">{{ $pProg }}% Done</div>
                 <div class="progressbar"><div style="width:{{ $pProg }}%"></div></div>
               </td>
-              <td style="text-align:right;">
-                <span class="badge {{ $statusCls }}"><span class="badge-dot"></span>{{ ucfirst($p->status) }}</span>
+              <td class="cell-align-right">
+                <x-status-badge :status="$p->status" />
               </td>
             </tr>
           @endforeach
@@ -151,8 +137,8 @@
             </div>
           </div>
 
-          <div style="display:flex; align-items:center; gap:8px;">
-            <span class="badge {{ $mt->statusBadgeClass() }}" style="font-size:10.5px;">{{ $mt->status }}</span>
+          <div class="cell-align-right">
+            <x-status-badge :status="$mt->status" />
           </div>
         </div>
       @empty

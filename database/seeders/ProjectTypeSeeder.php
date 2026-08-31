@@ -15,6 +15,13 @@ class ProjectTypeSeeder extends Seeder
         'System Maintenance' => 'Upgrades, patching and preventive maintenance of existing systems.',
         'Hardware Procurement' => 'Purchase, rollout and lifecycle management of hardware assets.',
         'IT Support' => 'Helpdesk improvement, support tooling and end-user service initiatives.',
+        // Legacy catalogue names kept as active types so historical projects
+        // and old form payloads continue to validate.
+        'Software' => 'Legacy alias for general software projects.',
+        'Network & Infrastructure' => 'Legacy alias for network and infrastructure projects.',
+        'Training & Consultancy' => 'Legacy alias for training and consultancy projects.',
+        'Enterprise Systems' => 'Legacy alias for enterprise system projects.',
+        'Research & Development' => 'Legacy alias for research and development projects.',
     ];
 
     public function run(): void

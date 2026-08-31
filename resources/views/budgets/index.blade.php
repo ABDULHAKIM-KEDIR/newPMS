@@ -56,7 +56,6 @@
           @php
             $b = $p->budget;
             $util = $b ? $b->utilisationPercent() : 0;
-            $statusCls = ['active' => 'b-active', 'planning' => 'b-planning', 'risk' => 'b-risk', 'closed' => 'b-closed'][$p->status] ?? 'b-planning';
           @endphp
           <tr onclick="window.location='{{ route('projects.show', $p) }}'" style="cursor:pointer;">
             <td>

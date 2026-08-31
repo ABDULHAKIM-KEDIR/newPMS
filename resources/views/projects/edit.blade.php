@@ -40,11 +40,11 @@
 
             <div class="form-grid">
                 <div class="form-field">
-                    <label for="project_type">Type <span style="color:var(--danger);">*</span></label>
+                    <label for="project_type">Type <span class="required-mark">*</span></label>
                     <select id="project_type" name="project_type" required>
-                        @foreach ($types as $t)
-                            <option value="{{ $t }}" {{ old('project_type', $project->project_type) === $t ? 'selected' : '' }}>
-                                {{ $t }}</option>
+                        @foreach ($projectTypes as $t)
+                            <option value="{{ $t->name }}" {{ old('project_type', $project->project_type) === $t->name ? 'selected' : '' }}>
+                                {{ $t->name }}</option>
                         @endforeach
                     </select>
                 </div>
