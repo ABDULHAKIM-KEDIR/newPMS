@@ -12,10 +12,12 @@ use App\Models\TaskProgressLog;
 use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\User;
+use App\Services\MentionService;
 use App\Support\Activity;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class TaskController extends Controller
@@ -82,6 +84,25 @@ class TaskController extends Controller
 
         $tasks = $query->get();
 
+        // Status counts computed in SQL (single GROUP BY) instead of counting
+        // the loaded collection in PHP — keeps memory flat for large tables.
+        $countQuery = Task::query();
+        if ($filter === 'mine' || ! $user->can('view_projects')) {
+            $countQuery->where('assigned_to', $user->user_id);
+        }
+        $statusCounts = $countQuery->select('status', DB::raw('COUNT(*) as total'))
+            ->groupBy('status')
+            ->pluck('total', 'status')
+            ->all();
+
+        $kanbanCounts = [
+            'todo' => ($statusCounts['To Do'] ?? 0) + ($statusCounts['Pending'] ?? 0) + ($statusCounts['Not started'] ?? 0),
+            'in-progress' => $statusCounts['In Progress'] ?? 0,
+            'in-review' => $statusCounts['In Review'] ?? 0,
+            'completed' => ($statusCounts['Completed'] ?? 0) + ($statusCounts['Done'] ?? 0),
+            'blocked' => $statusCounts['Blocked'] ?? 0,
+        ];
+
         $myCount = Task::where('assigned_to', $user->user_id)->count();
         $allCount = Task::count();
 
@@ -92,7 +113,7 @@ class TaskController extends Controller
         return view('tasks.index', compact(
             'tasks', 'filter', 'view', 'status', 'priority', 'search',
             'projectId', 'teamId', 'assigneeId', 'dueDate',
-            'myCount', 'allCount', 'projects', 'teams', 'assignableUsers'
+            'myCount', 'allCount', 'projects', 'teams', 'assignableUsers', 'kanbanCounts'
         ));
     }
 
@@ -103,6 +124,9 @@ class TaskController extends Controller
             'attachments.uploader', 'dependencies', 'assignee', 'phase.project.team', 'progressLogs.user',
         ]);
 
+        $this->authorize('view', $task);
+
+        /** @var User $user */
         $user = Auth::user();
         $project = $task->project ?? optional($task->phase)->project;
 
@@ -272,6 +296,7 @@ class TaskController extends Controller
         $user = Auth::user();
 
         $isAssignee = (int) $task->assigned_to === (int) $user->user_id;
+        $this->authorize('updateStatus', $task);
         abort_unless($user->can('update_task_status') && ($isAssignee || ($project && $project->isManagedBy($user)) || $user->isDirectorOrAdmin()), 403);
 
         $data = $request->validate([
@@ -322,6 +347,8 @@ class TaskController extends Controller
         }
 
         return response()->json([
+            'success' => true,
+            'message' => 'Status updated',
             'status' => $task->status,
             'progress' => $task->progress,
             'blocker_reason' => $task->blocker_reason,
@@ -452,6 +479,13 @@ class TaskController extends Controller
             Activity::notify((int) $task->assigned_to, $user->full_name." commented on \"{$task->task_name}\"", 'mention');
         }
 
+        // @mention parsing: notify every active user tagged in the comment
+        // body (never the author) with a deep link back to the task.
+        $mentioned = app(MentionService::class)
+            ->extractMentionedUsers($comment->comment_text, (int) $user->user_id);
+        app(MentionService::class)
+            ->notifyMentionedUsers($task, $mentioned, $comment->comment_text);
+
         return response()->json([
             'id' => $comment->comment_id,
             'user' => $user->full_name,
@@ -510,6 +544,16 @@ class TaskController extends Controller
 
     public function downloadAttachment(Attachment $attachment)
     {
+        // IDOR guard: the attachment must belong to a task the current user
+        // can view (entity_type 'Task'), or belong to an unknown type and be
+        // rejected outright.
+        abort_unless($attachment->entity_type === 'Task', 404);
+
+        $task = Task::find((int) $attachment->entity_id);
+        abort_unless($task !== null, 404);
+
+        $this->authorize('view', $task);
+
         abort_unless(Storage::disk('public')->exists($attachment->file_path), 404);
 
         return Storage::disk('public')->download($attachment->file_path, $attachment->file_name);

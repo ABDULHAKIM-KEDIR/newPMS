@@ -9,6 +9,7 @@ use App\Models\Project;
 use App\Models\ProjectBudget;
 use App\Models\ProjectDeliverable;
 use App\Models\ProjectMemberRole;
+use App\Models\ProjectType;
 use App\Models\Role;
 use App\Models\Task;
 use App\Models\Team;
@@ -16,8 +17,10 @@ use App\Models\TeamMember;
 use App\Models\User;
 use App\Support\Activity;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 
 class ProjectController extends Controller
@@ -46,7 +49,7 @@ class ProjectController extends Controller
 
     public function index(Request $request)
     {
-        abort_unless(Auth::user()->can('view_projects'), 403);
+        Gate::authorize('view_projects');
 
         $query = Project::with(['team.leader', 'teams.leader', 'projectManager', 'budget', 'tasks', 'phases.tasks', 'memberRoles.user']);
 
@@ -77,7 +80,7 @@ class ProjectController extends Controller
 
     public function show(Project $project)
     {
-        abort_unless(Auth::user()->can('view_projects'), 403);
+        $this->authorize('view', $project);
 
         $project->load([
             'team.leader',
@@ -107,10 +110,11 @@ class ProjectController extends Controller
 
     public function create()
     {
-        abort_unless(Auth::user()->can('create_projects'), 403);
+        Gate::authorize('create_projects');
 
         $teams = Team::with(['leader', 'members.user'])->orderBy('team_name')->get();
         $projectManagers = User::where('status', 'Active')->orderBy('full_name')->get();
+        $projectTypes = ProjectType::where('is_active', true)->orderBy('name')->get();
 
         $teamsData = $teams->map(function ($t) {
             return [
@@ -122,7 +126,7 @@ class ProjectController extends Controller
                         'id' => $m->user ? $m->user->user_id : null,
                         'name' => $m->user ? $m->user->full_name : 'Member',
                     ];
-                })->filter(fn($m) => !is_null($m['id']))->values()->all(),
+                })->filter(fn ($m) => ! is_null($m['id']))->values()->all(),
             ];
         })->values()->all();
 
@@ -130,6 +134,7 @@ class ProjectController extends Controller
             'teams' => $teams,
             'teamsData' => $teamsData,
             'types' => self::TYPES,
+            'projectTypes' => $projectTypes,
             'priorities' => self::PRIORITIES,
             'projectManagers' => $projectManagers,
         ]);
@@ -137,8 +142,10 @@ class ProjectController extends Controller
 
     public function saveWizardStep(Request $request)
     {
+        Gate::authorize('create_projects');
+
+        /** @var User $user */
         $user = Auth::user();
-        abort_unless($user->can('create_projects'), 403);
 
         $step = (int) $request->input('step');
         $projectId = $request->input('project_id');
@@ -149,6 +156,7 @@ class ProjectController extends Controller
                 'description' => ['nullable', 'string', 'max:2000'],
                 'client' => ['nullable', 'string', 'max:150'],
                 'project_type' => ['nullable', 'string', 'max:100'],
+                'project_type_id' => ['nullable', 'exists:project_types,project_type_id'],
                 'project_manager_id' => ['nullable', 'exists:users,user_id'],
                 'priority' => ['nullable', 'in:Low,Medium,High,Urgent'],
                 'start_date' => ['nullable', 'date'],
@@ -161,7 +169,8 @@ class ProjectController extends Controller
                 'project_name' => $data['project_name'],
                 'description' => $data['description'] ?? null,
                 'client' => $data['client'] ?? null,
-                'project_type' => $data['project_type'] ?? 'Software',
+                'project_type' => $data['project_type'] ?? optional(ProjectType::find($data['project_type_id'] ?? null))->name ?? 'Software',
+                'project_type_id' => $this->resolveProjectTypeId($data),
                 'project_manager_id' => $data['project_manager_id'] ?? null,
                 'priority' => $data['priority'] ?? 'Medium',
                 'start_date' => $data['start_date'] ?? null,
@@ -199,7 +208,7 @@ class ProjectController extends Controller
                 'teams' => ['required', 'array', 'min:1'],
                 'teams.*' => ['exists:teams,team_id'],
             ]);
-            $teamIds = collect($data['teams'])->map(fn($id) => (int) $id)->unique()->values();
+            $teamIds = collect($data['teams'])->map(fn ($id) => (int) $id)->unique()->values();
             $project->update(['team_id' => $teamIds->first()]);
             DB::table('project_teams')->where('project_id', $project->project_id)->delete();
             foreach ($teamIds as $teamId) {
@@ -258,10 +267,34 @@ class ProjectController extends Controller
         ]);
     }
 
+    /**
+     * Prefers an explicit project_type_id; otherwise falls back to the
+     * legacy free-text project_type string so old clients keep working.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function resolveProjectTypeId(array $data): ?int
+    {
+        if (! empty($data['project_type_id'])) {
+            return (int) $data['project_type_id'];
+        }
+
+        $legacy = trim((string) ($data['project_type'] ?? ''));
+
+        if ($legacy === '') {
+            return null;
+        }
+
+        return ProjectType::whereRaw('lower(name) = ?', [strtolower($legacy)])
+            ->value('project_type_id');
+    }
+
     public function store(Request $request)
     {
+        Gate::authorize('create_projects');
+
+        /** @var User $user */
         $user = Auth::user();
-        abort_unless($user->can('create_projects'), 403);
 
         $pmInput = $request->input('project_manager_id') ?? $request->input('project_manager_name');
         $resolvedPmId = $this->resolveUserId($pmInput, $request->input('team_id'));
@@ -271,6 +304,7 @@ class ProjectController extends Controller
             'description' => ['nullable', 'string', 'max:2000'],
             'client' => ['nullable', 'string', 'max:150'],
             'project_type' => ['nullable', 'string', 'max:100'],
+            'project_type_id' => ['nullable', 'exists:project_types,project_type_id'],
             'team_id' => ['nullable', 'exists:teams,team_id'],
             'team_ids' => ['nullable', 'array'],
             'team_ids.*' => ['exists:teams,team_id'],
@@ -308,7 +342,8 @@ class ProjectController extends Controller
             'project_name' => $data['project_name'],
             'description' => $data['description'] ?? null,
             'client' => $data['client'] ?? null,
-            'project_type' => $data['project_type'] ?? 'Software',
+            'project_type' => $data['project_type'] ?? optional(ProjectType::find($data['project_type_id'] ?? null))->name ?? 'Software',
+            'project_type_id' => $this->resolveProjectTypeId($data),
             'team_id' => $primaryTeamId,
             'project_manager_id' => $resolvedPmId,
             'priority' => $data['priority'] ?? 'Medium',
@@ -331,10 +366,10 @@ class ProjectController extends Controller
         }
 
         // Save flexible member assignments
-        if (!empty($data['members']) && is_array($data['members'])) {
+        if (! empty($data['members']) && is_array($data['members'])) {
             $assignedUserIds = [];
             foreach ($data['members'] as $memberData) {
-                if (!empty($memberData['user_id']) && !in_array($memberData['user_id'], $assignedUserIds)) {
+                if (! empty($memberData['user_id']) && ! in_array($memberData['user_id'], $assignedUserIds)) {
                     $assignedUserIds[] = $memberData['user_id'];
                     ProjectMemberRole::create([
                         'project_id' => $project->project_id,
@@ -345,7 +380,7 @@ class ProjectController extends Controller
                     ]);
 
                     if ((int) $memberData['user_id'] !== (int) $user->user_id) {
-                        $roleName = !empty($memberData['specialty']) ? " as {$memberData['specialty']}" : '';
+                        $roleName = ! empty($memberData['specialty']) ? " as {$memberData['specialty']}" : '';
                         Activity::notify((int) $memberData['user_id'], "You were assigned to \"{$project->project_name}\"{$roleName}", 'project');
                     }
                 }
@@ -380,15 +415,15 @@ class ProjectController extends Controller
         $firstPhase = $defaultPhases[0] ?? null;
 
         // Step 3: Create initial tasks if provided in workflow
-        if (!empty($data['tasks']) && is_array($data['tasks'])) {
+        if (! empty($data['tasks']) && is_array($data['tasks'])) {
             foreach ($data['tasks'] as $taskData) {
                 if (empty($taskData['task_name'])) {
                     continue;
                 }
 
-                $taskTeamId = !empty($taskData['team_id']) ? (int) $taskData['team_id'] : $primaryTeamId;
+                $taskTeamId = ! empty($taskData['team_id']) ? (int) $taskData['team_id'] : $primaryTeamId;
                 $assigneeId = null;
-                if (!empty($taskData['assigned_to'])) {
+                if (! empty($taskData['assigned_to'])) {
                     $assigneeId = $this->resolveUserId($taskData['assigned_to'], $taskTeamId);
                 }
 
@@ -423,7 +458,7 @@ class ProjectController extends Controller
         Activity::log('Created project', 'Project', $project->project_id, $project->project_name);
 
         if ($project->project_manager_id && (int) $project->project_manager_id !== (int) $user->user_id) {
-            Activity::notify((int) $project->project_manager_id, $user->full_name . " assigned you as Project Manager for \"{$project->project_name}\"", 'project');
+            Activity::notify((int) $project->project_manager_id, $user->full_name." assigned you as Project Manager for \"{$project->project_name}\"", 'project');
         }
 
         return redirect()->route('projects.show', $project)->with('status', 'Project created.');
@@ -431,8 +466,9 @@ class ProjectController extends Controller
 
     public function edit(Project $project)
     {
+        $this->authorize('update', $project);
+        /** @var User $user */
         $user = Auth::user();
-        abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
 
         return view('projects.edit', [
             'project' => $project->load(['budget', 'memberRoles.user', 'memberRoles.role', 'projectManager', 'team.leader']),
@@ -446,8 +482,9 @@ class ProjectController extends Controller
 
     public function update(Request $request, Project $project)
     {
+        $this->authorize('update', $project);
+        /** @var User $user */
         $user = Auth::user();
-        abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
 
         $eligibleTeamIds = $this->eligibleTeamsFor($user, $project)->pluck('team_id');
 
@@ -457,9 +494,9 @@ class ProjectController extends Controller
         $data = $request->validate([
             'project_name' => ['required', 'string', 'max:150'],
             'description' => ['nullable', 'string', 'max:2000'],
-            'project_type' => ['required', 'in:' . implode(',', self::TYPES)],
+            'project_type' => ['required', 'in:'.implode(',', self::TYPES)],
             'team_id' => ['required', Rule::in($eligibleTeamIds)],
-            'status' => ['required', 'in:' . implode(',', self::STATUSES)],
+            'status' => ['required', 'in:'.implode(',', self::STATUSES)],
             'start_date' => ['nullable', 'date'],
             'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
             'allocated_amount' => ['nullable', 'numeric', 'min:0'],
@@ -485,7 +522,7 @@ class ProjectController extends Controller
             $submittedUserIds = [];
 
             foreach ($request->input('members') as $memberData) {
-                if (!empty($memberData['user_id'])) {
+                if (! empty($memberData['user_id'])) {
                     $submittedUserIds[] = $memberData['user_id'];
 
                     ProjectMemberRole::updateOrCreate(
@@ -503,7 +540,7 @@ class ProjectController extends Controller
             }
 
             // Only remove members that were explicitly removed from the form list
-            if (!empty($submittedUserIds)) {
+            if (! empty($submittedUserIds)) {
                 $project->memberRoles()->whereNotIn('user_id', $submittedUserIds)->delete();
             }
         }
@@ -513,7 +550,7 @@ class ProjectController extends Controller
             $previous = $project->budget->allocated_amount;
             $project->budget->update(['allocated_amount' => $data['allocated_amount']]);
             if ((float) $previous !== (float) $data['allocated_amount']) {
-                Activity::log('Updated project budget', 'Project', $project->project_id, "{$project->project_name}: ETB " . number_format($previous) . ' → ETB ' . number_format($data['allocated_amount']));
+                Activity::log('Updated project budget', 'Project', $project->project_id, "{$project->project_name}: ETB ".number_format($previous).' → ETB '.number_format($data['allocated_amount']));
             }
         }
 
@@ -524,8 +561,7 @@ class ProjectController extends Controller
 
     public function updateSchedule(Request $request, Project $project)
     {
-        $user = Auth::user();
-        abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
+        $this->authorize('update', $project);
 
         $data = $request->validate([
             'start_date' => ['nullable', 'date'],
@@ -544,8 +580,10 @@ class ProjectController extends Controller
 
     public function assignTeam(Request $request, Project $project)
     {
+        $this->authorize('update', $project);
+
+        /** @var User $user */
         $user = Auth::user();
-        abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
 
         $data = $request->validate([
             'team_id' => ['required', 'exists:teams,team_id'],
@@ -570,8 +608,7 @@ class ProjectController extends Controller
 
     public function removeTeam(Project $project, Team $team)
     {
-        $user = Auth::user();
-        abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
+        $this->authorize('update', $project);
 
         DB::table('project_teams')
             ->where('project_id', $project->project_id)
@@ -585,13 +622,15 @@ class ProjectController extends Controller
 
     public function addMember(Request $request, Project $project)
     {
+        $this->authorize('update', $project);
+
+        /** @var User $user */
         $user = Auth::user();
-        abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
 
         $input = $request->input('user_id') ?? $request->input('user_name') ?? $request->input('name');
         $resolvedUserId = $this->resolveUserId($input, $project->team_id);
 
-        if (!$resolvedUserId) {
+        if (! $resolvedUserId) {
             return back()->withErrors(['user_id' => 'Please provide a valid member name or select from the list.']);
         }
 
@@ -627,8 +666,7 @@ class ProjectController extends Controller
 
     public function storeDeliverable(Request $request, Project $project)
     {
-        $user = Auth::user();
-        abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
+        $this->authorize('update', $project);
 
         $data = $request->validate([
             'deliverable_name' => ['required', 'string', 'max:150'],
@@ -652,8 +690,7 @@ class ProjectController extends Controller
 
     public function toggleDeliverable(Project $project, ProjectDeliverable $deliverable)
     {
-        $user = Auth::user();
-        abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
+        $this->authorize('update', $project);
         abort_unless((int) $deliverable->project_id === (int) $project->project_id, 404);
 
         $newStatus = $deliverable->status === 'Delivered' ? 'Pending' : 'Delivered';
@@ -666,8 +703,7 @@ class ProjectController extends Controller
 
     public function destroyDeliverable(Project $project, ProjectDeliverable $deliverable)
     {
-        $user = Auth::user();
-        abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
+        $this->authorize('update', $project);
         abort_unless((int) $deliverable->project_id === (int) $project->project_id, 404);
 
         $name = $deliverable->deliverable_name;
@@ -680,8 +716,7 @@ class ProjectController extends Controller
 
     public function updateMember(Request $request, Project $project, ProjectMemberRole $memberRole)
     {
-        $user = Auth::user();
-        abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
+        $this->authorize('update', $project);
         abort_unless((int) $memberRole->project_id === (int) $project->project_id, 404);
 
         $data = $request->validate([
@@ -703,8 +738,7 @@ class ProjectController extends Controller
 
     public function removeMember(Project $project, ProjectMemberRole $memberRole)
     {
-        $user = Auth::user();
-        abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
+        $this->authorize('update', $project);
         abort_unless((int) $memberRole->project_id === (int) $project->project_id, 404);
 
         $userName = optional($memberRole->user)->full_name ?? 'A member';
@@ -717,8 +751,7 @@ class ProjectController extends Controller
 
     public function destroy(Project $project)
     {
-        $user = Auth::user();
-        abort_unless($user->can('delete_projects') && $project->isManagedBy($user), 403);
+        $this->authorize('delete', $project);
 
         $name = $project->project_name;
         Activity::log('Deleted project', 'Project', $project->project_id, $name);
@@ -729,7 +762,7 @@ class ProjectController extends Controller
 
     public function storeChangeRequest(Request $request, Project $project)
     {
-        abort_unless(Auth::user()->can('view_projects'), 403);
+        Gate::authorize('view', $project);
 
         $data = $request->validate([
             'description' => ['required', 'string', 'max:1000'],
@@ -746,7 +779,7 @@ class ProjectController extends Controller
         Activity::log('Created change request', 'ChangeRequest', $cr->change_request_id, $data['description']);
 
         if (optional($project->team)->team_leader_id) {
-            Activity::notify($project->team->team_leader_id, Auth::user()->full_name . " filed a change request on \"{$project->project_name}\"", 'approval');
+            Activity::notify($project->team->team_leader_id, Auth::user()->full_name." filed a change request on \"{$project->project_name}\"", 'approval');
         }
 
         return back()->with('status', 'Change request submitted.');
@@ -755,7 +788,7 @@ class ProjectController extends Controller
     /**
      * Resolve a user ID or typed user name.
      */
-    private function resolveUserId($input, ?int $teamId = null): ?int
+    private function resolveUserId(string|int|null $input, ?int $teamId = null): ?int
     {
         if ($input === null || $input === '') {
             return null;
@@ -790,13 +823,13 @@ class ProjectController extends Controller
         $slug = strtolower(preg_replace('/[^a-zA-Z0-9]+/', '.', $trimmed));
         $slug = trim($slug, '.');
         if (empty($slug)) {
-            $slug = 'pm.' . rand(100, 999);
+            $slug = 'pm.'.rand(100, 999);
         }
 
-        $email = $slug . '@ju.edu.et';
+        $email = $slug.'@ju.edu.et';
         $counter = 1;
         while (User::where('email', $email)->exists()) {
-            $email = $slug . $counter . '@ju.edu.et';
+            $email = $slug.$counter.'@ju.edu.et';
             $counter++;
         }
 
@@ -831,7 +864,7 @@ class ProjectController extends Controller
      * for a Director/Admin (or anyone editing a project they already manage),
      * otherwise only teams they actually lead.
      */
-    private function eligibleTeamsFor($user, ?Project $editingProject = null)
+    private function eligibleTeamsFor(User $user, ?Project $editingProject = null): Collection
     {
         if ($user->isDirectorOrAdmin()) {
             return Team::orderBy('team_name')->get();
@@ -839,7 +872,7 @@ class ProjectController extends Controller
 
         $led = Team::where('team_leader_id', $user->user_id)->orderBy('team_name')->get();
 
-        if ($editingProject && $editingProject->isManagedBy($user) && !$led->contains('team_id', $editingProject->team_id)) {
+        if ($editingProject && $editingProject->isManagedBy($user) && ! $led->contains('team_id', $editingProject->team_id)) {
             $led->push($editingProject->team);
         }
 

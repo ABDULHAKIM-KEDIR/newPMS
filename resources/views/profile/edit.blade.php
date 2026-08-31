@@ -20,42 +20,20 @@
 
 @if (session('status'))
 
-    <div
-        style="
-            background:var(--success-soft);
-            color:var(--success);
-            border-radius:8px;
-            padding:10px 12px;
-            font-size:13px;
-            margin-bottom:16px;
-        "
-    >
+    <div class="flash f-success" style="margin-bottom:16px;">
         {{ session('status') }}
     </div>
 
 @endif
 
-<div
-    style="
-        display:grid;
-        grid-template-columns:repeat(auto-fit, minmax(320px, 1fr));
-        gap:16px;
-        align-items:start;
-    "
->
+<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(340px, 1fr)); gap:20px; align-items:start;">
 
     {{-- Profile Details --}}
-    <div class="card">
+    <div class="card card-pad">
 
-        <div class="card-pad" style="padding-bottom:0;">
-
-            <div class="card-title-row">
+            <div class="card-title-row" style="margin-bottom:16px;">
                 <h3>Profile details</h3>
             </div>
-
-        </div>
-
-        <div class="card-pad">
 
             <form
                 method="POST"
@@ -65,7 +43,7 @@
                 @csrf
                 @method('PUT')
 
-                <div class="field">
+                <div class="form-field">
 
                     <label for="full_name">Full name</label>
 
@@ -85,7 +63,7 @@
 
                 </div>
 
-                <div class="field">
+                <div class="form-field">
 
                     <label for="email">Email</label>
 
@@ -105,45 +83,34 @@
 
                 </div>
 
-                <div class="field-row" style="margin-bottom:16px;">
-
+                <div class="meta-row">
                     <span class="k">Role</span>
                     <span class="v">{{ $roleName }}</span>
-
                 </div>
 
-                <div class="field-row" style="margin-bottom:16px;">
-
+                <div class="meta-row">
                     <span class="k">Joined</span>
                     <span class="v">{{ \Illuminate\Support\Carbon::parse($user->created_at)->format('M j, Y') }}</span>
-
                 </div>
 
                 <button
                     type="submit"
-                    class="btn btn-primary"
+                    class="btn btn-accent"
+                    style="margin-top:8px;"
                 >
                     Save changes
                 </button>
 
             </form>
 
-        </div>
-
     </div>
 
     {{-- Change Password --}}
-    <div class="card">
+    <div class="card card-pad">
 
-        <div class="card-pad" style="padding-bottom:0;">
-
-            <div class="card-title-row">
+            <div class="card-title-row" style="margin-bottom:16px;">
                 <h3>Change password</h3>
             </div>
-
-        </div>
-
-        <div class="card-pad">
 
             <form
                 method="POST"
@@ -153,7 +120,7 @@
                 @csrf
                 @method('PUT')
 
-                <div class="field">
+                <div class="form-field">
 
                     <label for="current_password">Current password</label>
 
@@ -172,7 +139,7 @@
 
                 </div>
 
-                <div class="field">
+                <div class="form-field">
 
                     <label for="password">New password</label>
 
@@ -192,7 +159,7 @@
 
                 </div>
 
-                <div class="field">
+                <div class="form-field">
 
                     <label for="password_confirmation">Confirm new password</label>
 
@@ -207,14 +174,13 @@
 
                 <button
                     type="submit"
-                    class="btn btn-primary"
+                    class="btn btn-accent"
+                    style="margin-top:8px;"
                 >
                     Update password
                 </button>
 
             </form>
-
-        </div>
 
     </div>
 

@@ -16,6 +16,7 @@ class DatabaseSeeder extends Seeder
         // inheritance and scopes) live in RbacSeeder, which also aliases
         // legacy directorate role names onto canonical ones.
         $this->call(RbacSeeder::class);
+        $this->call(ProjectTypeSeeder::class);
 
         $adminRole = Role::where('role_name', 'Administrator')->firstOrFail();
 

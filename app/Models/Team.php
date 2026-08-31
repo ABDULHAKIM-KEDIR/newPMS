@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 
 class Team extends Model
 {
@@ -54,33 +55,55 @@ class Team extends Model
     }
 
     /**
-     * Calculate team progress percentage across all its tasks
+     * Calculate team progress percentage across all its tasks.
+     * Uses a SQL aggregate instead of loading task models into memory.
      */
     public function progressPercentage(): int
     {
-        $tasks = $this->tasks;
-        if ($tasks->isEmpty()) {
+        $stats = $this->taskCountByStatus();
+        $total = array_sum($stats);
+        if ($total === 0) {
             return 0;
         }
 
-        $done = $tasks->filter(fn ($t) => in_array($t->status, ['Done', 'Completed']))->count();
+        $done = ($stats['Done'] ?? 0) + ($stats['Completed'] ?? 0);
 
-        return (int) round(($done / $tasks->count()) * 100);
+        return (int) round(($done / $total) * 100);
     }
 
     /**
-     * Get task statistics breakdown for this team
+     * Task counts grouped by status in a single SQL aggregate query.
+     *
+     * @return array<string, int>
+     */
+    public function taskCountByStatus(): array
+    {
+        return array_map('intval', $this->tasks()
+            ->groupBy('status')
+            ->select('status', DB::raw('COUNT(*) as total'))
+            ->pluck('total', 'status')
+            ->all());
+    }
+
+    /**
+     * Get task statistics breakdown for this team, aggregated in SQL
+     * instead of filtering a loaded collection in PHP.
      */
     public function taskStats(): array
     {
-        $tasks = $this->tasks;
-        $total = $tasks->count();
-        $completed = $tasks->filter(fn ($t) => in_array($t->status, ['Done', 'Completed']))->count();
-        $inProgress = $tasks->filter(fn ($t) => $t->status === 'In Progress')->count();
-        $inReview = $tasks->filter(fn ($t) => $t->status === 'In Review')->count();
-        $toDo = $tasks->filter(fn ($t) => in_array($t->status, ['Pending', 'To Do', 'Not started']))->count();
-        $blocked = $tasks->filter(fn ($t) => $t->status === 'Blocked')->count();
-        $overdue = $tasks->filter(fn ($t) => ! in_array($t->status, ['Done', 'Completed']) && $t->end_date && $t->end_date->isPast())->count();
+        $byStatus = $this->taskCountByStatus();
+        $total = array_sum($byStatus);
+        $completed = ($byStatus['Done'] ?? 0) + ($byStatus['Completed'] ?? 0);
+        $inProgress = $byStatus['In Progress'] ?? 0;
+        $inReview = $byStatus['In Review'] ?? 0;
+        $toDo = ($byStatus['Pending'] ?? 0) + ($byStatus['To Do'] ?? 0) + ($byStatus['Not started'] ?? 0);
+        $blocked = $byStatus['Blocked'] ?? 0;
+
+        $overdue = (int) $this->tasks()
+            ->whereNotIn('status', ['Done', 'Completed'])
+            ->whereNotNull('end_date')
+            ->where('end_date', '<', now()->toDateString())
+            ->count();
 
         return [
             'total' => $total,

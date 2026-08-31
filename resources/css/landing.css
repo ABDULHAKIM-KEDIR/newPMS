@@ -73,6 +73,14 @@ html {
     scroll-behavior: smooth;
 }
 
+#features,
+#workflow,
+#roles,
+#faq,
+#about {
+    scroll-margin-top: 90px;
+}
+
 
 /* ============================================================
    NAVIGATION
@@ -429,7 +437,7 @@ html {
 
     overflow: hidden;
 
-    padding: 95px 5vw 115px;
+    padding: 44px 5vw 44px;
 
     color: #fff;
 
@@ -490,7 +498,7 @@ html {
         minmax(0, 1.05fr)
         minmax(0, 0.95fr);
 
-    gap: 65px;
+    gap: 36px;
 
     align-items: center;
 }
@@ -508,7 +516,7 @@ html {
 
     padding: 7px 13px;
 
-    margin-bottom: 22px;
+    margin-bottom: 12px;
 
     border:
         1px solid rgba(255,255,255,0.18);
@@ -536,14 +544,14 @@ html {
 }
 
 .lp-hero h1 {
-    margin: 0 0 20px;
+    margin: 0 0 12px;
 
     font-family:
         "Space Grotesk",
         sans-serif;
 
     font-size:
-        clamp(36px, 4.3vw, 56px);
+        clamp(30px, 3.4vw, 42px);
 
     line-height: 1.06;
 
@@ -567,15 +575,15 @@ html {
 }
 
 .lp-hero p.lead {
-    max-width: 570px;
+    max-width: 540px;
 
-    margin: 0 0 32px;
+    margin: 0 0 18px;
 
     color: #D7E9F8;
 
-    font-size: 16px;
+    font-size: 15px;
 
-    line-height: 1.7;
+    line-height: 1.6;
 }
 
 
@@ -592,11 +600,11 @@ html {
 
     flex-wrap: wrap;
 
-    margin-bottom: 44px;
+    margin-bottom: 22px;
 }
 
 .lp-hero-cta .btn {
-    padding: 13px 22px;
+    padding: 11px 20px;
 
     border-radius: 7px;
 
@@ -667,7 +675,7 @@ html {
         "IBM Plex Mono",
         monospace;
 
-    font-size: 20px;
+    font-size: 18px;
 
     font-weight: 600;
 
@@ -881,6 +889,8 @@ html {
    ============================================================ */
 
 .lp-scroll-indicator {
+    display: none;
+
     position: absolute;
 
     left: 50%;
@@ -1816,7 +1826,7 @@ html {
 }
 
 .lp-testimonial blockquote {
-    margin: 0 0 20px;
+    margin: 0 0 12px;
 
     color: var(--lp-ink);
 
@@ -2642,7 +2652,7 @@ html {
 
     .lp-hero {
         padding:
-            65px 5vw 90px;
+            32px 5vw 36px;
     }
 
     .lp-hero h1 {
@@ -2803,4 +2813,19 @@ html[data-lp-theme="dark"] .lp-hero {
 
         transition-duration: 0.01ms !important;
     }
+}
+/* ============================================================
+   SCROLL FIX
+   app.css locks html/body to height:100vh + overflow:hidden for
+   the dashboard shell. The landing page must scroll normally,
+   so undo that here (landing.css loads after app.css).
+   ============================================================ */
+
+html,
+body {
+    height: auto !important;
+    max-height: none !important;
+
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
 }

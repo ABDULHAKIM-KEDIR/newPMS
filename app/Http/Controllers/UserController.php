@@ -300,6 +300,7 @@ class UserController extends Controller
             $role->role_id,
         ]);
 
+        $user->role = $role->role_name;
         $user->status = 'Active';
         $user->save();
 

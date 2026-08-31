@@ -263,6 +263,23 @@
             @can('manage_system_settings')
 
                 <a
+                    href="{{ route('admin.project-types.index') }}"
+                    class="nav-item {{ request()->routeIs('*project-types*') ? 'active' : '' }}"
+                >
+                    <svg width="16" height="16" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7-7A2 2 0 0 1 3 12.2V5a2 2 0 0 1 2-2h7.2a2 2 0 0 1 1.4.6l7 7a2 2 0 0 1 0 2.8Z" />
+                        <circle cx="7.5" cy="7.5" r="1" />
+                    </svg>
+
+                    <span>Project Types</span>
+                </a>
+
+            @endcan
+
+            @can('manage_system_settings')
+
+                <a
                     href="{{ route('admin.settings') }}"
                     class="nav-item {{ request()->routeIs('admin.settings') ? 'active' : '' }}"
                 >

@@ -13,7 +13,8 @@
 
 <div class="card card-pad">
   @forelse ($notifications as $n)
-    <div class="activity-row">
+    <div class="activity-row"
+      @if ($n->link) style="cursor:pointer;" onclick="window.location='{{ $n->link }}'" @endif>
       <div class="activity-icon">🔔</div>
       <div style="flex:1;">
         <div class="activity-txt" style="{{ !$n->is_read ? 'font-weight:600;' : '' }}">{{ $n->message }}</div>

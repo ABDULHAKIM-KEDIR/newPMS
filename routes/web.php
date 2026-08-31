@@ -6,11 +6,13 @@ use App\Http\Controllers\BudgetController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\ChangeRequestController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\GuestController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PhaseController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
+use App\Http\Controllers\ProjectTypeController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\RoleController;
 use App\Http\Controllers\SearchController;
@@ -82,7 +84,7 @@ Route::middleware('guest')->group(function () {
 |
 */
 
-Route::middleware(['auth', 'active'])->group(function () {
+Route::middleware(['auth', 'active', 'approved'])->group(function () {
 
     /*
     |--------------------------------------------------------------------------
@@ -94,6 +96,23 @@ Route::middleware(['auth', 'active'])->group(function () {
         '/logout',
         [AuthController::class, 'logout']
     )->name('logout');
+
+    /*
+    |--------------------------------------------------------------------------
+    | Guest Onboarding (Restricted)
+    |--------------------------------------------------------------------------
+    |
+    | Pending guest registrations are kept on this read-only landing
+    | page. The 'approved' middleware ensures they cannot reach any
+    | other authenticated route, and that approved users are bounced
+    | back to the dashboard if they try to visit it.
+    |
+    */
+
+    Route::get(
+        '/pending-approval',
+        [GuestController::class, 'pendingApproval']
+    )->name('guest.pending');
 
     /*
     |--------------------------------------------------------------------------
@@ -495,7 +514,9 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get(
         '/budgets',
         [BudgetController::class, 'index']
-    )->name('budgets.index');
+    )
+        ->name('budgets.index')
+        ->middleware('can:view_budgets');
 
     Route::post(
         '/budgets/projects/{project}',
@@ -520,12 +541,16 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get(
         '/notifications',
         [NotificationController::class, 'index']
-    )->name('notifications.index');
+    )
+        ->name('notifications.index')
+        ->middleware('can:view_notifications');
 
     Route::post(
         '/notifications/mark-all-read',
         [NotificationController::class, 'markAllRead']
-    )->name('notifications.markAllRead');
+    )
+        ->name('notifications.markAllRead')
+        ->middleware('can:view_notifications');
 
     /*
     |--------------------------------------------------------------------------
@@ -536,7 +561,9 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get(
         '/reports',
         [ReportController::class, 'index']
-    )->name('reports.index');
+    )
+        ->name('reports.index')
+        ->middleware('can:view_reports');
 
     /*
     |--------------------------------------------------------------------------
@@ -547,7 +574,9 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get(
         '/calendar',
         [CalendarController::class, 'index']
-    )->name('calendar.index');
+    )
+        ->name('calendar.index')
+        ->middleware('can:view_calendar');
 
     /*
     |--------------------------------------------------------------------------
@@ -746,6 +775,57 @@ Route::middleware(['auth', 'active'])->group(function () {
         [SystemSettingController::class, 'update']
     )
         ->name('admin.settings.update')
+        ->middleware('can:manage_system_settings');
+
+    /*
+    |--------------------------------------------------------------------------
+    | Project Types (Settings)
+    |--------------------------------------------------------------------------
+    |
+    | Database-managed catalogue used by the project creation wizard.
+    |
+    */
+
+    Route::get(
+        '/settings/project-types',
+        [ProjectTypeController::class, 'index']
+    )
+        ->name('admin.project-types.index')
+        ->middleware('can:manage_system_settings');
+
+    Route::get(
+        '/settings/project-types/{projectType}/edit',
+        [ProjectTypeController::class, 'edit']
+    )
+        ->name('admin.project-types.edit')
+        ->middleware('can:manage_system_settings');
+
+    Route::post(
+        '/settings/project-types',
+        [ProjectTypeController::class, 'store']
+    )
+        ->name('admin.project-types.store')
+        ->middleware('can:manage_system_settings');
+
+    Route::put(
+        '/settings/project-types/{projectType}',
+        [ProjectTypeController::class, 'update']
+    )
+        ->name('admin.project-types.update')
+        ->middleware('can:manage_system_settings');
+
+    Route::post(
+        '/settings/project-types/{projectType}/toggle',
+        [ProjectTypeController::class, 'toggleActive']
+    )
+        ->name('admin.project-types.toggle')
+        ->middleware('can:manage_system_settings');
+
+    Route::delete(
+        '/settings/project-types/{projectType}',
+        [ProjectTypeController::class, 'destroy']
+    )
+        ->name('admin.project-types.destroy')
         ->middleware('can:manage_system_settings');
 
 });

@@ -35,7 +35,7 @@ class Activity
         ]);
     }
 
-    public static function notify(int $userId, string $message, string $type = 'general'): void
+    public static function notify(int $userId, string $message, string $type = 'general', ?string $link = null): void
     {
         // Don't notify people about their own actions.
         if ($userId === Auth::id()) {
@@ -47,6 +47,7 @@ class Activity
             'message' => $message,
             'is_read' => false,
             'type' => $type,
+            'link' => $link,
         ]);
     }
 }
