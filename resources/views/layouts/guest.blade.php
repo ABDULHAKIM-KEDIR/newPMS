@@ -9,10 +9,12 @@
 @vite(['resources/css/app.css', 'resources/js/app.js'])
 <style>
   body.guest-body {
-    height: 100vh;
+    min-height: 100vh;
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 32px 16px;
+    box-sizing: border-box;
     background:
       radial-gradient(circle at 15% 10%, rgba(201,134,44,.10), transparent 45%),
       radial-gradient(circle at 85% 90%, rgba(31,75,75,.14), transparent 45%),
@@ -42,7 +44,7 @@
 </head>
 <body class="guest-body">
   <div class="card guest-card">
-    
+
     @yield('content')
   </div>
 </body>
