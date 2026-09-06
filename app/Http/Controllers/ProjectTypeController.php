@@ -12,7 +12,7 @@ class ProjectTypeController extends Controller
 {
     public function index()
     {
-        Gate::authorize('manage_system_settings');
+        Gate::authorize('manage_project_types');
 
         $projectTypes = ProjectType::withCount('projects')
             ->orderBy('name')
@@ -27,7 +27,7 @@ class ProjectTypeController extends Controller
     /** Loads a record into the inline editor on the index page. */
     public function edit(ProjectType $projectType)
     {
-        Gate::authorize('manage_system_settings');
+        Gate::authorize('manage_project_types');
 
         $projectTypes = ProjectType::withCount('projects')
             ->orderBy('name')
@@ -41,7 +41,7 @@ class ProjectTypeController extends Controller
 
     public function store(Request $request)
     {
-        Gate::authorize('manage_system_settings');
+        Gate::authorize('manage_project_types');
 
         $data = $this->validated($request);
 
@@ -59,7 +59,7 @@ class ProjectTypeController extends Controller
 
     public function update(Request $request, ProjectType $projectType)
     {
-        Gate::authorize('manage_system_settings');
+        Gate::authorize('manage_project_types');
 
         $data = $this->validated($request, $projectType->project_type_id);
 
@@ -80,7 +80,7 @@ class ProjectTypeController extends Controller
     /** Activate / deactivate without destroying history. */
     public function toggleActive(ProjectType $projectType)
     {
-        Gate::authorize('manage_system_settings');
+        Gate::authorize('manage_project_types');
 
         $projectType->update([
             'is_active' => ! $projectType->is_active,
@@ -103,7 +103,7 @@ class ProjectTypeController extends Controller
 
     public function destroy(ProjectType $projectType)
     {
-        Gate::authorize('manage_system_settings');
+        Gate::authorize('manage_project_types');
 
         abort_if(
             $projectType->projects()->exists(),

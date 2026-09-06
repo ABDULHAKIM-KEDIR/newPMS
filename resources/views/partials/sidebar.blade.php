@@ -260,7 +260,7 @@
 
             @endcan
 
-            @can('manage_system_settings')
+            @can('manage_project_types')
 
                 <a
                     href="{{ route('admin.project-types.index') }}"
