@@ -207,6 +207,10 @@
         align-items: start;
     }
 
+    .role-form-card {
+        padding: 22px 24px;
+    }
+
     @media (max-width: 1024px) {
         .role-form-grid {
             grid-template-columns: 1fr;
@@ -237,6 +241,21 @@
         font-size: 13px;
         font-family: inherit;
         background: var(--surface, #fff);
+        transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    .form-input:focus {
+        outline: none;
+        border-color: var(--primary, #2563eb);
+        box-shadow: 0 0 0 3px var(--primary-soft, #eff6ff);
+    }
+
+    .form-input[readonly],
+    .form-input:disabled {
+        background: var(--muted-soft, #f1f5f9);
+        color: var(--muted, #64748b);
+        cursor: not-allowed;
+        border-style: dashed;
     }
 
     .form-error {
@@ -256,6 +275,11 @@
         border-radius: 10px;
         padding: 14px 16px 16px;
         margin: 0 0 14px;
+        transition: border-color 0.18s ease;
+    }
+
+    .perm-group:hover {
+        border-color: var(--primary-muted, #bfdbfe);
     }
 
     .perm-group-title {
@@ -289,20 +313,27 @@
         border-radius: 8px;
         padding: 9px 11px;
         cursor: pointer;
-        transition: border-color 0.12s, background 0.12s;
+        user-select: none;
+        transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
     }
 
     .perm-check:hover {
         border-color: var(--primary, #2563eb);
+        box-shadow: 0 1px 4px rgba(37, 99, 235, 0.12);
     }
 
-    .perm-check.perm-checked {
+    .perm-check.perm-checked,
+    .perm-check:has(input:checked) {
         background: var(--primary-soft, #eff6ff);
         border-color: var(--primary, #2563eb);
     }
 
     .perm-check input {
         margin-top: 2px;
+        width: 15px;
+        height: 15px;
+        accent-color: var(--primary, #2563eb);
+        cursor: pointer;
     }
 
     .perm-slug {

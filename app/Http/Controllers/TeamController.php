@@ -24,8 +24,8 @@ class TeamController extends Controller
     public function create()
     {
         // Standing up a brand-new team is an org-structure change — reserved
-        // for whoever holds manage_team AND the ICT Director role specifically.
-        // A Team Leader has manage_team too, but only to run the team(s) they
+        // for whoever holds manage_team AND the Administrator role specifically.
+        // A Team Lead has manage_team too, but only to run the team(s) they
         // already lead, not to create new ones.
         abort_unless($this->canCreateTeams(), 403);
 
@@ -149,10 +149,10 @@ class TeamController extends Controller
 
         $team->update(['team_leader_id' => $resolvedUserId]);
 
-        Activity::log('Changed team leader', 'Team', $team->team_id, "{$oldLeader} → {$newLeader->full_name} ({$team->team_name})");
+        Activity::log('Changed Team Lead', 'Team', $team->team_id, "{$oldLeader} → {$newLeader->full_name} ({$team->team_name})");
         Activity::notify((int) $resolvedUserId, "You are now the leader of the {$team->team_name} team", 'general');
 
-        return back()->with('status', "Team leader changed to {$newLeader->full_name}.");
+        return back()->with('status', "Team Lead changed to {$newLeader->full_name}.");
     }
 
     private function resolveUserId($input, ?int $teamId = null): ?int
@@ -169,7 +169,7 @@ class TeamController extends Controller
         }
 
         $trimmed = trim((string) $input);
-        if ($trimmed === '' || $trimmed === '— Select Member —' || $trimmed === '— Select Team Leader —' || $trimmed === 'None') {
+        if ($trimmed === '' || $trimmed === '— Select Member —' || $trimmed === '— Select Team Lead —' || $trimmed === 'None') {
             return null;
         }
 
@@ -193,10 +193,10 @@ class TeamController extends Controller
             $slug = 'member.'.rand(100, 999);
         }
 
-        $email = $slug.'@ju.edu.et';
+        $email = $slug.'@example.com';
         $counter = 1;
         while (User::where('email', $email)->exists()) {
-            $email = $slug.$counter.'@ju.edu.et';
+            $email = $slug.$counter.'@example.com';
             $counter++;
         }
 

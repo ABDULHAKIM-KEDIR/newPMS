@@ -1,6 +1,6 @@
 @extends('layouts.landing')
 
-@section('title', 'ICT PMS — Jimma University')
+@section('title', 'PMS — Project Management System')
 
 @section('content')
 
@@ -8,13 +8,13 @@
     <div class="lp-nav-brand">
         <a href="{{ url('/') }}" class="lp-logo-link">
             <img
-                src="{{ asset('images/jimma-university-logo.png') }}"
-                alt="Jimma University"
+                src="{{ asset('images/logo.png') }}"
+                alt="PMS"
                 class="lp-logo"
             >
             <div class="lp-brand-text">
                 <div class="name">PMS</div>
-                <div class="university">Jimma University</div>
+                <div class="university">Project Management System</div>
             </div>
         </a>
     </div>
@@ -86,13 +86,13 @@
 
             <div class="lp-badge">
                 <span class="dot"></span>
-                Built for Jimma University
+                Built for your organization
             </div>
 
             <h1>
                 <span class="word"><span>Run</span></span>
                 <span class="word"><span>every</span></span>
-                
+
                 <span class="word"><span>project</span></span>
                 <span class="word"><span>with</span></span>
                 <span class="word accent-word"><span>total</span></span>
@@ -128,7 +128,7 @@
 
                 <div>
                     <span class="n" data-count="{{ $stats['teams'] }}">0</span>
-                    <span class="l">Directorate teams</span>
+            <span class="l">Teams</span>
                 </div>
 
                 <div>
@@ -219,7 +219,7 @@
 <div class="lp-section lp-trusted">
 
     <div class="lp-trusted-title">
-        Powering every team in the directorate
+        Powering every team
     </div>
 
     <div class="lp-marquee-wrap">
@@ -305,7 +305,7 @@
         </div>
 
         <h2>
-            Built for how the directorate actually works
+            Built for how teams actually work
         </h2>
 
         <p>
@@ -403,7 +403,7 @@
             <h3>Role-based access</h3>
 
             <p>
-                ICT Director, Team Leader, Team Member, System Administrator —
+                Administrator, Team Lead, Team Member, System Administrator —
                 each with its own permission set.
             </p>
         </div>
@@ -439,7 +439,7 @@
 
         <div class="lp-compare-card before" data-reveal-item>
 
-            <h3>😩 Without ICT PMS</h3>
+            <h3>😩 Without PMS</h3>
 
             <ul>
                 <li>Project status lives in someone's inbox, not a shared view</li>
@@ -454,7 +454,7 @@
 
         <div class="lp-compare-card after" data-reveal-item>
 
-            <h3>✨ With ICT PMS</h3>
+            <h3>✨ With PMS</h3>
 
             <ul>
                 <li>Every project's status is one click away, for anyone with access</li>
@@ -736,7 +736,7 @@
         </div>
 
         <h2>
-            Built around your directorate's structure
+            Built around your team's structure
         </h2>
 
         <p>
@@ -751,12 +751,12 @@
 
         <div class="lp-role-card" data-reveal-item>
             <span class="tag">DIRECTOR</span>
-            <h3>ICT Director</h3>
+            <h3>Director / Administrator</h3>
 
             <ul>
                 <li>Full visibility across all projects</li>
                 <li>Approves change requests</li>
-                <li>Manages budgets directorate-wide</li>
+                <li>Manages budgets organization-wide</li>
             </ul>
         </div>
 
@@ -808,7 +808,7 @@
     <div class="lp-section-head" data-reveal>
 
         <div class="lp-eyebrow">
-            From the directorate
+            From the teams
         </div>
 
         <h2>
@@ -831,8 +831,8 @@
                 <div class="avatar">IC</div>
 
                 <div class="meta">
-                    <div class="n">ICT Director</div>
-                    <div class="r">Jimma University</div>
+                    <div class="n">Director / Administrator</div>
+                    <div class="r">Project Management Office</div>
                 </div>
             </div>
 
@@ -923,12 +923,12 @@
         </div>
 
         <h2>
-            One deployment for the whole directorate
+            One deployment for the whole organization
         </h2>
 
         <p>
             No license tiers, no per-seat pricing. If you're part of
-            the ICT Directorate, you're covered.
+            your organization, you're covered.
         </p>
 
         <div class="badge-row">
@@ -989,7 +989,7 @@
                 <div class="lp-faq-a-inner">
                     Accounts aren't self-serve — a System Administrator
                     creates your account from Users and sets your starting
-                    role, which an ICT Director or Administrator can change
+                    role, which an Administrator can change
                     later from Roles &amp; Access.
                 </div>
             </div>
@@ -1059,7 +1059,7 @@
                 :style="open === 3 && 'max-height:200px;padding-bottom:18px'"
             >
                 <div class="lp-faq-a-inner">
-                    Yes — an ICT Director or System Administrator can
+                    Yes — a System Administrator can
                     update anyone's role from the Roles &amp; Access
                     screen at any time.
                 </div>
@@ -1114,7 +1114,7 @@
     <div class="lp-cta-banner" data-reveal>
 
         <h2>
-            Ready to bring order to your ICT projects?
+            Ready to bring order to your projects?
         </h2>
 
         <p>
@@ -1146,23 +1146,23 @@
             <div class="lp-footer-brand">
 
                 <img
-                    src="{{ asset('images/jimma-university-logo.png') }}"
-                    alt="Jimma University"
+                    src="{{ asset('images/logo.png') }}"
+                    alt="PMS"
                     class="lp-footer-logo"
                 >
 
                 <div>
-                    <div class="name">ICT PMS</div>
+                <div class="name">PMS</div>
                     <div class="footer-university">
-                        Jimma University
+                        Project Management System
                     </div>
                 </div>
 
             </div>
 
             <p>
-                The project management system for Jimma University's
-                ICT Directorate — projects, tasks, budgets, and teams
+                The project management system for your
+                organization — projects, tasks, budgets, and teams
                 in one place.
             </p>
 
@@ -1205,8 +1205,8 @@
 
     <div class="lp-footer-bottom">
 
-        © {{ date('Y') }} Jimma University ICT Directorate.
-        Built in-house for the ICT Project Management System.
+        © {{ date('Y') }} Project Management System.
+        Built in-house for the Project Management System.
 
     </div>
 

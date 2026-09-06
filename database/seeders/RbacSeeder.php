@@ -10,7 +10,7 @@ use Illuminate\Database\Seeder;
 /**
  * Upserts the permission catalogue and the default dynamic roles.
  * Safe to re-run: permissions and roles are matched by name, permission
- * sets are re-synced, and legacy directorate roles are aliased onto the
+ * sets are re-synced, and legacy roles are aliased onto the
  * new default roles so existing user_roles rows keep working.
  */
 class RbacSeeder extends Seeder
@@ -61,7 +61,7 @@ class RbacSeeder extends Seeder
             $roles[$name]->permissions()->sync($ids);
         }
 
-        // 3. Alias legacy directorate roles: re-point their permission sets
+        // 3. Alias legacy roles: re-point their permission sets
         //    to the canonical default role and re-point assigned users.
         foreach (Permissions::LEGACY_ROLE_ALIASES as $legacy => $canonical) {
             $legacyRole = Role::where('role_name', $legacy)->first();

@@ -6,8 +6,8 @@
 <div x-data="{ editModal: false, selectedProject: null, allocated: 0, spent: 0 }">
   <div class="page-head">
     <div>
-      <h1>Directorate Budgets</h1>
-      <div class="page-sub">Financial allocation, expenditure tracking, and utilization across all ICT projects</div>
+      <h1>Organization Budgets</h1>
+      <div class="page-sub">Financial allocation, expenditure tracking, and utilization across all projects</div>
     </div>
   </div>
 

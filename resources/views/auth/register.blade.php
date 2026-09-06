@@ -38,8 +38,8 @@
             "
         >
             <img
-                src="{{ asset('images/jimma-university-logo.png') }}"
-                alt="Jimma University"
+                src="{{ asset('images/logo.png') }}"
+                alt="PMS"
                 style="
                     width:46px;
                     height:46px;
@@ -68,7 +68,7 @@
                     margin-top:2px;
                 "
             >
-                Jimma University
+                Project Management System
             </div>
         </div>
 
@@ -141,7 +141,7 @@
                 id="email"
                 name="email"
                 value="{{ old('email') }}"
-                placeholder="you@ju.edu.et"
+                placeholder="you@example.com"
                 required
             >
         </div>

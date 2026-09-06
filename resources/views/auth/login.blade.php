@@ -42,8 +42,8 @@
             "
         >
             <img
-                src="{{ asset('images/jimma-university-logo.png') }}"
-                alt="Jimma University"
+                src="{{ asset('images/logo.png') }}"
+                alt="PMS"
                 style="
                     width:62px;
                     height:62px;
@@ -72,7 +72,7 @@
                 margin-top:2px;
             "
         >
-            Jimma University
+            Project Management System
         </div>
 
     </div>
@@ -93,7 +93,7 @@
             margin-bottom:22px;
         "
     >
-        Use your directorate account to continue.
+        Use your organization account to continue.
     </div>
 
     @if ($errors->any())
@@ -131,7 +131,7 @@
                 id="email"
                 name="email"
                 value="{{ old('email') }}"
-                placeholder="you@ju.edu.et"
+                placeholder="you@example.com"
                 required
                 autofocus
             >

@@ -313,7 +313,7 @@ class UserController extends Controller
 
         Activity::notify(
             $user->user_id,
-            "Your ICT PMS account has been approved. You have been assigned the {$role->role_name} role.",
+            "Your PMS account has been approved. You have been assigned the {$role->role_name} role.",
             'general'
         );
 
@@ -358,7 +358,7 @@ class UserController extends Controller
 
         Activity::notify(
             $user->user_id,
-            'Your ICT PMS registration was not approved. Please contact a System Administrator.',
+            'Your PMS registration was not approved. Please contact a System Administrator.',
             'general'
         );
 

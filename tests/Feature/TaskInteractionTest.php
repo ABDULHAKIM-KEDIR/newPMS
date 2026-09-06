@@ -20,7 +20,7 @@ class TaskInteractionTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $author = User::where('email', 'director@ju.edu.et')->first();
+        $author = User::where('email', 'director@example.com')->first();
         $project = Project::first();
         $phase = Phase::where('project_id', $project->project_id)->first();
 
@@ -75,7 +75,7 @@ class TaskInteractionTest extends TestCase
 
         $mentioned = User::create([
             'full_name' => 'Mentioned Person',
-            'email' => 'mentioned.person@ju.edu.et',
+            'email' => 'mentioned.person@example.com',
             'password_hash' => bcrypt('secret'),
             'status' => 'Active',
             'role' => 'member',
@@ -110,19 +110,19 @@ class TaskInteractionTest extends TestCase
     public function test_mention_service_extracts_users_by_name_slug_and_email_prefix(): void
     {
         $author = User::create([
-            'full_name' => 'Author Person', 'email' => 'author@ju.edu.et',
+            'full_name' => 'Author Person', 'email' => 'author@example.com',
             'password_hash' => bcrypt('x'), 'status' => 'Active', 'role' => 'member',
         ]);
         $byName = User::create([
-            'full_name' => 'Jane Doe', 'email' => 'jane.doe@ju.edu.et',
+            'full_name' => 'Jane Doe', 'email' => 'jane.doe@example.com',
             'password_hash' => bcrypt('x'), 'status' => 'Active', 'role' => 'member',
         ]);
         $byEmail = User::create([
-            'full_name' => 'Someone Else', 'email' => 'jwick@ju.edu.et',
+            'full_name' => 'Someone Else', 'email' => 'jwick@example.com',
             'password_hash' => bcrypt('x'), 'status' => 'Active', 'role' => 'member',
         ]);
         $inactive = User::create([
-            'full_name' => 'Ghost User', 'email' => 'ghost@ju.edu.et',
+            'full_name' => 'Ghost User', 'email' => 'ghost@example.com',
             'password_hash' => bcrypt('x'), 'status' => 'Inactive', 'role' => 'member',
         ]);
 

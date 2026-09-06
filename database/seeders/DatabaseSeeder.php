@@ -14,7 +14,7 @@ class DatabaseSeeder extends Seeder
         // ---- Roles & permissions ----
         // The dynamic RBAC catalogue: permissions + default roles (with
         // inheritance and scopes) live in RbacSeeder, which also aliases
-        // legacy directorate role names onto canonical ones.
+        // legacy role names onto canonical ones.
         $this->call(RbacSeeder::class);
         $this->call(ProjectTypeSeeder::class);
 
@@ -24,11 +24,11 @@ class DatabaseSeeder extends Seeder
         // No demo users, teams, or projects — this is a clean install. The
         // System Administrator's job from here is exactly what their role
         // grants: create the first real users (via Users → + New User) and
-        // assign someone an ICT Director / Team Leader role so they can in
+        // assign someone an Administrator / Team Lead role so they can in
         // turn create teams and projects.
         $admin = User::create([
             'full_name' => 'System Administrator',
-            'email' => 'admin@ju.edu.et',
+            'email' => 'admin@example.com',
             'password_hash' => Hash::make('ChangeMe123!'),
             'phone' => null,
             'status' => 'Active',

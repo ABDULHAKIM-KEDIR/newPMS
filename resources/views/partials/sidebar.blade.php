@@ -3,14 +3,14 @@
     <div class="brand">
         <div class="brand-mark">
             <img
-                src="{{ asset('images/jimma-university-logo.png') }}"
-                alt="Jimma University"
+                src="{{ asset('images/logo.png') }}"
+                alt="Project Management System"
             >
         </div>
 
         <div class="brand-text">
             <div class="t1">PMS</div>
-            <div class="t2">Jimma University</div>
+            <div class="t2">Project Management System</div>
         </div>
     </div>
 

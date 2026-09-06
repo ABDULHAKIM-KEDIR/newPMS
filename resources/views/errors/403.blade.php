@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Access denied · ICT PMS</title>
+<title>Access denied · PMS</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 @vite(['resources/css/app.css'])
@@ -15,7 +15,7 @@
     </div>
     <h1 style="font-family:'Space Grotesk'; font-size:19px; margin-bottom:8px;">You don't have access to this</h1>
     <p style="font-size:13.5px; color:var(--ink-soft); line-height:1.6; margin-bottom:24px;">
-      {{ $exception->getMessage() ?: "Your role doesn't include the permission this page or action needs. If you think that's wrong, ask an ICT Director or System Administrator to check your role under Roles & Access." }}
+      {{ $exception->getMessage() ?: "Your role doesn't include the permission this page or action needs. If you think that's wrong, ask a Director / Administrator or System Administrator to check your role under Roles & Access." }}
     </p>
     <a href="{{ route('dashboard') }}" class="btn btn-primary" style="justify-content:center;">Back to dashboard</a>
   </div>

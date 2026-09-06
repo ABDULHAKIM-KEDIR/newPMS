@@ -5,7 +5,7 @@ use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
 
 /**
- * Upgrades the fixed directorate-role system to a fully dynamic,
+ * Upgrades the fixed organization-role system to a fully dynamic,
  * scope-aware RBAC:
  *
  *  - Roles carry a scope (organization | project | team), may inherit from
