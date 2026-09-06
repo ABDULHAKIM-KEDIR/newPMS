@@ -10,7 +10,7 @@ use App\Models\User;
 use App\Services\RoleManagementService;
 use App\Support\Activity;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 
 /**
@@ -176,7 +176,7 @@ class RoleController extends Controller
         $newRole = Role::findOrFail($data['role_id']);
         $previousRole = optional($user->roles->first())->role_name ?? 'no role';
 
-        // Every account carries exactly one directorate-wide role.
+        // Every account carries exactly one organization-wide role.
         $user->roles()->sync([$newRole->role_id]);
 
         Activity::log('Updated user role', 'User', $user->user_id, "{$user->full_name}: {$previousRole} → {$newRole->role_name}");
@@ -211,7 +211,7 @@ class RoleController extends Controller
      * All catalogue permissions grouped by their `group` column for the
      * permission matrix.
      *
-     * @return array<string, \Illuminate\Support\Collection<int, Permission>>
+     * @return array<string, Collection<int, Permission>>
      */
     protected function groupedPermissions(): array
     {
@@ -225,7 +225,7 @@ class RoleController extends Controller
      * Candidate parent roles for $role: everything except itself and its
      * own descendants, so selecting a parent can never close a cycle.
      *
-     * @return \Illuminate\Support\Collection<int, Role>
+     * @return Collection<int, Role>
      */
     protected function allowedParentsFor(Role $role)
     {

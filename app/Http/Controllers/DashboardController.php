@@ -42,7 +42,7 @@ class DashboardController extends Controller
         ];
 
         // The audit log isn't team-tagged in a way that's safe to filter
-        // precisely, and it's already a directorate-wide transparency page —
+        // precisely, and it's already a organization-wide transparency page —
         // show the same recent activity to everyone rather than fake-scoping it.
         $activity = AuditLog::with('user')->orderByDesc('timestamp')->take(6)->get();
 

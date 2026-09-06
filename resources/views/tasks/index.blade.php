@@ -7,7 +7,7 @@
   <div class="page-head">
     <div>
       <h1>{{ $filter === 'all' ? 'All Tasks' : 'My Tasks' }}</h1>
-      <div class="page-sub">{{ $filter === 'all' ? 'All tasks across all directorate projects and assigned teams' : 'Everything assigned to you, across every project and team' }}</div>
+      <div class="page-sub">{{ $filter === 'all' ? 'All tasks across all projects and assigned teams' : 'Everything assigned to you, across every project and team' }}</div>
     </div>
     <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
       <span class="stat-label" style="margin:0;">View:</span>

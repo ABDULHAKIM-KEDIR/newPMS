@@ -770,7 +770,7 @@
                 <strong>Reject this registration?</strong><br>
 
                 The account will remain unable to access
-                the ICT PMS.
+                the PMS.
 
             </div>
 

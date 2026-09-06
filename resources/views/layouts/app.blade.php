@@ -17,7 +17,7 @@
     />
 
     <title>
-        @yield('title', 'Dashboard') · ICT PMS — Jimma University
+        @yield('title', 'Dashboard') · PMS — Project Management System
     </title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com">

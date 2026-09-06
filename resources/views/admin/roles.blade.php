@@ -4,13 +4,13 @@
 
 @section('content')
 @php
-  $tagFor = ['ICT Director' => 'DIRECTOR', 'Team Leader' => 'LEADER', 'Team Member' => 'MEMBER', 'System Administrator' => 'ADMIN'];
+  $tagFor = ['Administrator' => 'DIRECTOR', 'Team Lead' => 'LEADER', 'Team Member' => 'MEMBER', 'System Administrator' => 'ADMIN'];
   $myRoleName = optional(auth()->user()->roles->first())->role_name;
 @endphp
 
 <div class="rbac-section">
   <div class="rbac-eyebrow">Role-based access</div>
-  <h2>Built around your directorate's structure</h2>
+  <h2>Built around your organization's structure</h2>
   <p>Every account gets exactly the access their role needs — nothing more.</p>
 </div>
 

@@ -62,10 +62,10 @@ class ProjectManagementFullWorkflowTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $pm = User::where('email', 'john.smith@ju.edu.et')->first();
+        $pm = User::where('email', 'john.smith@example.com')->first();
         $uiux = Team::where('team_name', 'UI/UX Team')->first();
         $frontend = Team::where('team_name', 'Frontend Team')->first();
-        $sarah = User::where('email', 'sarah@ju.edu.et')->first();
+        $sarah = User::where('email', 'sarah@example.com')->first();
 
         $response = $this->actingAs($pm)->post(route('projects.store'), [
             'project_name' => 'Mobile Banking App',
@@ -107,7 +107,7 @@ class ProjectManagementFullWorkflowTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $pm = User::where('email', 'john.smith@ju.edu.et')->first();
+        $pm = User::where('email', 'john.smith@example.com')->first();
         $team = Team::where('team_name', 'Frontend Team')->first();
 
         $stepOne = $this->actingAs($pm)->postJson(route('projects.wizard.save'), [
@@ -144,7 +144,7 @@ class ProjectManagementFullWorkflowTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $pm = User::where('email', 'john.smith@ju.edu.et')->first();
+        $pm = User::where('email', 'john.smith@example.com')->first();
         $team = Team::first();
 
         $project = Project::create([
@@ -202,7 +202,7 @@ class ProjectManagementFullWorkflowTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $pm = User::where('email', 'john.smith@ju.edu.et')->first();
+        $pm = User::where('email', 'john.smith@example.com')->first();
         $task = Task::first();
 
         // 1. Create subtask
@@ -229,7 +229,7 @@ class ProjectManagementFullWorkflowTest extends TestCase
         $this->seed(DatabaseSeeder::class);
         Storage::fake('public');
 
-        $pm = User::where('email', 'john.smith@ju.edu.et')->first();
+        $pm = User::where('email', 'john.smith@example.com')->first();
         $task = Task::first();
 
         $file = UploadedFile::fake()->create('project-specs.pdf', 1024, 'application/pdf');
@@ -253,7 +253,7 @@ class ProjectManagementFullWorkflowTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $pm = User::where('email', 'john.smith@ju.edu.et')->first();
+        $pm = User::where('email', 'john.smith@example.com')->first();
 
         // 1. Reports
         $reportResponse = $this->actingAs($pm)->get(route('reports.index'));
@@ -271,7 +271,7 @@ class ProjectManagementFullWorkflowTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $pm = User::where('email', 'john.smith@ju.edu.et')->first();
+        $pm = User::where('email', 'john.smith@example.com')->first();
         $project = Project::where('project_name', 'E-Commerce Website')->first();
         $infraTeam = Team::where('team_name', 'Network & Infrastructure')->first();
 
@@ -292,7 +292,7 @@ class ProjectManagementFullWorkflowTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $pm = User::where('email', 'john.smith@ju.edu.et')->first();
+        $pm = User::where('email', 'john.smith@example.com')->first();
         $response = $this->actingAs($pm)->get(route('projects.create'));
 
         $response->assertOk();
@@ -307,11 +307,11 @@ class ProjectManagementFullWorkflowTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $pm = User::where('email', 'john.smith@ju.edu.et')->first();
+        $pm = User::where('email', 'john.smith@example.com')->first();
         $project = Project::where('project_name', 'E-Commerce Website')->first();
         $frontend = Team::where('team_name', 'Frontend Team')->first();
-        $david = User::where('email', 'david@ju.edu.et')->first();
-        $sarah = User::where('email', 'sarah@ju.edu.et')->first();
+        $david = User::where('email', 'david@example.com')->first();
+        $sarah = User::where('email', 'sarah@example.com')->first();
 
         // 1. Create task with budget and assignee
         $createResponse = $this->actingAs($pm)->post(route('tasks.store'), [
@@ -366,7 +366,7 @@ class ProjectManagementFullWorkflowTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $pm = User::where('email', 'john.smith@ju.edu.et')->first();
+        $pm = User::where('email', 'john.smith@example.com')->first();
         $uiux = Team::where('team_name', 'UI/UX Team')->first();
         $project = Project::where('project_name', 'E-Commerce Website')->first();
 
@@ -414,9 +414,9 @@ class ProjectManagementFullWorkflowTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $pm = User::where('email', 'john.smith@ju.edu.et')->first();
+        $pm = User::where('email', 'john.smith@example.com')->first();
         $task = Task::where('task_name', 'Create Authentication API')->first();
-        $daniel = User::where('email', 'daniel@ju.edu.et')->first();
+        $daniel = User::where('email', 'daniel@example.com')->first();
 
         $response = $this->actingAs($pm)->postJson(route('tasks.assign', $task), [
             'assigned_to' => $daniel->user_id,
@@ -435,7 +435,7 @@ class ProjectManagementFullWorkflowTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $pm = User::where('email', 'john.smith@ju.edu.et')->first();
+        $pm = User::where('email', 'john.smith@example.com')->first();
         $task = Task::where('task_name', 'Create Product API')->first();
 
         // 1. Report Blocker
@@ -462,7 +462,7 @@ class ProjectManagementFullWorkflowTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $pm = User::where('email', 'john.smith@ju.edu.et')->first();
+        $pm = User::where('email', 'john.smith@example.com')->first();
         $project = Project::where('project_name', 'E-Commerce Website')->first();
 
         // 1. Add Deliverable
@@ -492,7 +492,7 @@ class ProjectManagementFullWorkflowTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $pm = User::where('email', 'john.smith@ju.edu.et')->first();
+        $pm = User::where('email', 'john.smith@example.com')->first();
         $project = Project::where('project_name', 'E-Commerce Website')->first();
         $backend = Team::where('team_name', 'Backend Team')->first();
 

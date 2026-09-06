@@ -6,7 +6,7 @@
 <div class="page-head">
   <div>
     <h1>Projects</h1>
-    <div class="page-sub">All software, network-infrastructure and training engagements run by the directorate</div>
+    <div class="page-sub">All software, network-infrastructure and training engagements run across the organization</div>
   </div>
   @if (auth()->user()->canCreateProjects())
     <a href="{{ route('projects.create') }}" class="btn btn-accent">+ New Project</a>

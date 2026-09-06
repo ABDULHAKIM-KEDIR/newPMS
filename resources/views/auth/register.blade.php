@@ -4,18 +4,28 @@
 
 @section('content')
 
+    <style>
+        .guest-card { width: 380px; padding: 24px 28px; }
+        .field { margin-bottom: 11px; }
+        .field label { margin-bottom: 4px; font-size: 12px; }
+        .field input { padding: 8px 11px; font-size: 13px; }
+    </style>
+
     <div
         style="
-            text-align:center;
-            margin-bottom:20px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            gap:12px;
+            margin-bottom:14px;
         "
     >
 
         <div
             style="
-                width:72px;
-                height:72px;
-                margin:0 auto 12px;
+                width:54px;
+                height:54px;
+                margin:0;
                 border-radius:12px;
                 background:#fff;
                 border:1px solid var(--line);
@@ -24,47 +34,50 @@
                 justify-content:center;
                 box-shadow:0 4px 14px rgba(0,103,184,.10);
                 overflow:hidden;
+                flex-shrink:0;
             "
         >
             <img
-                src="{{ asset('images/jimma-university-logo.png') }}"
-                alt="Jimma University"
+                src="{{ asset('images/logo.png') }}"
+                alt="PMS"
                 style="
-                    width:62px;
-                    height:62px;
+                    width:46px;
+                    height:46px;
                     object-fit:contain;
                     display:block;
                 "
             >
         </div>
 
-        <div
-            style="
-                font-family:'Space Grotesk';
-                font-weight:700;
-                font-size:16px;
-                color:var(--primary);
-            "
-        >
-            ICT PMS
-        </div>
+        <div style="text-align:left;">
+            <div
+                style="
+                    font-family:'Space Grotesk';
+                    font-weight:700;
+                    font-size:16px;
+                    color:var(--primary);
+                "
+            >
+                PMS
+            </div>
 
-        <div
-            style="
-                font-size:11.5px;
-                color:var(--ink-soft);
-                margin-top:2px;
-            "
-        >
-            Jimma University
+            <div
+                style="
+                    font-size:11.5px;
+                    color:var(--ink-soft);
+                    margin-top:2px;
+                "
+            >
+                Project Management System
+            </div>
         </div>
 
     </div>
 
     <h1
         style="
-            font-size:19px;
-            margin-bottom:4px;
+            font-size:18px;
+            margin-bottom:3px;
         "
     >
         Create an account
@@ -72,9 +85,9 @@
 
     <div
         style="
-            font-size:12.8px;
+            font-size:12.3px;
             color:var(--ink-soft);
-            margin-bottom:22px;
+            margin-bottom:14px;
         "
     >
         Submit your account request for administrator approval.
@@ -86,9 +99,9 @@
                 background:var(--danger-soft);
                 color:var(--danger);
                 border-radius:8px;
-                padding:10px 12px;
-                font-size:12.6px;
-                margin-bottom:16px;
+                padding:8px 12px;
+                font-size:12.2px;
+                margin-bottom:12px;
             "
         >
             <ul style="margin:0; padding-left:18px;">
@@ -128,7 +141,7 @@
                 id="email"
                 name="email"
                 value="{{ old('email') }}"
-                placeholder="you@ju.edu.et"
+                placeholder="you@example.com"
                 required
             >
         </div>
@@ -184,7 +197,8 @@
             style="
                 width:100%;
                 justify-content:center;
-                padding:11px;
+                padding:9px;
+                margin-top:4px;
             "
         >
             Submit registration
@@ -195,8 +209,8 @@
     <div
         style="
             text-align:center;
-            margin-top:18px;
-            font-size:12.6px;
+            margin-top:12px;
+            font-size:12.2px;
             color:var(--ink-soft);
         "
     >

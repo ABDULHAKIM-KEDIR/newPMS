@@ -33,6 +33,7 @@ class Permissions
         'manage_users' => ['Create, edit, deactivate users, and assign roles', 'Administration'],
         'users.reset-password' => ['Reset a user\'s password to a temporary default', 'Administration'],
         'manage_roles' => ['Create roles and manage their permissions', 'Administration'],
+        'manage_project_types' => ['Create, edit, activate, and delete project types', 'Administration'],
         'manage_system_settings' => ['Manage system-level configuration', 'Administration'],
     ];
 
@@ -43,7 +44,7 @@ class Permissions
         'Teams' => ['manage_team'],
         'Governance' => ['approve_change_requests', 'manage_budgets', 'view_budgets'],
         'Insights' => ['view_reports', 'view_calendar', 'view_notifications'],
-        'Administration' => ['view_audit_logs', 'manage_users', 'users.reset-password', 'manage_roles', 'manage_system_settings'],
+        'Administration' => ['view_audit_logs', 'manage_users', 'users.reset-password', 'manage_roles', 'manage_project_types', 'manage_system_settings'],
     ];
 
     /**
@@ -101,7 +102,7 @@ class Permissions
         ],
     ];
 
-    /** Legacy directorate names kept so existing data keeps resolving. */
+    /** Legacy role names kept so existing data keeps resolving. */
     public const LEGACY_ROLE_ALIASES = [
         'System Administrator' => 'Administrator',
         'Admin' => 'Administrator',

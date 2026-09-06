@@ -596,10 +596,10 @@ class TaskController extends Controller
             $slug = 'member.'.rand(100, 999);
         }
 
-        $email = $slug.'@ju.edu.et';
+        $email = $slug.'@example.com';
         $counter = 1;
         while (User::where('email', $email)->exists()) {
-            $email = $slug.$counter.'@ju.edu.et';
+            $email = $slug.$counter.'@example.com';
             $counter++;
         }
 

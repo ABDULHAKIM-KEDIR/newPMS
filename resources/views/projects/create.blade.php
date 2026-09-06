@@ -75,7 +75,7 @@
 
       <div class="form-field">
         <label for="client">Client / Organization</label>
-        <input type="text" id="client" name="client" value="{{ old('client') }}" placeholder="e.g. Jimma University">
+        <input type="text" id="client" name="client" value="{{ old('client') }}" placeholder="e.g. Acme Corp">
       </div>
 
       <div class="form-field">

@@ -787,41 +787,41 @@ Route::middleware(['auth', 'active', 'approved'])->group(function () {
         [ProjectTypeController::class, 'index']
     )
         ->name('admin.project-types.index')
-        ->middleware('can:manage_system_settings');
+        ->middleware('can:manage_project_types');
 
     Route::get(
         '/settings/project-types/{projectType}/edit',
         [ProjectTypeController::class, 'edit']
     )
         ->name('admin.project-types.edit')
-        ->middleware('can:manage_system_settings');
+        ->middleware('can:manage_project_types');
 
     Route::post(
         '/settings/project-types',
         [ProjectTypeController::class, 'store']
     )
         ->name('admin.project-types.store')
-        ->middleware('can:manage_system_settings');
+        ->middleware('can:manage_project_types');
 
     Route::put(
         '/settings/project-types/{projectType}',
         [ProjectTypeController::class, 'update']
     )
         ->name('admin.project-types.update')
-        ->middleware('can:manage_system_settings');
+        ->middleware('can:manage_project_types');
 
     Route::post(
         '/settings/project-types/{projectType}/toggle',
         [ProjectTypeController::class, 'toggleActive']
     )
         ->name('admin.project-types.toggle')
-        ->middleware('can:manage_system_settings');
+        ->middleware('can:manage_project_types');
 
     Route::delete(
         '/settings/project-types/{projectType}',
         [ProjectTypeController::class, 'destroy']
     )
         ->name('admin.project-types.destroy')
-        ->middleware('can:manage_system_settings');
+        ->middleware('can:manage_project_types');
 
 });
