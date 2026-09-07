@@ -477,7 +477,7 @@
             </div>
 
             @if (auth()->user()->can('edit_projects') && $project->isManagedBy(auth()->user()) && $allTeams->count() > 1)
-              <form method="POST" action="{{ route('projects.teams.remove', [$project, $assignedTeam]) }}" onsubmit="return confirm('Remove team {{ $assignedTeam->team_name }} from this project?');">
+              <form method="POST" action="{{ route('projects.teams.remove', [$project, $assignedTeam]) }}" data-confirm data-confirm-title="Remove team '{{ $assignedTeam->team_name }}' from this project?">
                 @csrf
                 @method('DELETE')
                 <button type="submit" class="btn btn-ghost" style="padding:3px 8px; font-size:11px; color:var(--danger);">Unassign</button>
@@ -693,7 +693,7 @@
                         {{ $d->status === 'Delivered' ? 'Mark Pending' : '✓ Mark Delivered' }}
                       </button>
                     </form>
-                    <form method="POST" action="{{ route('projects.deliverables.destroy', [$project, $d]) }}" onsubmit="return confirm('Remove deliverable {{ $d->deliverable_name }}?');" style="display:inline;">
+                    <form method="POST" action="{{ route('projects.deliverables.destroy', [$project, $d]) }}" data-confirm data-confirm-title="Remove deliverable '{{ $d->deliverable_name }}'?" style="display:inline;">
                       @csrf
                       @method('DELETE')
                       <button type="submit" class="btn btn-ghost" style="padding:3px 7px; font-size:11.5px; color:var(--danger);">✕</button>

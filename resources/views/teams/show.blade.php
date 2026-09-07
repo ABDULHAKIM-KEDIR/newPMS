@@ -134,7 +134,7 @@
               </td>
               <td style="text-align:right;">
                 @if ($canManage && $team->team_leader_id !== $m->user_id)
-                  <form method="POST" action="{{ route('teams.members.remove', [$team, $m]) }}" onsubmit="return confirm('Remove {{ $u->full_name }} from this team?');" style="display:inline;">
+                  <form method="POST" action="{{ route('teams.members.remove', [$team, $m]) }}" data-confirm data-confirm-title="Remove '{{ $u->full_name }}' from this team?" style="display:inline;">
                     @csrf
                     @method('DELETE')
                     <button type="submit" class="btn btn-ghost" style="padding:3px 7px; font-size:11px; color:var(--danger);">Remove</button>

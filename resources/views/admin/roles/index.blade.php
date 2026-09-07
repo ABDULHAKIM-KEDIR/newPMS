@@ -109,7 +109,9 @@
                             method="POST"
                             action="{{ route('admin.roles.destroy', $role) }}"
                             style="display:inline; margin-left:14px;"
-                            onsubmit="return confirm('Delete role &quot;{{ $role->role_name }}&quot;? Its child roles will be re-parented to its parent.');"
+                            data-confirm
+                            data-confirm-title="Delete role '{{ $role->role_name }}'?"
+                            data-confirm-text="Its child roles will be re-parented to its parent."
                         >
                             @csrf
                             @method('DELETE')
@@ -400,10 +402,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 'background:none;border:none;cursor:pointer;color:var(--danger);';
             revokeBtn.textContent = 'Revoke';
             revokeBtn.addEventListener('click', function (event) {
-                if (!confirm('Revoke "' + roleNameEl.textContent +
-                    '" from ' + holder.name + '?')) {
-                    event.preventDefault();
-                }
+                event.preventDefault();
+                confirmDialog({
+                    title: 'Revoke "' + roleNameEl.textContent + '"?',
+                    text: 'This will be removed from ' + holder.name + '.',
+                }).then(function (confirmed) {
+                    if (confirmed) {
+                        revokeForm.submit();
+                    }
+                });
             });
 
             revokeForm.appendChild(revokeBtn);

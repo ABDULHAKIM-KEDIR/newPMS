@@ -2261,3 +2261,109 @@ tbody tr:hover{
   font-weight:600;
   color:var(--ink);
 }
+
+/* =========================================================
+   SWEETALERT2 THEME (matches the PMS design system)
+   ========================================================= */
+
+.swal2-container.swal2-backdrop-show {
+    background: rgba(20, 33, 43, .48) !important;
+    backdrop-filter: blur(4px);
+}
+
+.swal2-pms {
+    border-radius: 14px;
+    border: 1px solid var(--line);
+    box-shadow: 0 20px 50px rgba(0, 67, 120, .18), 0 4px 16px rgba(0, 67, 120, .10);
+    font-family: 'IBM Plex Sans', sans-serif;
+    padding: 26px 24px 22px;
+}
+
+.swal2-pms-title {
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--ink);
+    padding: 0;
+}
+
+.swal2-pms-text {
+    font-size: 13.2px;
+    line-height: 1.55;
+    color: var(--ink-soft);
+    padding: 6px 0 0;
+}
+
+.swal2-pms .swal2-icon {
+    margin: 0 auto 14px;
+}
+
+.swal2-pms .swal2-actions {
+    gap: 8px;
+    margin-top: 20px;
+}
+
+.swal2-pms-confirm,
+.swal2-pms-cancel {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 110px;
+    padding: 9px 16px;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 12.8px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: background .15s ease, filter .15s ease, transform .1s ease;
+}
+
+.swal2-pms-confirm:active,
+.swal2-pms-cancel:active {
+    transform: translateY(1px);
+}
+
+.swal2-pms-confirm {
+    background: var(--danger);
+    border-color: var(--danger);
+    color: #fff;
+    box-shadow: 0 3px 8px rgba(180, 35, 24, .22);
+}
+
+.swal2-pms-confirm:hover,
+.swal2-pms-confirm:focus {
+    background: #991D14;
+    border-color: #991D14;
+    outline: none;
+}
+
+.swal2-pms-cancel {
+    background: #3B4652;
+    border-color: #3B4652;
+    color: #fff;
+}
+
+.swal2-pms-cancel:hover,
+.swal2-pms-cancel:focus {
+    background: #2E3842;
+    border-color: #2E3842;
+    outline: none;
+}
+
+.swal2-pms .swal2-success-ring {
+    border-color: var(--success-soft);
+}
+
+.swal2-pms .swal2-warning {
+    border-color: #E8A33D;
+    background-color: #FFF7EA;
+}
+
+.swal2-pms .swal2-warning .swal2-warning-body {
+    background-color: #E8A33D;
+}
+
+.swal2-pms .swal2-warning .swal2-x-marks {
+    color: #fff;
+}

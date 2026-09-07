@@ -126,7 +126,8 @@
                                 method="POST"
                                 action="{{ route('admin.project-types.destroy', $type) }}"
                                 style="display:inline; margin-left:14px;"
-                                onsubmit="return confirm('Delete project type &quot;{{ $type->name }}&quot;?');"
+                                data-confirm
+                                data-confirm-title="Delete project type '{{ $type->name }}'?"
                             >
                                 @csrf
                                 @method('DELETE')
