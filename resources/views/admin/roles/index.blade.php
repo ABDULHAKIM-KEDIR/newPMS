@@ -57,10 +57,14 @@
                     <div style="display:flex; align-items:center; gap:8px;">
                         <span class="cell-primary">{{ $role->role_name }}</span>
 
-                        @if ($role->is_system)
+                        @php
+                            $protected = \App\Support\Permissions::isProtectedRoleName($role->role_name);
+                        @endphp
+
+                        @if ($protected)
                             <span
                                 class="badge b-system"
-                                title="System role — protected from deletion"
+                                title="Protected role — cannot be deleted"
                             >🔒 System</span>
                         @endif
                     </div>
@@ -120,11 +124,7 @@
                             @endphp
 
                             @if ($protected)
-                                <span
-                                    class="link-small"
-                                    style="color:var(--muted); cursor:not-allowed;"
-                                    title="The Administrator role is protected and cannot be deleted"
-                                >Delete</span>
+                                <span class="cell-sub" title="The Administrator role cannot be deleted">—</span>
                             @else
                                 <button
                                     type="submit"
