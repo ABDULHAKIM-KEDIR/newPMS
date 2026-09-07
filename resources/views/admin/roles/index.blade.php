@@ -109,16 +109,21 @@
                             method="POST"
                             action="{{ route('admin.roles.destroy', $role) }}"
                             style="display:inline; margin-left:14px;"
-                            onsubmit="return confirm('Delete role &quot;{{ $role->role_name }}&quot;? Its child roles will be re-parented to its parent.');"
+                            class="js-delete-role-form"
+                            data-role-name="{{ $role->role_name }}"
                         >
                             @csrf
                             @method('DELETE')
 
-                            @if ($role->is_system)
+                            @php
+                                $protected = \App\Support\Permissions::isProtectedRoleName($role->role_name);
+                            @endphp
+
+                            @if ($protected)
                                 <span
                                     class="link-small"
                                     style="color:var(--muted); cursor:not-allowed;"
-                                    title="System roles are protected"
+                                    title="The Administrator role is protected and cannot be deleted"
                                 >Delete</span>
                             @else
                                 <button
@@ -225,6 +230,47 @@
     </div>
 @endcan
 
+{{-- =========================================================
+     DELETE ROLE CONFIRMATION MODAL
+     ========================================================= --}}
+@can('manage_roles')
+<div
+    id="deleteModal"
+    class="delete-modal-overlay"
+    style="display:none;"
+    aria-hidden="true"
+>
+    <div class="delete-modal" role="dialog" aria-modal="true">
+        <div class="delete-modal-head">
+            <div>
+                <h3>Delete role</h3>
+                <div class="assign-drawer-role" id="deleteModalRoleName">—</div>
+            </div>
+            <button
+                type="button"
+                class="pms-modal-close"
+                id="deleteModalClose"
+                aria-label="Close"
+            >✕</button>
+        </div>
+
+        <div class="delete-modal-body">
+            Delete the role
+            <strong id="deleteModalRoleName2">—</strong>?
+            Its child roles will be re-parented to its parent,
+            and all assigned users will lose this role.
+        </div>
+
+        <div class="delete-modal-foot">
+            <button type="button" class="btn" id="deleteModalCancel">Cancel</button>
+            <button type="submit" class="btn btn-accent" id="deleteModalConfirm"
+                    style="background:var(--danger, #dc2626); border-color:var(--danger, #dc2626); color:#fff;">
+                Delete role
+            </button>
+        </div>
+    </div>
+</div>
+@endcan
 @endsection
 
 @once
@@ -335,12 +381,119 @@
         font-size: 13px;
         color: var(--muted, #64748b);
     }
+
+    /* ---- Delete confirmation modal ---- */
+    .delete-modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.45);
+        z-index: 95;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        animation: fade-in 0.15s ease-out;
+    }
+
+    @keyframes fade-in {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+
+    .delete-modal {
+        width: min(420px, 100%);
+        background: var(--surface, #fff);
+        border-radius: 12px;
+        box-shadow: 0 20px 50px rgba(15, 23, 42, 0.3);
+        animation: modal-in 0.18s ease-out;
+        overflow: hidden;
+    }
+
+    @keyframes modal-in {
+        from { transform: translateY(12px) scale(0.98); opacity: 0; }
+        to { transform: translateY(0) scale(1); opacity: 1; }
+    }
+
+    .delete-modal-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 18px 20px;
+        border-bottom: 1px solid var(--line, #e2e8f0);
+    }
+
+    .delete-modal-head h3 {
+        margin: 0;
+        font-size: 16px;
+    }
+
+    .delete-modal-body {
+        padding: 20px;
+        font-size: 14px;
+        line-height: 1.55;
+        color: var(--text, #0f172a);
+    }
+
+    .delete-modal-body strong {
+        color: var(--danger, #dc2626);
+    }
+
+    .delete-modal-foot {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        padding: 14px 20px;
+        border-top: 1px solid var(--line, #e2e8f0);
+    }
 </style>
 @endonce
 
 @can('manage_roles')
 <script>
 document.addEventListener('DOMContentLoaded', function () {
+
+    // ---- Delete role confirmation modal ----
+    var deleteModal = document.getElementById('deleteModal');
+    var deleteForm = null;
+
+    function openDeleteModal(form) {
+        deleteForm = form;
+        var name = form.getAttribute('data-role-name') || 'this role';
+        document.getElementById('deleteModalRoleName').textContent = name;
+        document.getElementById('deleteModalRoleName2').textContent = '"' + name + '"';
+        deleteModal.style.display = 'flex';
+        deleteModal.setAttribute('aria-hidden', 'false');
+    }
+
+    function closeDeleteModal() {
+        deleteModal.style.display = 'none';
+        deleteModal.setAttribute('aria-hidden', 'true');
+        deleteForm = null;
+    }
+
+    document.querySelectorAll('.js-delete-role-form').forEach(function (form) {
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            openDeleteModal(form);
+        });
+    });
+
+    document.getElementById('deleteModalClose').addEventListener('click', closeDeleteModal);
+    document.getElementById('deleteModalCancel').addEventListener('click', closeDeleteModal);
+
+    deleteModal.addEventListener('click', function (e) {
+        if (e.target === deleteModal) {
+            closeDeleteModal();
+        }
+    });
+
+    document.getElementById('deleteModalConfirm').addEventListener('click', function () {
+        if (deleteForm) {
+            var form = deleteForm;
+            closeDeleteModal();
+            form.submit();
+        }
+    });
 
     var holdersByRole = @json($holdersByRole);
     var assignRoutes = {};
