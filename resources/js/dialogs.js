@@ -5,8 +5,8 @@ import Swal from 'sweetalert2';
  * Matches the PMS dark UI (var(--bg), var(--card), var(--line), etc.)
  */
 const baseOptions = {
-    background: '#16161f',
-    color: '#e7e7ee',
+    background: '#0F172A',
+    color: '#CBD5E1',
     customClass: {
         popup: 'swal2-pms',
         title: 'swal2-pms-title',

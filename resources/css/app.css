@@ -44,10 +44,10 @@ html,
 body{
   margin:0;
   padding:0;
-  
 
 
-  
+
+
     min-height: 100%;
     overflow-x: hidden;
     overflow-y: auto;
@@ -2263,34 +2263,39 @@ tbody tr:hover{
 }
 
 /* =========================================================
-   SWEETALERT2 THEME (matches the PMS design system)
+   SWEETALERT2 THEME — high-contrast dark navy palette
    ========================================================= */
 
 .swal2-container.swal2-backdrop-show {
-    background: rgba(20, 33, 43, .48) !important;
+    background: rgba(2, 6, 23, .72) !important;
     backdrop-filter: blur(4px);
 }
 
-.swal2-pms {
-    border-radius: 14px;
-    border: 1px solid var(--line);
-    box-shadow: 0 20px 50px rgba(0, 67, 120, .18), 0 4px 16px rgba(0, 67, 120, .10);
+.swal2-popup.swal2-pms,
+.swal2-popup {
+    background: #0F172A;
+    color: #CBD5E1;
+    border: 1px solid #334155;
+    border-radius: 12px;
     font-family: 'IBM Plex Sans', sans-serif;
     padding: 26px 24px 22px;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, .5);
 }
 
-.swal2-pms-title {
+.swal2-title.swal2-pms-title,
+.swal2-popup .swal2-title {
     font-family: 'Space Grotesk', sans-serif;
     font-size: 18px;
     font-weight: 700;
-    color: var(--ink);
+    color: #FFFFFF;
     padding: 0;
 }
 
-.swal2-pms-text {
+.swal2-html-container.swal2-pms-text,
+.swal2-popup .swal2-html-container {
     font-size: 13.2px;
     line-height: 1.55;
-    color: var(--ink-soft);
+    color: #CBD5E1;
     padding: 6px 0 0;
 }
 
@@ -2325,45 +2330,54 @@ tbody tr:hover{
 }
 
 .swal2-pms-confirm {
-    background: var(--danger);
-    border-color: var(--danger);
-    color: #fff;
-    box-shadow: 0 3px 8px rgba(180, 35, 24, .22);
+    background: #DC2626;
+    border-color: #DC2626;
+    color: #FFFFFF;
+    box-shadow: 0 3px 10px rgba(220, 38, 38, .35);
 }
 
 .swal2-pms-confirm:hover,
 .swal2-pms-confirm:focus {
-    background: #991D14;
-    border-color: #991D14;
+    background: #B91C1C;
+    border-color: #B91C1C;
     outline: none;
 }
 
 .swal2-pms-cancel {
-    background: #3B4652;
-    border-color: #3B4652;
-    color: #fff;
+    background: #334155;
+    border-color: #334155;
+    color: #FFFFFF;
 }
 
 .swal2-pms-cancel:hover,
 .swal2-pms-cancel:focus {
-    background: #2E3842;
-    border-color: #2E3842;
+    background: #475569;
+    border-color: #475569;
     outline: none;
 }
 
 .swal2-pms .swal2-success-ring {
-    border-color: var(--success-soft);
+    border-color: rgba(34, 197, 94, .35);
 }
 
 .swal2-pms .swal2-warning {
-    border-color: #E8A33D;
-    background-color: #FFF7EA;
+    border-color: #F59E0B;
+    background-color: rgba(245, 158, 11, .12);
 }
 
 .swal2-pms .swal2-warning .swal2-warning-body {
-    background-color: #E8A33D;
+    background-color: #F59E0B;
 }
 
 .swal2-pms .swal2-warning .swal2-x-marks {
-    color: #fff;
+    color: #78350F;
+}
+
+.swal2-pms .swal2-close-button {
+    color: #64748B;
+}
+
+.swal2-pms .swal2-close-button:hover {
+    color: #FFFFFF;
+    background: rgba(148, 163, 184, .12);
 }
