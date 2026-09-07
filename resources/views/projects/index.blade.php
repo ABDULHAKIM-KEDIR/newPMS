@@ -14,10 +14,12 @@
 </div>
 
 <div class="filter-row">
-  <a href="{{ route('projects.index') }}" class="pill {{ !request('type') ? 'active' : '' }}">All</a>
-  <a href="{{ route('projects.index', ['type' => 'Software']) }}" class="pill {{ request('type')==='Software' ? 'active' : '' }}">Software</a>
-  <a href="{{ route('projects.index', ['type' => 'Network & Infrastructure']) }}" class="pill {{ request('type')==='Network & Infrastructure' ? 'active' : '' }}">Network &amp; Infrastructure</a>
-  <a href="{{ route('projects.index', ['type' => 'Training & Consultancy']) }}" class="pill {{ request('type')==='Training & Consultancy' ? 'active' : '' }}">Training &amp; Consultancy</a>
+  <a href="{{ route('projects.index', array_filter(request()->only(['status', 'priority', 'q']))) }}"
+     class="pill {{ !request('type') ? 'active' : '' }}">All</a>
+  @foreach ($projectTypes as $type)
+    <a href="{{ route('projects.index', array_filter(array_merge(request()->only(['status', 'priority', 'q']), ['type' => $type->name]))) }}"
+       class="pill {{ request('type') === $type->name ? 'active' : '' }}">{{ $type->name }}</a>
+  @endforeach
 </div>
 
 <div class="card">

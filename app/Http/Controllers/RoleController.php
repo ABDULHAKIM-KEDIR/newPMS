@@ -82,6 +82,7 @@ class RoleController extends Controller
     public function edit(Role $role)
     {
         $this->authorizeManageRoles();
+        $this->abortIfProtectedRole($role);
 
         $role->load(['permissions', 'parentRole']);
         $groupedPermissions = $this->groupedPermissions();
@@ -101,6 +102,8 @@ class RoleController extends Controller
 
     public function update(UpdateRoleRequest $request, Role $role)
     {
+        $this->abortIfProtectedRole($role);
+
         $validated = $request->validated();
 
         $this->roleManagement->updateRole($role, [
@@ -122,6 +125,7 @@ class RoleController extends Controller
     public function destroy(Role $role)
     {
         $this->authorizeManageRoles();
+        $this->abortIfProtectedRole($role);
 
         $name = $role->role_name;
 
@@ -222,6 +226,16 @@ class RoleController extends Controller
     protected function authorizeManageRoles(): void
     {
         Gate::authorize('manage_roles');
+    }
+
+    /**
+     * The Administrator role is immutable: no edit, update or delete.
+     */
+    protected function abortIfProtectedRole(Role $role): void
+    {
+        if ($role->role_name === 'Administrator') {
+            abort(403, 'The Administrator role cannot be modified.');
+        }
     }
 
     /**

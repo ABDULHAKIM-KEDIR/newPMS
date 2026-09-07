@@ -57,8 +57,18 @@ class ProjectController extends Controller
 
         $query = Project::with(['team.leader', 'teams.leader', 'projectManager', 'budget', 'tasks', 'phases.tasks', 'memberRoles.user']);
 
+        $projectTypes = ProjectType::where('is_active', true)->orderBy('name')->get();
+
         if ($type = $request->get('type')) {
-            $query->where('project_type', $type);
+            $typeModel = $projectTypes->firstWhere('name', $type);
+
+            $query->where(function ($q) use ($type, $typeModel) {
+                $q->where('project_type', $type);
+
+                if ($typeModel) {
+                    $q->orWhere('project_type_id', $typeModel->project_type_id);
+                }
+            });
         }
 
         if ($status = $request->get('status')) {
@@ -79,7 +89,7 @@ class ProjectController extends Controller
 
         $projects = $query->orderByDesc('project_id')->paginate(15)->withQueryString();
 
-        return view('projects.index', compact('projects'));
+        return view('projects.index', compact('projects', 'projectTypes'));
     }
 
     public function show(Project $project)

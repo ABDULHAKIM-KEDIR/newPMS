@@ -5,8 +5,8 @@ import Swal from 'sweetalert2';
  * Matches the PMS dark UI (var(--bg), var(--card), var(--line), etc.)
  */
 const baseOptions = {
-    background: '#0F172A',
-    color: '#CBD5E1',
+    background: '#F8FAFC',
+    color: '#475569',
     customClass: {
         popup: 'swal2-pms',
         title: 'swal2-pms-title',
@@ -18,13 +18,18 @@ const baseOptions = {
     reverseButtons: true,
 };
 
-/** A destructive-confirmation dialog. Resolves true only when confirmed. */
+/**
+ * A confirmation dialog. Resolves true only when confirmed.
+ * Pass `danger: true` for destructive actions (delete) to use the
+ * vivid red confirm button instead of the primary blue.
+ */
 export async function confirmDialog({
     title = 'Are you sure?',
     text = '',
     icon = 'warning',
     confirmText = 'Yes, continue',
     cancelText = 'Cancel',
+    danger = false,
 } = {}) {
     const result = await Swal.fire({
         ...baseOptions,
@@ -34,6 +39,12 @@ export async function confirmDialog({
         showCancelButton: true,
         confirmButtonText: confirmText,
         cancelButtonText: cancelText,
+        customClass: {
+            ...baseOptions.customClass,
+            confirmButton: danger
+                ? 'swal2-pms-confirm swal2-pms-danger'
+                : baseOptions.customClass.confirmButton,
+        },
     });
 
     return result.isConfirmed;
