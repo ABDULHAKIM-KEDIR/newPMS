@@ -109,4 +109,15 @@ class Permissions
         'ICT Director' => 'Administrator',
         'Team Leader' => 'Team Lead',
     ];
+
+    /**
+     * The Administrator role (including its legacy aliases) can never be
+     * deleted — every other role is deletable.
+     */
+    public static function isProtectedRoleName(string $name): bool
+    {
+        $canonical = self::LEGACY_ROLE_ALIASES[$name] ?? $name;
+
+        return $canonical === 'Administrator';
+    }
 }

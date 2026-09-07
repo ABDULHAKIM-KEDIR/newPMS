@@ -139,14 +139,18 @@ it('rejects role inheritance cycles at write time', function () {
         ->and(app(RbacService::class)->setParentRole($a, $a))->toBeFalse();
 });
 
-it('re-parents child roles when a role is deleted and protects system roles', function () {
+it('re-parents child roles when a role is deleted and protects only the Administrator role', function () {
     $service = app(RoleManagementService::class);
 
     $admin = User::create(['full_name' => 'Ad', 'email' => 'ad@t.io', 'password_hash' => bcrypt('x'), 'status' => 'Active']);
     $admin->roles()->attach(Role::where('role_name', 'Administrator')->value('role_id'));
 
+    $administrator = Role::where('role_name', 'Administrator')->first();
+    expect($service->deleteRole($administrator))->toBeFalse();
+
+    // Every other role — including system roles like Team Member — is deletable.
     $system = Role::where('role_name', 'Team Member')->first();
-    expect($service->deleteRole($system))->toBeFalse();
+    expect($service->deleteRole($system))->toBeTrue();
 
     $parent = $service->createRole(['name' => 'P', 'description' => null, 'scope' => 'organization', 'parent_role_id' => null, 'rank' => 50]);
     $child = $service->createRole(['name' => 'C', 'description' => null, 'scope' => 'organization', 'parent_role_id' => $parent->role_id, 'rank' => 51]);

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Permission;
 use App\Models\Role;
 use App\Models\User;
+use App\Support\Permissions;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -80,13 +81,14 @@ class RoleManagementService
     }
 
     /**
-     * Delete a role. System roles are refused. Child roles are re-parented
+     * Delete a role. Only the Administrator role is refused — every other
+     * role (system or custom) may be deleted. Child roles are re-parented
      * to the deleted role's parent so no inheritance branch is orphaned.
      * Returns false when the role is protected.
      */
     public function deleteRole(Role $role): bool
     {
-        if ($role->is_system) {
+        if (Permissions::isProtectedRoleName($role->role_name)) {
             return false;
         }
 
