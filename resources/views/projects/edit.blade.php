@@ -132,19 +132,43 @@
         <!-- SEPARATE DELETE FORM (OUTSIDE MAIN FORM) -->
         @can('delete_projects')
             @if ($project->isManagedBy(auth()->user()))
-                <div style="margin-top:-38px; display:flex; justify-content:flex-end;">
-                    <form method="POST" action="{{ route('projects.destroy', $project) }}"
-                        data-confirm
-                        data-confirm-title="Delete '{{ $project->project_name }}'?"
-                        data-confirm-text="This removes all its phases, tasks, and budget data. This action cannot be undone."
-                        data-confirm-button="Yes, delete it"
-                        data-cancel-button="Cancel"
-                        data-confirm-icon="warning">
+                <div style="margin-top:-38px; display:flex; justify-content:flex-end;"
+                    x-data="{ showDeleteModal: false }">
+                    <form id="deleteProjectForm" method="POST" action="{{ route('projects.destroy', $project) }}">
                         @csrf
                         @method('DELETE')
-                        <button type="submit" class="btn btn-ghost"
-                            style="color:var(--danger); border-color:var(--danger-soft);">Delete project</button>
+                        <button type="button" class="btn btn-ghost"
+                            style="color:var(--danger); border-color:var(--danger-soft);"
+                            @click="showDeleteModal = true">Delete project</button>
                     </form>
+
+                    {{-- Delete confirmation modal --}}
+                    <template x-if="showDeleteModal">
+                        <div>
+                            <div class="overlay show" @click="showDeleteModal = false"></div>
+                            <div class="card card-pad"
+                                style="position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); z-index:1000; width:420px; box-shadow:0 15px 35px rgba(0,0,0,0.2);"
+                                role="dialog" aria-modal="true">
+                                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+                                    <h3 style="margin:0; font-size:16px; font-weight:700;">Delete
+                                        '{{ $project->project_name }}'?</h3>
+                                    <button type="button" @click="showDeleteModal = false"
+                                        style="background:none; border:none; font-size:18px; cursor:pointer; color:var(--ink-faint);">&times;</button>
+                                </div>
+                                <p style="margin:0 0 18px; font-size:14px; line-height:1.55; color:var(--ink-soft);">
+                                    This removes all its phases, tasks, and budget data. This action cannot be undone.
+                                </p>
+                                <div style="display:flex; justify-content:flex-end; gap:8px;">
+                                    <button type="button" class="btn btn-ghost"
+                                        @click="showDeleteModal = false">Cancel</button>
+                                    <button type="button" class="btn"
+                                        style="background:var(--danger); border-color:var(--danger); color:#fff;"
+                                        @click="document.getElementById('deleteProjectForm').submit()">Yes, delete
+                                        it</button>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
                 </div>
             @endif
         @endcan

@@ -207,9 +207,9 @@
                 >
                     @csrf
 
-                    <label class="form-label">
-                        User
-                        <select name="user_id" required class="form-input">
+                    <div class="form-field">
+                        <label for="assignDrawerUser">User</label>
+                        <select name="user_id" id="assignDrawerUser" required>
                             <option value="">Choose a user…</option>
                             @foreach ($users as $drawerUser)
                                 <option value="{{ $drawerUser->user_id }}">
@@ -217,9 +217,9 @@
                                 </option>
                             @endforeach
                         </select>
-                    </label>
+                    </div>
 
-                    <button type="submit" class="btn btn-accent" style="width:100%;">
+                    <button type="submit" class="btn btn-accent assign-drawer-submit">
                         Assign role
                     </button>
 
@@ -354,6 +354,48 @@
         display: flex;
         flex-direction: column;
         gap: 24px;
+    }
+
+    .assign-drawer-body form {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    .assign-drawer-body .form-field {
+        margin-bottom: 10px;
+    }
+
+    .assign-drawer-body .form-field label {
+        display: block;
+        font-size: 12.5px;
+        font-weight: 600;
+        color: var(--ink-soft);
+        margin-bottom: 6px;
+    }
+
+    .assign-drawer-body .form-field select {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 9px 12px;
+        font-size: 13.3px;
+        font-family: inherit;
+        background: var(--surface);
+        color: var(--ink);
+        box-sizing: border-box;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+
+    .assign-drawer-body .form-field select:focus {
+        outline: none;
+        border-color: var(--primary);
+        box-shadow: 0 0 0 3px var(--primary-soft);
+    }
+
+    .assign-drawer-submit {
+        width: 100%;
+        margin-top: 4px;
     }
 
     .assign-holders h4 {
