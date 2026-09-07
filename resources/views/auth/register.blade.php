@@ -174,7 +174,15 @@
                 name="password"
                 placeholder="At least 8 characters"
                 required
+                minlength="8"
+                pattern="(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}"
+                title="Must be at least 8 characters and include uppercase, lowercase, a number, and a special character."
             >
+
+            <div class="form-hint" style="font-size:12px; color:var(--muted, #64748b); margin-top:6px;">
+                Use at least 8 characters with uppercase and lowercase letters,
+                a number, and a special character.
+            </div>
         </div>
 
         <div class="field">

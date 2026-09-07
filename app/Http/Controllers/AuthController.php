@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Rules\NotCommonPassword;
 use App\Support\Activity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -138,6 +139,11 @@ class AuthController extends Controller
                 'string',
                 'min:8',
                 'confirmed',
+                'regex:/[a-z]/',              // lowercase letter
+                'regex:/[A-Z]/',              // uppercase letter
+                'regex:/[0-9]/',              // number
+                'regex:/[^A-Za-z0-9]/',       // special character
+                new NotCommonPassword,  // blocked against common/leaked passwords
             ],
         ]);
 
