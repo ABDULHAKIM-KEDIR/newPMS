@@ -103,11 +103,15 @@
                             Assign
                         </button>
 
-                        <a
-                            href="{{ route('admin.roles.edit', $role) }}"
-                            class="link-small"
-                            style="margin-left:14px;"
-                        >Edit</a>
+                        @if ($role->role_name !== 'Administrator')
+                            <a
+                                href="{{ route('admin.roles.edit', $role) }}"
+                                class="link-small"
+                                style="margin-left:14px;"
+                            >Edit</a>
+                        @else
+                            <span class="cell-sub" style="margin-left:14px;" title="The Administrator role cannot be modified">—</span>
+                        @endif
 
                         @if ($role->role_name !== 'Administrator')
                         <form
