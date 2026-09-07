@@ -348,7 +348,13 @@
       },
 
       async deleteTask() {
-        if (!confirm(`Are you sure you want to delete task "${this.task.name}"?`)) {
+        const confirmed = await confirmDialog({
+          title: `Delete task '${this.task.name}'?`,
+          text: 'This action is permanent and cannot be undone.',
+          confirmText: 'Yes, delete it',
+        });
+
+        if (!confirmed) {
           return;
         }
 
@@ -364,7 +370,7 @@
 
           if (!res.ok) {
             const err = await res.json().catch(() => ({}));
-            alert(err.message || 'Failed to delete task.');
+            alertDialog({ text: err.message || 'Failed to delete task.' });
             return;
           }
 
@@ -372,7 +378,7 @@
           window.location.reload();
         } catch (e) {
           console.error('Delete error:', e);
-          alert('An error occurred while deleting the task.');
+          alertDialog({ text: 'An error occurred while deleting the task.' });
         }
       },
 
@@ -401,7 +407,7 @@
           if (!res.ok) {
             const err = await res.json().catch(() => ({}));
             console.error('Failed to update task:', res.status, err);
-            alert(err.message || 'Failed to save task changes.');
+            alertDialog({ text: err.message || 'Failed to save task changes.' });
             return;
           }
 
@@ -435,7 +441,7 @@
           this.dirty = true;
         } catch (e) {
           console.error('Save changes error:', e);
-          alert('An error occurred while saving task changes.');
+          alertDialog({ text: 'An error occurred while saving task changes.' });
         }
       },
 
@@ -629,11 +635,11 @@
             this.task.attachments = [...(this.task.attachments || []), data.attachment];
             this.flash('File uploaded successfully');
           } else {
-            alert('Failed to upload file. Max size: 20MB.');
+            alertDialog({ text: 'Failed to upload file. Max size: 20MB.' });
           }
         } catch(e) {
           console.error(e);
-          alert('Upload failed.');
+          alertDialog({ text: 'Upload failed.' });
         } finally {
           this.uploadingFile = false;
           event.target.value = '';
@@ -641,7 +647,13 @@
       },
 
       async deleteAttachment(attachmentId) {
-        if (!confirm('Are you sure you want to remove this attachment?')) return;
+        const confirmed = await confirmDialog({
+          title: 'Remove this attachment?',
+          text: 'The file will be permanently deleted.',
+          confirmText: 'Yes, remove it',
+        });
+
+        if (!confirmed) return;
         try {
           const res = await fetch(`/tasks/${this.task.id}/attachments/${attachmentId}`, {
             method: 'DELETE',

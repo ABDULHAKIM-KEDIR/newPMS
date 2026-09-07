@@ -2,7 +2,7 @@
 
 @section('title', 'Roles & Permissions')
 
-@section('crumb', 'Roles &amp; Permissions')
+@section('crumb', 'Roles & Permissions')
 
 @section('content')
 
@@ -109,6 +109,7 @@
                             style="margin-left:14px;"
                         >Edit</a>
 
+                        @if ($role->role_name !== 'Administrator')
                         <form
                             method="POST"
                             action="{{ route('admin.roles.destroy', $role) }}"
@@ -133,6 +134,7 @@
                                 >Delete</button>
                             @endif
                         </form>
+                        @endif
                     @else
                         <span class="cell-sub">View only</span>
                     @endcan
@@ -553,10 +555,15 @@ document.addEventListener('DOMContentLoaded', function () {
                 'background:none;border:none;cursor:pointer;color:var(--danger);';
             revokeBtn.textContent = 'Revoke';
             revokeBtn.addEventListener('click', function (event) {
-                if (!confirm('Revoke "' + roleNameEl.textContent +
-                    '" from ' + holder.name + '?')) {
-                    event.preventDefault();
-                }
+                event.preventDefault();
+                confirmDialog({
+                    title: 'Revoke "' + roleNameEl.textContent + '"?',
+                    text: 'This will be removed from ' + holder.name + '.',
+                }).then(function (confirmed) {
+                    if (confirmed) {
+                        revokeForm.submit();
+                    }
+                });
             });
 
             revokeForm.appendChild(revokeBtn);

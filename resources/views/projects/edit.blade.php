@@ -134,7 +134,12 @@
             @if ($project->isManagedBy(auth()->user()))
                 <div style="margin-top:-38px; display:flex; justify-content:flex-end;">
                     <form method="POST" action="{{ route('projects.destroy', $project) }}"
-                        onsubmit="return confirm('Delete \'{{ $project->project_name }}\' permanently? This removes all its phases, tasks, and budget data.');">
+                        data-confirm
+                        data-confirm-title="Delete '{{ $project->project_name }}'?"
+                        data-confirm-text="This removes all its phases, tasks, and budget data. This action cannot be undone."
+                        data-confirm-button="Yes, delete it"
+                        data-cancel-button="Cancel"
+                        data-confirm-icon="warning">
                         @csrf
                         @method('DELETE')
                         <button type="submit" class="btn btn-ghost"
