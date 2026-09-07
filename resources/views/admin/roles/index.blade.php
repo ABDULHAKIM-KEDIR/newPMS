@@ -2,7 +2,7 @@
 
 @section('title', 'Roles & Permissions')
 
-@section('crumb', 'Roles &amp; Permissions')
+@section('crumb', 'Roles & Permissions')
 
 @section('content')
 
@@ -57,7 +57,7 @@
                     <div style="display:flex; align-items:center; gap:8px;">
                         <span class="cell-primary">{{ $role->role_name }}</span>
 
-                        @if ($role->is_system)
+                        @if ($role->role_name === 'Administrator')
                             <span
                                 class="badge b-system"
                                 title="System role — protected from deletion"
@@ -105,6 +105,7 @@
                             style="margin-left:14px;"
                         >Edit</a>
 
+                        @if ($role->role_name !== 'Administrator')
                         <form
                             method="POST"
                             action="{{ route('admin.roles.destroy', $role) }}"
@@ -115,24 +116,13 @@
                             @csrf
                             @method('DELETE')
 
-                            @php
-                                $protected = \App\Support\Permissions::isProtectedRoleName($role->role_name);
-                            @endphp
-
-                            @if ($protected)
-                                <span
-                                    class="link-small"
-                                    style="color:var(--muted); cursor:not-allowed;"
-                                    title="The Administrator role is protected and cannot be deleted"
-                                >Delete</span>
-                            @else
-                                <button
-                                    type="submit"
-                                    class="link-small"
-                                    style="background:none; border:none; cursor:pointer; color:var(--danger);"
-                                >Delete</button>
-                            @endif
+                            <button
+                                type="submit"
+                                class="link-small"
+                                style="background:none; border:none; cursor:pointer; color:var(--danger);"
+                            >Delete</button>
                         </form>
+                        @endif
                     @else
                         <span class="cell-sub">View only</span>
                     @endcan
