@@ -183,7 +183,7 @@
     <div style="border-bottom:1px solid var(--line); padding-bottom:14px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;">
       <div>
         <h2 style="font-size:17px; font-weight:700; margin:0;">Step 3 — Create Tasks by Team</h2>
-        </div>
+      </div>
     </div>
 
     <!-- Dynamic container for task creation sections per selected team -->
@@ -261,6 +261,30 @@
   .wizard-actions { display:flex; justify-content:space-between; align-items:center; margin-top:24px; padding-top:16px; border-top:1px solid var(--line); }
   .team-task-card { background:var(--bg-subtle); border:1px solid var(--line); border-radius:8px; padding:16px; margin-bottom:16px; }
   .task-row-item { display:grid; grid-template-columns:2fr 1.3fr 1fr 1fr 1fr 1fr auto; gap:8px; align-items:center; background:var(--bg-card); border:1px solid var(--line); border-radius:6px; padding:10px 12px; margin-bottom:8px; }
+  .task-row-item input:not([type="hidden"]),
+  .task-row-item select {
+    width:100%;
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:9px 12px;
+    font-size:13.3px;
+    font-family:inherit;
+    background:var(--surface);
+    color:var(--ink);
+    box-sizing:border-box;
+    transition:border-color .15s ease, box-shadow .15s ease;
+  }
+  .task-row-item input:focus,
+  .task-row-item select:focus {
+    outline:none;
+    border-color:var(--primary);
+    box-shadow:0 0 0 3px var(--primary-soft);
+  }
+  .task-row-item .task-field-label { display:block; font-size:11px; font-weight:600; color:var(--ink-muted); margin-bottom:4px; }
+  .task-row-item .btn-remove-task { background:var(--surface); border:1px solid var(--line); border-radius:8px; width:34px; height:36px; display:inline-flex; align-items:center; justify-content:center; color:var(--danger); font-size:14px; cursor:pointer; transition:background .15s ease, border-color .15s ease; }
+  .task-row-item .btn-remove-task:hover { background:var(--danger-soft); border-color:var(--danger); }
+  .team-task-card .btn-add-task { background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:6px 14px; font-size:12.5px; font-weight:600; color:var(--ink-soft); cursor:pointer; transition:background .15s ease, border-color .15s ease; }
+  .team-task-card .btn-add-task:hover { background:var(--primary-soft); border-color:var(--primary); color:var(--primary); }
   @media (max-width: 768px) {
     .wizard-stepper { flex-direction:column; gap:12px; align-items:flex-start; }
     .wizard-line { display:none; }
@@ -426,7 +450,7 @@
             <span style="font-weight:700; font-size:15px; color:var(--ink);">${team.name}</span>
             <span style="font-size:12px; color:var(--ink-soft); margin-left:8px;">(Lead: ${team.leader_name})</span>
           </div>
-          <button type="button" class="btn btn-ghost" style="padding:4px 10px; font-size:12px;" onclick="addTaskRow(${team.id})">+ Add Task</button>
+          <button type="button" class="btn-add-task" onclick="addTaskRow(${team.id})">+ Add Task</button>
         </div>
         <div id="task-rows-team-${team.id}"></div>
       `;
@@ -485,15 +509,15 @@
         <input type="number" step="0.01" min="0" name="tasks[${idx}][budget]" value="${prefill.budget || ''}" placeholder="e.g. 25,000 ETB" style="width:100%;">
       </div>
       <div>
-        <label style="font-size:11px; color:var(--ink-muted);">Start date</label>
-        <input type="date" name="tasks[${idx}][start_date]" value="${prefill.start_date || ''}" onchange="validateTaskDates(this)" style="width:100%;">
+        <label class="task-field-label">Start date</label>
+        <input type="date" name="tasks[${idx}][start_date]" value="${prefill.start_date || ''}" onchange="validateTaskDates(this)">
       </div>
       <div>
-        <label style="font-size:11px; color:var(--ink-muted);">End date</label>
-        <input type="date" name="tasks[${idx}][end_date]" value="${prefill.end_date || ''}" onchange="validateTaskDates(this)" style="width:100%;">
+        <label class="task-field-label">End date</label>
+        <input type="date" name="tasks[${idx}][end_date]" value="${prefill.end_date || ''}" onchange="validateTaskDates(this)">
       </div>
       <div>
-        <button type="button" class="btn btn-ghost" style="padding:4px 8px; color:var(--danger);" onclick="removeTaskRow(this)">✕</button>
+        <button type="button" class="btn-remove-task" title="Remove task" aria-label="Remove task" onclick="removeTaskRow(this)">✕</button>
       </div>
     `;
 
@@ -555,7 +579,7 @@
 
       if (name && teamTasksMap[teamId]) {
         validTasksCount++;
-        teamTasksMap[teamId].tasks.push({ name, assignee: assigneeName, priority: pri, due, budget: bgt });
+        teamTasksMap[teamId].tasks.push({ name, assignee: assigneeName, priority: pri, start: row.querySelector('[name*="[start_date]"]')?.value, due, budget: bgt });
       }
     });
 

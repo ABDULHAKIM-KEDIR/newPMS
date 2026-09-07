@@ -47,7 +47,15 @@ class RoleController extends Controller
         $groupedPermissions = $this->groupedPermissions();
         $allowedParents = Role::orderBy('role_name')->get();
 
-        return view('admin.roles.create', compact('groupedPermissions', 'allowedParents'));
+        // Permissions that would be inherited from the currently selected
+        // parent (kept across validation errors via old input).
+        $inheritedPermissionIds = old('parent_role_id')
+            ? $this->inheritedPermissionIdsFor((int) old('parent_role_id'))
+            : [];
+
+        return view('admin.roles.create', compact(
+            'groupedPermissions', 'allowedParents', 'inheritedPermissionIds'
+        ));
     }
 
     public function store(StoreRoleRequest $request)
@@ -79,7 +87,16 @@ class RoleController extends Controller
         $groupedPermissions = $this->groupedPermissions();
         $allowedParents = $this->allowedParentsFor($role);
 
-        return view('admin.roles.edit', compact('role', 'groupedPermissions', 'allowedParents'));
+        // Prefer the freshly selected parent (validation error) over the
+        // stored one so the inherited set matches what the user sees.
+        $selectedParentId = old('parent_role_id', $role->parent_role_id);
+        $inheritedPermissionIds = $selectedParentId
+            ? $this->inheritedPermissionIdsFor((int) $selectedParentId)
+            : [];
+
+        return view('admin.roles.edit', compact(
+            'role', 'groupedPermissions', 'allowedParents', 'inheritedPermissionIds'
+        ));
     }
 
     public function update(UpdateRoleRequest $request, Role $role)
@@ -218,6 +235,56 @@ class RoleController extends Controller
         return Permission::orderBy('permission_name')
             ->get()
             ->groupBy(fn (Permission $permission) => $permission->group ?: 'Other')
+            ->all();
+    }
+
+    /**
+     * All permission ids inherited through the full parent chain of
+     * $parentRoleId (union across ancestors, cycle-safe).
+     *
+     * @return list<int>
+     */
+    protected function inheritedPermissionIdsFor(int $parentRoleId): array
+    {
+        $ids = [];
+        $seen = [];
+        $currentId = $parentRoleId;
+        $depth = 0;
+
+        while ($currentId && $depth < 10 && ! isset($seen[$currentId])) {
+            $seen[$currentId] = true;
+
+            $current = Role::with('permissions')->find($currentId);
+
+            if (! $current) {
+                break;
+            }
+
+            $ids = array_merge(
+                $ids,
+                $current->permissions->pluck('permission_id')->all()
+            );
+
+            $currentId = $current->parent_role_id;
+            $depth++;
+        }
+
+        return array_values(array_unique(array_map('intval', $ids)));
+    }
+
+    /**
+     * Direct permission ids per role, for the live inheritance preview.
+     *
+     * @return array<int, list<int>>
+     */
+    public function rolePermissionsMap(): array
+    {
+        return Role::with('permissions')
+            ->orderBy('role_name')
+            ->get()
+            ->mapWithKeys(fn (Role $role) => [
+                $role->role_id => $role->permissions->pluck('permission_id')->map(fn ($id) => (int) $id)->all(),
+            ])
             ->all();
     }
 

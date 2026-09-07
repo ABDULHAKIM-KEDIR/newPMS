@@ -18,6 +18,14 @@
 
   --line:#D7E3EC;
 
+  /* Aliases used across views — must stay defined for visibility */
+  --bg-card:var(--surface);
+  --bg-subtle:var(--surface-alt);
+  --ink-muted:var(--ink-faint);
+  --surface-soft:var(--surface-alt);
+  --active:var(--success);
+  --review:var(--warning);
+
   --success:#2F7D4A;
   --success-soft:#DFF2E5;
 

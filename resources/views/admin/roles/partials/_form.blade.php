@@ -1,6 +1,9 @@
 @php /** @var \Illuminate\Support\Collection $groupedPermissions */ @endphp
 @php /** @var \Illuminate\Support\Collection $allowedParents */ @endphp
 @php /** @var \App\Models\Role|null $role */ @endphp
+@php /** @var array<int, int> $inheritedPermissionIds */ @endphp
+@php $inheritedPermissionIds ??= []; @endphp
+@php $rolesPermissions = app(App\Http\Controllers\RoleController::class)->rolePermissionsMap(); @endphp
 
 <div class="role-form-grid">
 
@@ -137,7 +140,9 @@
 
         <div class="form-hint" style="margin-bottom:14px;">
             Directly granted permissions are checked. Permissions inherited
-            from the parent role always apply, even when unchecked.
+            from the parent role are shown locked
+            (<span class="perm-inherited-badge">inherited</span>) and always
+            apply, even when unchecked.
         </div>
 
         @error('permissions.*')
@@ -166,22 +171,29 @@
                             $directlyGranted = isset($role)
                                 && $role->permissions
                                     ->contains('permission_id', $permission->permission_id);
+                            $isInherited = in_array($permission->permission_id, $inheritedPermissionIds, true);
                         @endphp
 
                         <label
                             class="perm-check
-                                {{ $directlyGranted ? 'perm-checked' : '' }}"
+                                {{ $directlyGranted ? 'perm-checked' : '' }}
+                                {{ $isInherited ? 'perm-inherited' : '' }}"
                         >
                             <input
                                 type="checkbox"
                                 name="permissions[]"
                                 value="{{ $permission->permission_id }}"
-                                @checked($directlyGranted || old('permissions', []) !== [] && in_array($permission->permission_id, old('permissions')))
+                                data-permission="{{ $permission->permission_id }}"
+                                @checked($directlyGranted || $isInherited || old('permissions', []) !== [] && in_array($permission->permission_id, old('permissions')))
+                                @disabled($isInherited)
                             >
 
                             <span>
                                 <span class="perm-slug">
                                     {{ $permission->permission_name }}
+                                    @if ($isInherited)
+                                        <span class="perm-inherited-badge">inherited</span>
+                                    @endif
                                 </span>
                                 <span class="perm-desc">
                                     {{ $permission->description }}
@@ -347,6 +359,35 @@
         font-size: 11.5px;
         color: var(--muted, #64748b);
     }
+
+    .perm-inherited-badge {
+        display: inline-block;
+        font-size: 9.5px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        padding: 1px 6px;
+        border-radius: 10px;
+        background: var(--surface-alt, #eaf3fa);
+        color: var(--primary-dark, #004a87);
+        margin-left: 4px;
+        vertical-align: 1px;
+    }
+
+    .perm-check.perm-inherited {
+        background: var(--surface-alt, #eaf3fa);
+        border-style: dashed;
+        border-color: var(--line, #d7e3ec);
+        cursor: not-allowed;
+    }
+
+    .perm-check.perm-inherited .perm-slug {
+        color: var(--ink-soft, #5b6b78);
+    }
+
+    .perm-check.perm-inherited input {
+        cursor: not-allowed;
+    }
 </style>
 @endonce
 
@@ -380,6 +421,67 @@ document.addEventListener('DOMContentLoaded', function () {
             cb.closest('.perm-check').classList.toggle('perm-checked', cb.checked);
         });
     });
+
+    /* Live inheritance preview: when the parent role changes, recompute
+       the union of permissions across its whole ancestor chain and show
+       them as locked "inherited" checkboxes. */
+    var rolePermissions = @json($rolesPermissions);
+    var parentSelect = document.getElementById('parent_role_id');
+
+    function inheritedIdsFor(parentId) {
+        var ids = [];
+        var seen = {};
+        var current = parentId ? String(parentId) : null;
+        var depth = 0;
+
+        while (current && depth < 10 && !seen[current] && rolePermissions[current]) {
+            seen[current] = true;
+            rolePermissions[current].forEach(function (id) {
+                if (ids.indexOf(id) === -1) {
+                    ids.push(id);
+                }
+            });
+            current = (window.__ROLE_PARENTS__ || {})[current] || null;
+            depth++;
+        }
+
+        return ids;
+    }
+
+    if (parentSelect) {
+        window.__ROLE_PARENTS__ = @json($allowedParents->mapWithKeys(
+            fn ($r) => [$r->role_id => $r->parent_role_id]
+        )->all());
+
+        parentSelect.addEventListener('change', function () {
+            var inherited = inheritedIdsFor(parentSelect.value);
+
+            document.querySelectorAll('.perm-check input').forEach(function (cb) {
+                var isInherited = inherited.indexOf(Number(cb.value)) !== -1;
+                var label = cb.closest('.perm-check');
+                var slug = label.querySelector('.perm-slug');
+                var badge = slug.querySelector('.perm-inherited-badge');
+
+                cb.disabled = isInherited;
+
+                if (isInherited) {
+                    cb.checked = true;
+                    label.classList.add('perm-inherited');
+                    if (!badge) {
+                        badge = document.createElement('span');
+                        badge.className = 'perm-inherited-badge';
+                        badge.textContent = 'inherited';
+                        slug.appendChild(badge);
+                    }
+                } else {
+                    label.classList.remove('perm-inherited');
+                    if (badge) {
+                        badge.remove();
+                    }
+                }
+            });
+        });
+    }
 
 });
 </script>
