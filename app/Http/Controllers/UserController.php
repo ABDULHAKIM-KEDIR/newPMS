@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Office;
 use App\Models\Role;
 use App\Models\User;
 use App\Support\Activity;
@@ -83,10 +84,11 @@ class UserController extends Controller
         );
 
         $roles = Role::orderBy('role_name')->get();
+        $offices = Office::orderBy('office_name')->get();
 
         return view(
             'admin.users.create',
-            compact('roles')
+            compact('roles', 'offices')
         );
     }
 
@@ -127,6 +129,11 @@ class UserController extends Controller
                 'string',
                 'min:8',
             ],
+
+            'office_id' => [
+                'nullable',
+                'exists:offices,office_id',
+            ],
         ]);
 
         /*
@@ -139,6 +146,7 @@ class UserController extends Controller
             'phone' => $data['phone'] ?? null,
             'password_hash' => Hash::make($data['password']),
             'status' => 'Active',
+            'office_id' => $data['office_id'] ?? null,
         ]);
 
         $user->roles()->sync([
@@ -174,10 +182,11 @@ class UserController extends Controller
         );
 
         $roles = Role::orderBy('role_name')->get();
+        $offices = Office::orderBy('office_name')->get();
 
         return view(
             'admin.users.edit',
-            compact('user', 'roles')
+            compact('user', 'roles', 'offices')
         );
     }
 
@@ -213,6 +222,11 @@ class UserController extends Controller
                 'required',
                 'exists:roles,role_id',
             ],
+
+            'office_id' => [
+                'nullable',
+                'exists:offices,office_id',
+            ],
         ]);
 
         $user->update([
@@ -220,6 +234,31 @@ class UserController extends Controller
             'email' => $data['email'],
             'phone' => $data['phone'] ?? null,
         ]);
+
+        // Office assignment / transfer (audited + user notified).
+        $previousOfficeId = (int) ($user->getOriginal('office_id') ?? 0);
+        $newOfficeId = (int) ($data['office_id'] ?? 0);
+
+        if ($previousOfficeId !== $newOfficeId) {
+            $user->office_id = $newOfficeId ?: null;
+            $user->save();
+
+            $oldOffice = Office::find($previousOfficeId);
+            $newOffice = Office::find($newOfficeId);
+
+            Activity::log(
+                $previousOfficeId ? 'Moved user between offices' : 'Assigned user to office',
+                'User',
+                $user->user_id,
+                $user->full_name.': '.($oldOffice?->office_name ?? 'none').' → '.($newOffice?->office_name ?? 'none')
+            );
+
+            Activity::notify(
+                $user->user_id,
+                'Your office assignment changed to '.($newOffice?->office_name ?? 'none'),
+                'general'
+            );
+        }
 
         $previousRole =
             optional($user->roles->first())->role_name

@@ -43,8 +43,8 @@
                     <label for="project_type">Type <span class="required-mark">*</span></label>
                     <select id="project_type" name="project_type" required>
                         @foreach ($projectTypes as $t)
-                            <option value="{{ $t->name }}" {{ old('project_type', $project->project_type) === $t->name ? 'selected' : '' }}>
-                                {{ $t->name }}</option>
+                            <option value="{{ $t->name }}" data-office="{{ $t->office_id ?? '' }}" {{ old('project_type', $project->project_type) === $t->name ? 'selected' : '' }}>
+                                {{ $t->name }}@if ($t->office_id) · {{ optional($t->office)->office_name }}@endif</option>
                         @endforeach
                     </select>
                 </div>
@@ -101,6 +101,33 @@
                     <label for="end_date">Target end date</label>
                     <input type="date" id="end_date" name="end_date"
                         value="{{ old('end_date', optional($project->end_date)->format('Y-m-d')) }}">
+                </div>
+            </div>
+
+            <div class="form-field">
+                <label for="primary_office_id">Primary Office</label>
+                <select id="primary_office_id" name="primary_office_id">
+                    <option value="">— No primary office —</option>
+                    @foreach ($offices as $office)
+                        <option value="{{ $office->office_id }}"
+                            {{ (string) old('primary_office_id', $project->primary_office_id) === (string) $office->office_id ? 'selected' : '' }}>
+                            {{ $office->office_name }}</option>
+                    @endforeach
+                </select>
+            </div>
+
+            <div class="form-field">
+                <label>Participating Offices
+                    <span style="font-weight:400; color:var(--ink-faint);">(cross-office collaboration)</span>
+                </label>
+                <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:6px;">
+                    @foreach ($offices as $office)
+                        <label style="display:flex; align-items:center; gap:6px; font-weight:400; font-size:13px;">
+                            <input type="checkbox" name="participating_offices[]" value="{{ $office->office_id }}"
+                                {{ $project->offices->contains('office_id', $office->office_id) && (int) $project->primary_office_id !== (int) $office->office_id ? 'checked' : '' }}>
+                            {{ $office->office_name }}
+                        </label>
+                    @endforeach
                 </div>
             </div>
 
@@ -174,3 +201,31 @@
         @endcan
     </div>
 @endsection
+
+@push('scripts')
+<script>
+    (function () {
+        const officeSelect = document.getElementById('primary_office_id');
+        const typeSelect = document.getElementById('project_type');
+        if (!officeSelect || !typeSelect) return;
+
+        const allOptions = Array.from(typeSelect.options);
+        const currentOffice = officeSelect.value;
+
+        function filterTypes(officeId) {
+            const selected = typeSelect.value;
+            typeSelect.innerHTML = '';
+            const visible = allOptions.filter(o => !o.dataset.office || o.dataset.office === '' || o.dataset.office === officeId);
+            visible.forEach(o => typeSelect.appendChild(o));
+            if (visible.some(o => o.value === selected)) {
+                typeSelect.value = selected;
+            } else {
+                typeSelect.value = '';
+            }
+        }
+
+        filterTypes(currentOffice);
+        officeSelect.addEventListener('change', () => filterTypes(officeSelect.value));
+    })();
+</script>
+@endpush

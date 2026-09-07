@@ -16,6 +16,30 @@
   </div>
 </div>
 
+@if ($officeStats)
+<!-- Office Snapshot -->
+<div class="card card-pad" style="margin-bottom:20px;">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+    <h3 style="margin:0; font-size:14px; text-transform:uppercase; color:var(--ink-soft);">{{ $officeStats['name'] }} Snapshot</h3>
+    @can('view_offices')
+      <a class="link-small" href="{{ route('admin.offices.index') }}">Office management →</a>
+    @endcan
+  </div>
+  <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:14px;">
+    <div><span class="k">Teams</span><div class="v">{{ $officeStats['teams'] }}</div></div>
+    <div><span class="k">Users</span><div class="v">{{ $officeStats['users'] }}</div></div>
+    <div><span class="k">Projects</span><div class="v">{{ $officeStats['projects'] }}</div></div>
+    <div><span class="k">Active</span><div class="v">{{ $officeStats['active_projects'] }}</div></div>
+    <div><span class="k">Completed</span><div class="v">{{ $officeStats['completed_projects'] }}</div></div>
+    @can('view_budgets')
+      <div><span class="k">Budget</span><div class="v">ETB {{ number_format($officeStats['budget']['allocated']) }}</div></div>
+      <div><span class="k">Spent</span><div class="v">ETB {{ number_format($officeStats['budget']['spent']) }}</div></div>
+      <div><span class="k">Remaining</span><div class="v">ETB {{ number_format($officeStats['budget']['remaining']) }}</div></div>
+    @endcan
+  </div>
+</div>
+@endif
+
 <!-- Key Stat Cards -->
 <div class="grid grid-4 stat-card-grid">
   <x-stat-card title="Active Projects" :value="$stats['active_projects']" icon="📁" :delta="$scoped ? 'Across your team(s)' : 'Across all departments'" />

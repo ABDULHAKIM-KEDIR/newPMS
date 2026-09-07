@@ -16,6 +16,7 @@ class Project extends Model
     protected $fillable = [
         'project_name', 'description', 'client', 'project_type', 'project_type_id', 'team_id', 'template_id',
         'project_manager_id', 'scope_statement', 'start_date', 'end_date', 'priority', 'status', 'progress', 'created_by',
+        'primary_office_id',
     ];
 
     /** Valid access levels for teams assigned to this project. */
@@ -34,6 +35,38 @@ class Project extends Model
     public function projectType()
     {
         return $this->belongsTo(ProjectType::class, 'project_type_id', 'project_type_id');
+    }
+
+    public function primaryOffice()
+    {
+        return $this->belongsTo(Office::class, 'primary_office_id', 'office_id');
+    }
+
+    /** All participating offices, including the primary one. */
+    public function offices()
+    {
+        return $this->belongsToMany(Office::class, 'project_office', 'project_id', 'office_id')
+            ->withPivot('participation_type')
+            ->withTimestamps();
+    }
+
+    /** Participating offices only (excludes the primary office). */
+    public function participatingOffices()
+    {
+        return $this->belongsToMany(Office::class, 'project_office', 'project_id', 'office_id')
+            ->wherePivot('participation_type', 'participating')
+            ->withPivot('participation_type')
+            ->withTimestamps();
+    }
+
+    /** True when the given office has a stake in this project (primary or participating). */
+    public function involvesOffice(int $officeId): bool
+    {
+        if ((int) $this->primary_office_id === $officeId) {
+            return true;
+        }
+
+        return $this->offices()->where('offices.office_id', $officeId)->exists();
     }
 
     public function teams()
@@ -125,6 +158,7 @@ class Project extends Model
     {
         return app(RosterService::class)->getFormattedRoster($this);
     }
+
     /**
      * Users assignable for tasks with informative labels.
      */

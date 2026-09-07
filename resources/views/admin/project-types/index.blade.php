@@ -39,7 +39,7 @@
         @else
             action="{{ route('admin.project-types.store') }}"
         @endif
-        style="display:grid; grid-template-columns:1fr 2fr auto; gap:12px; align-items:end;"
+        style="display:grid; grid-template-columns:1fr 2fr 1fr auto; gap:12px; align-items:end;"
     >
         @csrf
         @if ($editing) @method('PUT') @endif
@@ -68,6 +68,23 @@
             >
         </div>
 
+        <div>
+            <label for="office_id" style="display:block; font-size:12px; font-weight:600; color:var(--ink-soft); margin-bottom:6px;">
+                Office
+            </label>
+            <select
+                id="office_id" name="office_id"
+                style="width:100%; border:1px solid var(--line); border-radius:8px; padding:9px 12px; font-size:13px; font-family:inherit; background:var(--surface); color:var(--ink); box-sizing:border-box;"
+            >
+                <option value="">All offices (global)</option>
+                @foreach ($offices as $office)
+                    <option value="{{ $office->office_id }}"
+                        {{ (string) old('office_id', $editing?->office_id) === (string) $office->office_id ? 'selected' : '' }}>
+                        {{ $office->office_name }}</option>
+                @endforeach
+            </select>
+        </div>
+
         <div style="display:flex; gap:8px;">
             <button type="submit" class="btn btn-accent">
                 {{ $editing ? 'Save Changes' : 'Create' }}
@@ -86,6 +103,7 @@
             <tr>
                 <th style="width:26%">Name</th>
                 <th>Description</th>
+                <th>Office</th>
                 <th style="text-align:center; width:12%">Projects</th>
                 <th style="text-align:center; width:14%">Status</th>
                 <th style="width:22%; text-align:right"></th>
@@ -96,6 +114,7 @@
             <tr>
                 <td class="cell-primary">{{ $type->name }}</td>
                 <td class="cell-sub">{{ $type->description ?? '—' }}</td>
+                <td class="cell-sub">{{ optional($type->office)->office_name ?? 'All offices' }}</td>
                 <td style="text-align:center">{{ $type->projects_count }}</td>
                 <td style="text-align:center">
                     <span class="badge {{ $type->is_active ? 'b-active' : 'b-planning' }}">

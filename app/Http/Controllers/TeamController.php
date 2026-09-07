@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Office;
 use App\Models\Role;
 use App\Models\Team;
 use App\Models\TeamMember;
@@ -16,7 +17,13 @@ class TeamController extends Controller
     {
         abort_unless(Auth::user()->can('view_projects'), 403);
 
-        $teams = Team::with(['leader', 'members', 'projects'])->get();
+        $authUser = Auth::user();
+        $canViewAllOffices = $authUser->isAdmin() || $authUser->isDirectorOrAdmin();
+        $myOfficeIds = $authUser->officeIds();
+
+        $teams = Team::with(['leader', 'members', 'projects', 'office'])
+            ->when(! $canViewAllOffices, fn ($q) => $q->whereIn('office_id', $myOfficeIds))
+            ->get();
 
         return view('teams.index', compact('teams'));
     }
@@ -30,8 +37,9 @@ class TeamController extends Controller
         abort_unless($this->canCreateTeams(), 403);
 
         $users = User::orderBy('full_name')->get();
+        $offices = Office::active()->orderBy('office_name')->get();
 
-        return view('teams.create', compact('users'));
+        return view('teams.create', compact('users', 'offices'));
     }
 
     public function store(Request $request)
@@ -42,6 +50,7 @@ class TeamController extends Controller
             'team_name' => ['required', 'string', 'max:100'],
             'team_leader_id' => ['nullable', 'exists:users,user_id'],
             'description' => ['nullable', 'string', 'max:1000'],
+            'office_id' => ['nullable', 'exists:offices,office_id'],
         ]);
 
         $team = Team::create($data);
@@ -50,7 +59,7 @@ class TeamController extends Controller
             TeamMember::create(['team_id' => $team->team_id, 'user_id' => $team->team_leader_id, 'joined_date' => now()]);
         }
 
-        Activity::log('Created team', 'Team', $team->team_id, $team->team_name);
+        Activity::log('Created team', 'Team', $team->team_id, $team->team_name.($team->office_id ? ' → '.optional($team->office)->office_name : ''));
 
         return redirect()->route('teams.show', $team)->with('status', 'Team created.');
     }

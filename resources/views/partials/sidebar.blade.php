@@ -243,6 +243,23 @@
 
             @endcan
 
+            @can('view_offices')
+
+                <a
+                    href="{{ route('admin.offices.index') }}"
+                    class="nav-item {{ request()->routeIs('admin.offices.*') ? 'active' : '' }}"
+                >
+                    <svg width="16" height="16" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 21h18M5 21V7l7-4 7 4v14" />
+                        <path d="M9 21v-4h6v4" />
+                    </svg>
+
+                    <span>Offices</span>
+                </a>
+
+            @endcan
+
             @can('view_audit_logs')
 
                 <a

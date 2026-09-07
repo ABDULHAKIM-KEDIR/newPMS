@@ -32,7 +32,7 @@ class ProjectPolicy
         }
 
         // PM of record.
-        if ((int) $project->pm_id === (int) $user->user_id) {
+        if ((int) $project->project_manager_id === (int) $user->user_id) {
             return true;
         }
 
@@ -46,6 +46,24 @@ class ProjectPolicy
 
         if ($memberIds->contains((int) $user->user_id)) {
             return true;
+        }
+
+        /*
+         * Office scoping: an org-level view_projects grant no longer grants
+         * blanket visibility across offices. Users scoped to an office can
+         * only see projects whose primary office is their own (or that their
+         * office participates in) — unless they hold manage-level authority
+         * (edit_projects covers directors who manage all offices).
+         */
+        if ($user->office_id && ! $user->hasPermission('edit_projects')) {
+            $inOfficeScope = (int) $project->primary_office_id === (int) $user->office_id
+                || $project->offices()
+                    ->wherePivot('office_id', $user->office_id)
+                    ->exists();
+
+            if (! $inOfficeScope) {
+                return false;
+            }
         }
 
         return app(RbacService::class)

@@ -11,7 +11,12 @@ class Team extends Model
 
     public $timestamps = false;
 
-    protected $fillable = ['team_name', 'team_leader_id', 'description', 'status'];
+    protected $fillable = ['team_name', 'team_leader_id', 'description', 'status', 'office_id'];
+
+    public function office()
+    {
+        return $this->belongsTo(Office::class, 'office_id', 'office_id');
+    }
 
     public function leader()
     {

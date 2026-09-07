@@ -2,10 +2,12 @@
 
 namespace App\Providers;
 
+use App\Models\Office;
 use App\Models\Phase;
 use App\Models\Project;
 use App\Models\Task;
 use App\Models\User;
+use App\Policies\OfficePolicy;
 use App\Policies\ProjectPolicy;
 use App\Policies\TaskPolicy;
 use App\Services\RbacService;
@@ -55,5 +57,6 @@ class AppServiceProvider extends ServiceProvider
         // Explicit policy registrations for object-level authorization.
         Gate::policy(Project::class, ProjectPolicy::class);
         Gate::policy(Task::class, TaskPolicy::class);
+        Gate::policy(Office::class, OfficePolicy::class);
     }
 }

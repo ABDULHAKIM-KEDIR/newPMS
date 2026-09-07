@@ -35,6 +35,8 @@ class Permissions
         'manage_roles' => ['Create roles and manage their permissions', 'Administration'],
         'manage_project_types' => ['Create, edit, activate, and delete project types', 'Administration'],
         'manage_system_settings' => ['Manage system-level configuration', 'Administration'],
+        'view_offices' => ['View offices and their details', 'Administration'],
+        'manage_offices' => ['Create, edit, activate/deactivate offices and assign office heads', 'Administration'],
     ];
 
     /** Grouped view for the permission matrix. */
@@ -44,7 +46,7 @@ class Permissions
         'Teams' => ['manage_team'],
         'Governance' => ['approve_change_requests', 'manage_budgets', 'view_budgets'],
         'Insights' => ['view_reports', 'view_calendar', 'view_notifications'],
-        'Administration' => ['view_audit_logs', 'manage_users', 'users.reset-password', 'manage_roles', 'manage_project_types', 'manage_system_settings'],
+        'Administration' => ['view_audit_logs', 'manage_users', 'users.reset-password', 'manage_roles', 'manage_project_types', 'manage_system_settings', 'view_offices', 'manage_offices'],
     ];
 
     /**

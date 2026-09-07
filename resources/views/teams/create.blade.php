@@ -30,6 +30,15 @@
       </select>
     </div>
     <div class="form-field">
+      <label for="office_id">Office</label>
+      <select id="office_id" name="office_id">
+        <option value="">— No office —</option>
+        @foreach ($offices as $office)
+          <option value="{{ $office->office_id }}" {{ (string) old('office_id') === (string) $office->office_id ? 'selected' : '' }}>{{ $office->office_name }}</option>
+        @endforeach
+      </select>
+    </div>
+    <div class="form-field">
       <label for="description">Description</label>
       <textarea id="description" name="description">{{ old('description') }}</textarea>
     </div>

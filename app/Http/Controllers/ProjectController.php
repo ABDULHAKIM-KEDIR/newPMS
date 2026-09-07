@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreProjectRequest;
 use App\Http\Requests\UpdateProjectRequest;
 use App\Models\ChangeRequest;
+use App\Models\Office;
 use App\Models\Phase;
 use App\Models\PhaseBudget;
 use App\Models\Project;
@@ -23,6 +24,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
 
 class ProjectController extends Controller
 {
@@ -59,6 +61,17 @@ class ProjectController extends Controller
 
         $projectTypes = ProjectType::where('is_active', true)->orderBy('name')->get();
 
+        /*
+         * When an office filter is active, only show project types that are
+         * either global or belong to that office, so the pills follow the
+         * office dropdown.
+         */
+        if ($officeFilter = $request->get('office')) {
+            $projectTypes = $projectTypes->filter(
+                fn ($t) => empty($t->office_id) || $t->office_id == $officeFilter
+            )->values();
+        }
+
         if ($type = $request->get('type')) {
             $typeModel = $projectTypes->firstWhere('name', $type);
 
@@ -87,9 +100,34 @@ class ProjectController extends Controller
             });
         }
 
+        /*
+         * Office scoping. System Administrators/Directors see everything and
+         * may filter with the office dropdown; everyone else is server-side
+         * restricted to projects of their own office(s) or projects their
+         * teams are assigned to (cross-office participation honoured).
+         */
+        $authUser = Auth::user();
+        $offices = Office::orderBy('office_name')->get();
+
+        if ($authUser->isAdmin() || $authUser->isDirectorOrAdmin()) {
+            if ($officeFilter = $request->get('office')) {
+                $query->where(function ($q) use ($officeFilter) {
+                    $q->where('primary_office_id', $officeFilter)
+                        ->orWhereHas('offices', fn ($oq) => $oq->where('offices.office_id', $officeFilter));
+                });
+            }
+        } else {
+            $myOfficeIds = $authUser->officeIds()->all();
+            $query->where(function ($q) use ($myOfficeIds) {
+                $q->whereIn('primary_office_id', $myOfficeIds)
+                    ->orWhereHas('offices', fn ($oq) => $oq->whereIn('offices.office_id', $myOfficeIds))
+                    ->orWhereHas('teams.members', fn ($tq) => $tq->where('team_members.user_id', $authUser->user_id));
+            });
+        }
+
         $projects = $query->orderByDesc('project_id')->paginate(15)->withQueryString();
 
-        return view('projects.index', compact('projects', 'projectTypes'));
+        return view('projects.index', compact('projects', 'projectTypes', 'offices'));
     }
 
     public function show(Project $project)
@@ -126,9 +164,10 @@ class ProjectController extends Controller
     {
         Gate::authorize('create_projects');
 
-        $teams = Team::with(['leader', 'members.user'])->orderBy('team_name')->get();
+        $teams = Team::with(['leader', 'members.user', 'office'])->orderBy('team_name')->get();
         $projectManagers = User::where('status', 'Active')->orderBy('full_name')->get();
         $projectTypes = ProjectType::where('is_active', true)->orderBy('name')->get();
+        $offices = Office::active()->orderBy('office_name')->get();
 
         $teamsData = $teams->map(function ($t) {
             return [
@@ -150,6 +189,7 @@ class ProjectController extends Controller
             'projectTypes' => $projectTypes,
             'priorities' => self::PRIORITIES,
             'projectManagers' => $projectManagers,
+            'offices' => $offices,
         ]);
     }
 
@@ -164,17 +204,28 @@ class ProjectController extends Controller
         $projectId = $request->input('project_id');
 
         if ($step === 1) {
+            $officeScope = $request->input('primary_office_id');
             $data = $request->validate([
                 'project_name' => ['required', 'string', 'max:150'],
                 'description' => ['nullable', 'string', 'max:2000'],
                 'client' => ['nullable', 'string', 'max:150'],
                 'project_type' => ['nullable', 'string', 'max:100'],
-                'project_type_id' => ['nullable', 'exists:project_types,project_type_id'],
+                'project_type_id' => [
+                    'nullable',
+                    Rule::exists('project_types', 'project_type_id')->where(function ($q) use ($officeScope) {
+                        $q->where(function ($q2) use ($officeScope) {
+                            $q2->whereNull('office_id')->orWhere('office_id', $officeScope);
+                        });
+                    }),
+                ],
                 'project_manager_id' => ['nullable', 'exists:users,user_id'],
                 'priority' => ['nullable', 'in:Low,Medium,High,Urgent'],
                 'start_date' => ['nullable', 'date'],
                 'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
                 'allocated_amount' => ['nullable', 'numeric', 'min:0'],
+                'primary_office_id' => ['nullable', 'exists:offices,office_id'],
+                'participating_offices' => ['nullable', 'array'],
+                'participating_offices.*' => ['exists:offices,office_id'],
             ]);
 
             $project = $projectId ? Project::findOrFail($projectId) : new Project;
@@ -193,6 +244,28 @@ class ProjectController extends Controller
                 'created_by' => $project->created_by ?: $user->user_id,
             ]);
             $project->save();
+
+            // Primary + participating offices. The primary office is stored
+            // on the project row AND represented in the pivot so the
+            // many-to-many stays complete without duplicate rows.
+            $project->primary_office_id = $data['primary_office_id'] ?? null;
+            $project->save();
+
+            $officePivot = [];
+            if (! empty($data['primary_office_id'])) {
+                $officePivot[$data['primary_office_id']] = ['participation_type' => 'primary'];
+            }
+            foreach (collect($data['participating_offices'] ?? [])->unique() as $poId) {
+                if ((int) $poId !== (int) ($data['primary_office_id'] ?? 0)) {
+                    $officePivot[$poId] = ['participation_type' => 'participating'];
+                }
+            }
+            $project->offices()->sync($officePivot);
+
+            if (! empty($data['primary_office_id']) || ! empty($officePivot)) {
+                Activity::log('Assigned office to project', 'Project', $project->project_id,
+                    optional(Office::find($data['primary_office_id'] ?? null))->office_name ?? 'cross-office');
+            }
 
             ProjectBudget::updateOrCreate(['project_id' => $project->project_id], [
                 'allocated_amount' => $data['allocated_amount'] ?? 0,
@@ -318,11 +391,12 @@ class ProjectController extends Controller
         $user = Auth::user();
 
         return view('projects.edit', [
-            'project' => $project->load(['budget', 'memberRoles.user', 'memberRoles.role', 'projectManager', 'team.leader']),
+            'project' => $project->load(['budget', 'memberRoles.user', 'memberRoles.role', 'projectManager', 'team.leader', 'offices']),
             'teams' => $this->eligibleTeamsFor($user, $project),
             'projectTypes' => ProjectType::where('is_active', true)->orderBy('name')->get(),
             'statuses' => self::STATUSES,
             'projectManagers' => User::where('status', 'Active')->orderBy('full_name')->get(),
+            'offices' => Office::active()->orderBy('office_name')->get(),
             'canEditBudget' => $user->can('manage_budgets'),
         ]);
     }
@@ -338,16 +412,50 @@ class ProjectController extends Controller
 
         $data = $request->validated();
 
+        // Resolve the submitted type name to a type valid for the (possibly
+        // new) primary office: office-scoped types take precedence over
+        // global ones. Falls back to the legacy free-text value.
+        $primaryOfficeId = $data['primary_office_id'] ?? null;
+        $resolvedTypeId = ProjectType::whereRaw('lower(name) = ?', [strtolower($data['project_type'])])
+            ->when($primaryOfficeId, fn ($q) => $q->orderByRaw('CASE WHEN office_id = ? THEN 0 ELSE 1 END', [$primaryOfficeId]))
+            ->where(function ($q) use ($primaryOfficeId) {
+                $q->whereNull('office_id');
+                if ($primaryOfficeId) {
+                    $q->orWhere('office_id', $primaryOfficeId);
+                }
+            })
+            ->value('project_type_id');
+
         $project->update([
             'project_name' => $data['project_name'],
             'description' => $data['description'] ?? null,
             'project_type' => $data['project_type'],
+            'project_type_id' => $resolvedTypeId ?? $project->project_type_id,
             'team_id' => $data['team_id'],
             'project_manager_id' => $resolvedPmId,
             'status' => $data['status'],
             'start_date' => $data['start_date'] ?? null,
             'end_date' => $data['end_date'] ?? null,
         ]);
+
+        // Primary + participating offices on edit (validated IDs only).
+        $officePivot = [];
+        if ($primaryOfficeId) {
+            $officePivot[$primaryOfficeId] = ['participation_type' => 'primary'];
+        }
+        foreach (collect($data['participating_offices'] ?? [])->unique() as $poId) {
+            if ((int) $poId !== (int) $primaryOfficeId) {
+                $officePivot[$poId] = ['participation_type' => 'participating'];
+            }
+        }
+        $project->offices()->sync($officePivot);
+
+        if ((int) ($project->getOriginal('primary_office_id') ?? 0) !== (int) ($primaryOfficeId ?? 0)) {
+            $project->primary_office_id = $primaryOfficeId;
+            $project->save();
+            Activity::log('Changed project primary office', 'Project', $project->project_id,
+                optional(Office::find($primaryOfficeId))->office_name ?? 'none');
+        }
 
         // Safe Member Synchronization
         if ($request->has('members') && is_array($request->input('members'))) {

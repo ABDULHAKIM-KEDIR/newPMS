@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
 use App\Models\ChangeRequest;
+use App\Models\Office;
 use App\Models\Project;
 use App\Models\ProjectBudget;
 use App\Models\Task;
@@ -22,10 +23,49 @@ class DashboardController extends Controller
         $budgetQuery = ProjectBudget::query();
         $taskQuery = Task::query();
 
+        /*
+         * Office-aware scoping. Director/Admins see organization-wide stats.
+         * Everyone else sees only their own office's projects/teams/tasks —
+         * their own office's projects, plus cross-office projects their
+         * office participates in — never another office's private work.
+         */
+        $office = $user->office;
+        $myOfficeIds = $user->officeIds();
+
         if ($scoped) {
-            $projectQuery->whereIn('team_id', $teamIds);
-            $budgetQuery->whereHas('project', fn ($q) => $q->whereIn('team_id', $teamIds));
-            $taskQuery->whereHas('phase.project', fn ($q) => $q->whereIn('team_id', $teamIds));
+            $projectQuery->where(function ($q) use ($user, $teamIds, $myOfficeIds) {
+                $q->whereIn('team_id', $teamIds)
+                    ->orWhereIn('primary_office_id', $myOfficeIds)
+                    ->orWhereHas('offices', fn ($oq) => $oq->whereIn('offices.office_id', $myOfficeIds))
+                    ->orWhereHas('teams.members', fn ($tq) => $tq->where('team_members.user_id', $user->user_id));
+            });
+            $budgetQuery->whereHas('project', fn ($q) => $q->where(function ($w) use ($teamIds, $myOfficeIds) {
+                $w->whereIn('team_id', $teamIds)
+                    ->orWhereIn('primary_office_id', $myOfficeIds)
+                    ->orWhereHas('offices', fn ($oq) => $oq->whereIn('offices.office_id', $myOfficeIds));
+            }));
+            $taskQuery->where(function ($q) use ($user, $teamIds, $myOfficeIds) {
+                $q->where('assigned_to', $user->user_id)
+                    ->orWhereHas('phase.project', fn ($pq) => $pq->where(function ($w) use ($teamIds, $myOfficeIds) {
+                        $w->whereIn('team_id', $teamIds)
+                            ->orWhereIn('primary_office_id', $myOfficeIds)
+                            ->orWhereHas('offices', fn ($oq) => $oq->whereIn('offices.office_id', $myOfficeIds));
+                    }));
+            });
+        }
+
+        $officeStats = null;
+        if ($office) {
+            $officeBudget = $office->budgetSummary();
+            $officeStats = [
+                'name' => $office->office_name,
+                'teams' => $office->teams()->count(),
+                'users' => $office->users()->count(),
+                'projects' => $office->primaryProjects()->count(),
+                'active_projects' => $office->primaryProjects()->whereNotIn('status', ['closed', 'Closed'])->count(),
+                'completed_projects' => $office->primaryProjects()->whereIn('status', ['closed', 'Closed', 'Completed'])->count(),
+                'budget' => $officeBudget,
+            ];
         }
 
         $projects = (clone $projectQuery)->orderByDesc('project_id')->take(4)->get();
@@ -65,6 +105,12 @@ class DashboardController extends Controller
         $overdueTasksList = Task::whereNotNull('end_date')
             ->whereDate('end_date', '<', today())
             ->whereNotIn('status', ['Done', 'Completed'])
+            ->when($scoped, fn ($q) => $q->whereHas('phase.project', fn ($pq) => $pq->where(function ($w) use ($teamIds, $myOfficeIds, $user) {
+                $w->whereIn('team_id', $teamIds)
+                    ->orWhereIn('primary_office_id', $myOfficeIds)
+                    ->orWhereHas('offices', fn ($oq) => $oq->whereIn('offices.office_id', $myOfficeIds))
+                    ->orWhereHas('teams.members', fn ($tq) => $tq->where('team_members.user_id', $user->user_id));
+            })))
             ->with(['project', 'assignee'])
             ->take(4)
             ->get();
@@ -75,7 +121,7 @@ class DashboardController extends Controller
             ->get();
 
         return view('dashboard', compact(
-            'projects', 'stats', 'activity', 'teamLoad', 'scoped',
+            'projects', 'stats', 'activity', 'teamLoad', 'scoped', 'officeStats',
             'myAssignedTasks', 'overdueTasksList', 'blockedTasksList'
         ));
     }

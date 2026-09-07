@@ -83,8 +83,8 @@
         <select id="project_type" name="project_type_id" required>
           <option value="">Select Project Type</option>
           @foreach ($projectTypes as $type)
-            <option value="{{ $type->project_type_id }}" {{ (string) old('project_type_id') === (string) $type->project_type_id ? 'selected' : '' }}>
-              {{ $type->name }}</option>
+            <option value="{{ $type->project_type_id }}" {{ (string) old('project_type_id') === (string) $type->project_type_id ? 'selected' : '' }} data-office="{{ $type->office_id ?? '' }}">
+              {{ $type->name }}@if ($type->office_id) · {{ optional($type->office)->office_name }}@endif</option>
           @endforeach
         </select>
       </div>
@@ -126,6 +126,32 @@
       <div class="form-field">
         <label for="allocated_amount">Allocated Budget (ETB)</label>
         <input type="number" step="0.01" min="0" id="allocated_amount" name="allocated_amount" value="{{ old('allocated_amount') }}" placeholder="e.g. 750,000 ETB">
+      </div>
+
+      <div class="form-field">
+        <label for="primary_office_id">Primary Office</label>
+        <select id="primary_office_id" name="primary_office_id">
+          <option value="">— No primary office —</option>
+          @foreach ($offices as $office)
+            <option value="{{ $office->office_id }}" {{ (string) old('primary_office_id') === (string) $office->office_id ? 'selected' : '' }}>
+              {{ $office->office_name }}</option>
+          @endforeach
+        </select>
+      </div>
+
+      <div class="form-field">
+        <label>Participating Offices
+          <span style="font-weight:400; color:var(--ink-faint);">(cross-office collaboration)</span>
+        </label>
+        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:6px;">
+          @foreach ($offices as $office)
+            <label style="display:flex; align-items:center; gap:6px; font-weight:400; font-size:13px;">
+              <input type="checkbox" name="participating_offices[]" value="{{ $office->office_id }}"
+                {{ in_array((string) $office->office_id, old('participating_offices', [])) ? 'checked' : '' }}>
+              {{ $office->office_name }}
+            </label>
+          @endforeach
+        </div>
       </div>
     </div>
 
@@ -631,5 +657,51 @@
   document.querySelectorAll('.team-checkbox').forEach(cb => {
     toggleTeamSelection(cb.value);
   });
+
+  /*
+   * Office-scoped project types: when the Primary Office changes, the
+   * Project Type dropdown shows that office's types plus global types.
+   * Filtering happens client-side over data-office attributes rendered
+   * server-side; the selection resets when the current type is no longer
+   * valid for the chosen office.
+   */
+  (function () {
+    const officeSelect = document.getElementById('primary_office_id');
+    const typeSelect = document.getElementById('project_type');
+    if (!officeSelect || !typeSelect) return;
+
+    const typeLabelFor = {
+      @foreach ($projectTypes as $type)
+      {{ $type->project_type_id }}: {{ json_encode($type->name.($type->office_id ? ' · '.optional($type->office)->office_name : '')) }},
+      @endforeach
+    };
+
+    function filterTypes() {
+      const officeId = officeSelect.value;
+      let selectionValid = false;
+
+      typeSelect.querySelectorAll('option').forEach(function (option) {
+        if (!option.value) return; // placeholder
+
+        const optionOffice = option.getAttribute('data-office') || '';
+        const visible = !officeId || !optionOffice || optionOffice === officeId;
+        option.hidden = !visible;
+        option.disabled = !visible;
+
+        if (visible) {
+          option.textContent = typeLabelFor[option.value] || option.textContent;
+        }
+
+        if (option.selected && visible) selectionValid = true;
+      });
+
+      if (!selectionValid) typeSelect.value = '';
+    }
+
+    officeSelect.addEventListener('change', filterTypes);
+
+    // Apply once on load (e.g. validation errors re-rendering the form).
+    filterTypes();
+  })();
 </script>
 @endsection

@@ -37,6 +37,15 @@
       </select>
     </div>
     <div class="form-field">
+      <label for="office_id">Office</label>
+      <select id="office_id" name="office_id">
+        <option value="">— No office —</option>
+        @foreach ($offices as $office)
+          <option value="{{ $office->office_id }}" {{ (string) old('office_id') === (string) $office->office_id ? 'selected' : '' }}>{{ $office->office_name }}</option>
+        @endforeach
+      </select>
+    </div>
+    <div class="form-field">
       <label for="password">Temporary password</label>
       <input type="text" id="password" name="password" placeholder="At least 8 characters" required>
     </div>

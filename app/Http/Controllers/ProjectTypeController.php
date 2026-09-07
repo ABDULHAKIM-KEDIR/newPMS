@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Office;
 use App\Models\ProjectType;
 use App\Support\Activity;
 use Illuminate\Http\Request;
@@ -15,12 +16,14 @@ class ProjectTypeController extends Controller
         Gate::authorize('manage_project_types');
 
         $projectTypes = ProjectType::withCount('projects')
+            ->with('office')
             ->orderBy('name')
             ->get();
 
         return view('admin.project-types.index', [
             'projectTypes' => $projectTypes,
             'editing' => null,
+            'offices' => Office::orderBy('office_name')->get(),
         ]);
     }
 
@@ -30,13 +33,31 @@ class ProjectTypeController extends Controller
         Gate::authorize('manage_project_types');
 
         $projectTypes = ProjectType::withCount('projects')
+            ->with('office')
             ->orderBy('name')
             ->get();
 
         return view('admin.project-types.index', [
             'projectTypes' => $projectTypes,
             'editing' => $projectType,
+            'offices' => Office::orderBy('office_name')->get(),
         ]);
+    }
+
+    /**
+     * Active types available for a chosen primary office (JSON) — used by
+     * the project wizard to swap the type dropdown when the office changes.
+     */
+    public function forOffice(Request $request)
+    {
+        $officeId = $request->get('office_id');
+
+        $types = ProjectType::where('is_active', true)
+            ->forOffice($officeId ? (int) $officeId : null)
+            ->orderBy('name')
+            ->get(['project_type_id', 'name', 'office_id']);
+
+        return response()->json(['types' => $types]);
     }
 
     public function store(Request $request)
@@ -121,7 +142,7 @@ class ProjectTypeController extends Controller
     }
 
     /**
-     * @return array{name: string, description: ?string}
+     * @return array{name: string, description: ?string, office_id: ?int}
      */
     private function validated(Request $request, ?int $ignoreId = null): array
     {
@@ -133,11 +154,13 @@ class ProjectTypeController extends Controller
                 Rule::unique('project_types', 'name')->ignore($ignoreId, 'project_type_id'),
             ],
             'description' => ['nullable', 'string', 'max:1000'],
+            'office_id' => ['nullable', 'exists:offices,office_id'],
         ]);
 
         return [
             'name' => $data['name'],
             'description' => $data['description'] ?? null,
+            'office_id' => $data['office_id'] ?? null,
         ];
     }
 }

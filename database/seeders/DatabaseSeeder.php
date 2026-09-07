@@ -17,6 +17,7 @@ class DatabaseSeeder extends Seeder
         // legacy role names onto canonical ones.
         $this->call(RbacSeeder::class);
         $this->call(ProjectTypeSeeder::class);
+        $this->call(OfficeSeeder::class);
 
         $adminRole = Role::where('role_name', 'Administrator')->firstOrFail();
 
@@ -34,5 +35,10 @@ class DatabaseSeeder extends Seeder
             'status' => 'Active',
         ]);
         $admin->roles()->attach($adminRole->role_id);
+
+        // The bootstrap account belongs to no office (it oversees them all);
+        // assign specific offices to users via Users → Edit.
+        $admin->office_id = null;
+        $admin->save();
     }
 }

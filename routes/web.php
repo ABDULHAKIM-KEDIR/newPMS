@@ -9,6 +9,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\GuestController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\OfficeController;
 use App\Http\Controllers\PhaseController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
@@ -634,6 +635,66 @@ Route::middleware(['auth', 'active', 'approved'])->group(function () {
 
     /*
     |--------------------------------------------------------------------------
+    | Offices (Multi-Office Management)
+    |--------------------------------------------------------------------------
+    |
+    | Office administration is permission-protected twice: via the `can`
+    | middleware here AND via OfficePolicy checks in the controller, so
+    | a direct POST/PUT is blocked server-side even if the UI is bypassed.
+    |
+    */
+
+    Route::get(
+        '/admin/offices',
+        [OfficeController::class, 'index']
+    )
+        ->name('admin.offices.index')
+        ->middleware('can:view_offices');
+
+    Route::get(
+        '/admin/offices/create',
+        [OfficeController::class, 'create']
+    )
+        ->name('admin.offices.create')
+        ->middleware('can:manage_offices');
+
+    Route::post(
+        '/admin/offices',
+        [OfficeController::class, 'store']
+    )
+        ->name('admin.offices.store')
+        ->middleware('can:manage_offices');
+
+    Route::get(
+        '/admin/offices/{office}/edit',
+        [OfficeController::class, 'edit']
+    )
+        ->name('admin.offices.edit')
+        ->middleware('can:manage_offices');
+
+    Route::put(
+        '/admin/offices/{office}',
+        [OfficeController::class, 'update']
+    )
+        ->name('admin.offices.update')
+        ->middleware('can:manage_offices');
+
+    Route::post(
+        '/admin/offices/{office}/toggle-status',
+        [OfficeController::class, 'toggleStatus']
+    )
+        ->name('admin.offices.toggleStatus')
+        ->middleware('can:manage_offices');
+
+    Route::get(
+        '/admin/offices/{office}',
+        [OfficeController::class, 'show']
+    )
+        ->name('admin.offices.show')
+        ->middleware('can:view_offices');
+
+    /*
+    |--------------------------------------------------------------------------
     | Audit Log
     |--------------------------------------------------------------------------
     */
@@ -788,6 +849,18 @@ Route::middleware(['auth', 'active', 'approved'])->group(function () {
     )
         ->name('admin.project-types.index')
         ->middleware('can:manage_project_types');
+
+    /*
+     | JSON lookup used by the project wizard: returns the active types
+     | available for a given primary office (office-scoped + global).
+     | Read-only for any authenticated, approved user with create access.
+     */
+    Route::get(
+        '/settings/project-types/for-office',
+        [ProjectTypeController::class, 'forOffice']
+    )
+        ->name('admin.project-types.forOffice')
+        ->middleware('can:create_projects');
 
     Route::get(
         '/settings/project-types/{projectType}/edit',

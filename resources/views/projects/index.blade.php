@@ -14,12 +14,27 @@
 </div>
 
 <div class="filter-row">
-  <a href="{{ route('projects.index', array_filter(request()->only(['status', 'priority', 'q']))) }}"
+  @php $filterBase = request()->only(['status', 'priority', 'q', 'office']); @endphp
+  <a href="{{ route('projects.index', array_filter($filterBase)) }}"
      class="pill {{ !request('type') ? 'active' : '' }}">All</a>
   @foreach ($projectTypes as $type)
-    <a href="{{ route('projects.index', array_filter(array_merge(request()->only(['status', 'priority', 'q']), ['type' => $type->name]))) }}"
+    <a href="{{ route('projects.index', array_filter(array_merge($filterBase, ['type' => $type->name]))) }}"
        class="pill {{ request('type') === $type->name ? 'active' : '' }}">{{ $type->name }}</a>
   @endforeach
+
+  @can('manage_offices')
+    <form method="GET" action="{{ route('projects.index') }}" style="display:inline-flex; gap:8px; align-items:center; margin-left:auto;">
+      @foreach (request()->only(['status', 'priority', 'q', 'type']) as $k => $v)
+        @if ($v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endif
+      @endforeach
+      <select name="office" onchange="this.form.submit()" style="padding:6px 10px; font-size:13px;">
+        <option value="">All Offices</option>
+        @foreach ($offices as $office)
+          <option value="{{ $office->office_id }}" {{ request('office') == $office->office_id ? 'selected' : '' }}>{{ $office->office_name }}</option>
+        @endforeach
+      </select>
+    </form>
+  @endcan
 </div>
 
 <div class="card">

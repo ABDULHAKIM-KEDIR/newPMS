@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Services\RbacService;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Support\Collection;
 
 class User extends Authenticatable
 {
@@ -11,7 +12,7 @@ class User extends Authenticatable
 
     public $timestamps = false;
 
-    protected $fillable = ['full_name', 'email', 'password_hash', 'phone', 'department', 'avatar', 'status', 'role'];
+    protected $fillable = ['full_name', 'email', 'password_hash', 'phone', 'department', 'avatar', 'status', 'role', 'office_id'];
 
     protected $hidden = ['password_hash'];
 
@@ -89,6 +90,43 @@ class User extends Authenticatable
     public function hasPermission(string $slug, ?Project $project = null): bool
     {
         return app(RbacService::class)->can($this, $slug, $project);
+    }
+
+    public function office()
+    {
+        return $this->belongsTo(Office::class, 'office_id', 'office_id');
+    }
+
+    /**
+     * Offices whose projects this user may browse beyond their own office
+     * grants: their own office, plus any office their teams/projects already
+     * connect them to (cross-office participation is honoured via the RBAC
+     * engine's project-scoped sources, this is just a quick scoping aid).
+     */
+    public function officeIds(): Collection
+    {
+        $ids = collect();
+
+        if ($this->office_id) {
+            $ids->push((int) $this->office_id);
+        }
+
+        $viaTeams = Team::whereIn('team_id', $this->teamIds())
+            ->whereNotNull('office_id')->pluck('office_id');
+
+        return $ids->merge($viaTeams)->unique()->values();
+    }
+
+    /** True if the user heads this office. */
+    public function headsOffice(Office $office): bool
+    {
+        return (int) $office->head_user_id === (int) $this->user_id;
+    }
+
+    /** True if the user heads any office at all. */
+    public function headsAnyOffice(): bool
+    {
+        return Office::where('head_user_id', $this->user_id)->exists();
     }
 
     public function isActive(): bool
