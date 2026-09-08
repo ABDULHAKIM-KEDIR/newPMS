@@ -146,9 +146,10 @@ class Project extends Model
     }
 
     /**
-     * Query scope restricting projects to those the user participates in
-     * (PM of record, any assigned team they belong to, or direct project
-     * membership). System administrators see everything.
+     * Query scope restricting projects to those under the user's office(s)
+     * (primary or participating office) or those the user participates in
+     * directly (PM of record, any assigned team they belong to, or direct
+     * project membership). System administrators see everything.
      */
     public function scopeVisibleTo($query, User $user)
     {
@@ -156,11 +157,22 @@ class Project extends Model
             return $query;
         }
 
-        return $query->where(function ($q) use ($user) {
-            $q->where('project_manager_id', $user->user_id)
-                ->orWhereHas('memberRoles', fn ($mq) => $mq->where('project_member_roles.user_id', $user->user_id))
-                ->orWhereHas('team.members', fn ($tq) => $tq->where('team_members.user_id', $user->user_id))
-                ->orWhereHas('teams.members', fn ($tq) => $tq->where('team_members.user_id', $user->user_id));
+        $officeIds = $user->officeIds();
+
+        return $query->where(function ($q) use ($user, $officeIds) {
+            if ($officeIds->isNotEmpty()) {
+                $q->orWhere(function ($oq) use ($officeIds) {
+                    $oq->whereIn('primary_office_id', $officeIds)
+                        ->orWhereHas('offices', fn ($oq2) => $oq2->whereIn('offices.office_id', $officeIds));
+                });
+            }
+
+            $q->orWhere(function ($pq) use ($user) {
+                $pq->where('project_manager_id', $user->user_id)
+                    ->orWhereHas('memberRoles', fn ($mq) => $mq->where('project_member_roles.user_id', $user->user_id))
+                    ->orWhereHas('team.members', fn ($tq) => $tq->where('team_members.user_id', $user->user_id))
+                    ->orWhereHas('teams.members', fn ($tq) => $tq->where('team_members.user_id', $user->user_id));
+            });
         });
     }
 

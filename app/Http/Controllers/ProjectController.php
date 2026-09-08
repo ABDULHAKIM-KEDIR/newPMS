@@ -101,15 +101,15 @@ class ProjectController extends Controller
         }
 
         /*
-         * Participation scoping. System Administrators/Directors see
+         * Participation & office scoping. System Administrators see
          * everything and may filter with the office dropdown; every other
-         * role only sees projects they participate in — as PM of record,
-         * a member of an assigned team, or a direct project member.
+         * role (including Project Managers) only sees projects under their
+         * office(s) or ones they participate in directly.
          */
         $authUser = Auth::user();
         $offices = Office::orderBy('office_name')->get();
 
-        if ($authUser->isAdmin() || $authUser->isDirectorOrAdmin()) {
+        if ($authUser->isAdmin()) {
             if ($officeFilter = $request->get('office')) {
                 $query->where(function ($q) use ($officeFilter) {
                     $q->where('primary_office_id', $officeFilter)

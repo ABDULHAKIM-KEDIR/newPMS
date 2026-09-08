@@ -110,7 +110,18 @@
             </tr>
         </thead>
         <tbody>
-        @forelse ($projectTypes as $type)
+        @php
+            $grouped = $projectTypes
+                ->sortBy(fn ($t) => optional($t->office)->office_name ?? '')
+                ->groupBy(fn ($t) => optional($t->office)->office_name ?? 'All offices (global)');
+        @endphp
+        @forelse ($grouped as $officeLabel => $officeTypes)
+            <tr style="background:var(--surface-2, #f6f7f9);">
+                <th colspan="6" style="text-align:left; padding:10px 12px; font-size:12px; font-weight:700; color:var(--ink-soft); letter-spacing:0.4px; text-transform:uppercase;">
+                    🏢 {{ $officeLabel }} <span style="font-weight:500; color:var(--ink-faint); text-transform:none;">({{ $officeTypes->count() }} type{{ $officeTypes->count() === 1 ? '' : 's' }})</span>
+                </th>
+            </tr>
+            @foreach ($officeTypes as $type)
             <tr>
                 <td class="cell-primary">{{ $type->name }}</td>
                 <td class="cell-sub">{{ $type->description ?? '—' }}</td>
@@ -156,9 +167,10 @@
                     @endcan
                 </td>
             </tr>
+            @endforeach
         @empty
             <tr>
-                <td colspan="5" style="text-align:center; padding:30px; color:var(--ink-faint);">
+                <td colspan="6" style="text-align:center; padding:30px; color:var(--ink-faint);">
                     No project types defined yet. Add the first one above.
                 </td>
             </tr>
