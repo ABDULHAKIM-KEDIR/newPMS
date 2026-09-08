@@ -4,10 +4,7 @@ namespace Database\Seeders;
 
 use App\Models\Office;
 use App\Models\ProjectType;
-use App\Models\Role;
-use App\Models\User;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Hash;
 
 class DatabaseSeeder extends Seeder
 {
@@ -17,33 +14,24 @@ class DatabaseSeeder extends Seeder
         // The dynamic RBAC catalogue: permissions + default roles (with
         // inheritance and scopes) live in RbacSeeder, which also aliases
         // legacy role names onto canonical ones.
-        $this->call(RbacSeeder::class);
-        $this->call(OfficeSeeder::class);
+        // 1. Roles & permissions, then offices (FK dependencies first).
+        $this->call([
+            RbacSeeder::class,
+            OfficeSeeder::class,
+        ]);
 
+        // 2. Canonical project types, then the supplementary catalogue.
         $this->seedProjectTypes();
         $this->call(ProjectTypeSeeder::class);
 
-        $adminRole = Role::where('role_name', 'Administrator')->firstOrFail();
+        // 3. Users (admins, PMs, team leads, staff) across all offices.
+        $this->call(UserSeeder::class);
 
-        // ---- The one bootstrap account ----
-        // No demo users, teams, or projects — this is a clean install. The
-        // System Administrator's job from here is exactly what their role
-        // grants: create the first real users (via Users → + New User) and
-        // assign someone an Administrator / Team Lead role so they can in
-        // turn create teams and projects.
-        $admin = User::create([
-            'full_name' => 'System Administrator',
-            'email' => 'admin@example.com',
-            'password_hash' => Hash::make('ChangeMe123!'),
-            'phone' => null,
-            'status' => 'Active',
-        ]);
-        $admin->roles()->attach($adminRole->role_id);
+        // 4. Teams and their memberships.
+        $this->call(TeamSeeder::class);
 
-        // The bootstrap account belongs to no office (it oversees them all);
-        // assign specific offices to users via Users → Edit.
-        $admin->office_id = null;
-        $admin->save();
+        // 5. Projects, offices/teams participation and tasks.
+        $this->call(ProjectSeeder::class);
     }
 
     /**
