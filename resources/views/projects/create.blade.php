@@ -170,7 +170,7 @@
 
     <div class="teams-selection-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:16px; margin-bottom:20px;">
       @foreach ($teams as $team)
-        <label class="team-select-card" id="team-card-{{ $team->team_id }}" style="display:flex; align-items:flex-start; gap:14px; padding:16px; border:1.5px solid var(--line); border-radius:10px; cursor:pointer; transition:all 0.15s ease; background:var(--bg-card);">
+        <label class="team-select-card" id="team-card-{{ $team->team_id }}" data-office="{{ $team->office_id }}" style="display:flex; align-items:flex-start; gap:14px; padding:16px; border:1.5px solid var(--line); border-radius:10px; cursor:pointer; transition:all 0.15s ease; background:var(--bg-card);">
           <input
             type="checkbox"
             name="teams[]"
@@ -196,6 +196,10 @@
         </label>
       @endforeach
     </div>
+
+    <p id="teams-empty-message" style="display:none; color:var(--ink-muted); font-size:13px; margin-bottom:16px;">
+      No teams available yet. Choose a primary office and/or participating offices in Step 1 to see the teams you can assign.
+    </p>
 
     <div class="wizard-actions">
       <button type="button" class="btn btn-ghost" onclick="goToStep(1)">← Back to Info</button>
@@ -659,7 +663,6 @@
 
   /*
    * Office-scoped project types: when the Primary Office changes, the
-   * Project Type dropdown shows that office's types plus global types.
    * Filtering happens client-side over data-office attributes rendered
    * server-side; the selection resets when the current type is no longer
    * valid for the chosen office.
@@ -701,6 +704,56 @@
 
     // Apply once on load (e.g. validation errors re-rendering the form).
     filterTypes();
+  })();
+
+  /*
+   * Office-restricted team selection: teams from unrelated offices are
+   * hidden. Allowed offices = primary office + participating offices.
+   * (The backend enforces the same rule server-side.)
+   */
+  (function () {
+    const officeSelect = document.getElementById('primary_office_id');
+    if (!officeSelect) return;
+
+    function allowedOffices() {
+      const ids = new Set();
+      if (officeSelect.value) ids.add(officeSelect.value);
+      document.querySelectorAll('input[name="participating_offices[]"]:checked').forEach(function (cb) {
+        ids.add(cb.value);
+      });
+      return ids;
+    }
+
+    function filterTeams() {
+      const allowed = allowedOffices();
+      const noOffices = allowed.size === 0;
+      let anyVisible = false;
+
+      document.querySelectorAll('.team-select-card').forEach(function (card) {
+        const teamOffice = card.getAttribute('data-office') || '';
+        const visible = noOffices || !teamOffice || allowed.has(teamOffice);
+        card.style.display = visible ? '' : 'none';
+        if (visible) anyVisible = true;
+
+        if (!visible) {
+          const cb = card.querySelector('.team-checkbox');
+          if (cb && cb.checked) {
+            cb.checked = false;
+            toggleTeamSelection(cb.value);
+          }
+        }
+      });
+
+      const emptyMsg = document.getElementById('teams-empty-message');
+      if (emptyMsg) emptyMsg.style.display = anyVisible ? 'none' : '';
+    }
+
+    officeSelect.addEventListener('change', filterTeams);
+    document.querySelectorAll('input[name="participating_offices[]"]').forEach(function (cb) {
+      cb.addEventListener('change', filterTeams);
+    });
+
+    filterTeams();
   })();
 </script>
 @endsection

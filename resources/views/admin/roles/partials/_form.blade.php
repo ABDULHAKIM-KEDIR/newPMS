@@ -63,11 +63,13 @@
                 Scope
             </label>
 
+            @php $protectedRole = $role !== null && \App\Support\Permissions::isProtectedRoleName($role->role_name); @endphp
+
             <select
                 id="scope"
                 name="scope"
                 class="form-input"
-                @if ($role?->is_system)
+                @if ($protectedRole)
                     disabled
                 @endif
             >
@@ -88,8 +90,16 @@
                 @endforeach
             </select>
 
-            @if ($role?->is_system)
+            @if ($protectedRole)
                 <input type="hidden" name="scope" value="{{ $role->scope }}">
+                <div class="form-hint">
+                    Protected system role — the scope cannot be changed.
+                </div>
+            @elseif ($role?->is_system)
+                <div class="form-hint">
+                    Changing the scope re-applies this role's permissions to
+                    all of its holders in the new scope.
+                </div>
             @endif
 
             @error('scope')

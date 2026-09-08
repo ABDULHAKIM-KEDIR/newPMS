@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Services\RbacService;
 use App\Services\RosterService;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class Project extends Model
@@ -120,6 +121,50 @@ class Project extends Model
     }
 
     /**
+     * True when the user participates in this project in any capacity:
+     * PM of record, member of the primary/assigned team, or a direct
+     * project member role. This is the sole visibility criterion for
+     * non-oversight roles.
+     */
+    public function participatesIn(User $user): bool
+    {
+        if ($this->project_manager_id && (int) $this->project_manager_id === (int) $user->user_id) {
+            return true;
+        }
+
+        if ($this->relationLoaded('memberRoles')) {
+            if ($this->memberRoles->contains('user_id', $user->user_id)) {
+                return true;
+            }
+        } elseif ($this->memberRoles()->where('user_id', $user->user_id)->exists()) {
+            return true;
+        }
+
+        return $this->allTeams()
+            ->filter()
+            ->contains(fn ($team) => $team->members->contains('user_id', $user->user_id));
+    }
+
+    /**
+     * Query scope restricting projects to those the user participates in
+     * (PM of record, any assigned team they belong to, or direct project
+     * membership). System administrators see everything.
+     */
+    public function scopeVisibleTo($query, User $user)
+    {
+        if ($user->hasPermission('manage_system_settings')) {
+            return $query;
+        }
+
+        return $query->where(function ($q) use ($user) {
+            $q->where('project_manager_id', $user->user_id)
+                ->orWhereHas('memberRoles', fn ($mq) => $mq->where('project_member_roles.user_id', $user->user_id))
+                ->orWhereHas('team.members', fn ($tq) => $tq->where('team_members.user_id', $user->user_id))
+                ->orWhereHas('teams.members', fn ($tq) => $tq->where('team_members.user_id', $user->user_id));
+        });
+    }
+
+    /**
      * Everyone who can be assigned work on this project: the project manager,
      * the team leader, team members, and members assigned directly with roles/specialties.
      * Deduplicated by user id so a person holding multiple roles appears once.
@@ -183,9 +228,15 @@ class Project extends Model
             ];
         });
 
-        // Also allow assigning any other active user from the organization
+        // Also allow assigning other active users, restricted to the
+        // project's primary and participating offices.
+        $allowedOfficeIds = $this->authorizedOfficeIds();
+
         $otherUsers = User::where('status', 'Active')
             ->whereNotIn('user_id', $rosterUserIds)
+            ->when($allowedOfficeIds->isNotEmpty(), fn ($q) => $q->where(function ($q2) use ($allowedOfficeIds) {
+                $q2->whereNull('office_id')->orWhereIn('office_id', $allowedOfficeIds->all());
+            }))
             ->orderBy('full_name')
             ->get();
 
@@ -201,6 +252,37 @@ class Project extends Model
         }
 
         return $list->values();
+    }
+
+    /**
+     * Offices this project may draw members/users from: primary + participating.
+     *
+     * @return Collection<int, int>
+     */
+    public function authorizedOfficeIds(): Collection
+    {
+        return collect([$this->primary_office_id])
+            ->merge($this->offices()->pluck('offices.office_id'))
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+    }
+
+    /**
+     * True when a user may be assigned to this project. Users with an office
+     * must belong to one of the project's offices; legacy users without an
+     * office (and projects without offices) keep working as before.
+     */
+    public function canAssignUser(User $user): bool
+    {
+        $allowedOfficeIds = $this->authorizedOfficeIds();
+
+        if ($allowedOfficeIds->isEmpty() || ! $user->office_id) {
+            return true;
+        }
+
+        return $allowedOfficeIds->contains((int) $user->office_id);
     }
 
     public function deliverables()

@@ -145,6 +145,17 @@ class AuthController extends Controller
                 'regex:/[^A-Za-z0-9]/',       // special character
                 new NotCommonPassword,  // blocked against common/leaked passwords
             ],
+
+            /*
+             * Self-registrants may NEVER claim an Office (or a role).
+             * Even a forged POST containing office_id is rejected here,
+             * server-side — the office is assigned later by a System
+             * Administrator through the admin user-management screens.
+             */
+            'office_id' => ['prohibited'],
+            'role' => ['prohibited'],
+            'role_id' => ['prohibited'],
+            'status' => ['prohibited'],
         ]);
 
         /*

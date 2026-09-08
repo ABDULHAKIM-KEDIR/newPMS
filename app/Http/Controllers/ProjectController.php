@@ -101,10 +101,10 @@ class ProjectController extends Controller
         }
 
         /*
-         * Office scoping. System Administrators/Directors see everything and
-         * may filter with the office dropdown; everyone else is server-side
-         * restricted to projects of their own office(s) or projects their
-         * teams are assigned to (cross-office participation honoured).
+         * Participation scoping. System Administrators/Directors see
+         * everything and may filter with the office dropdown; every other
+         * role only sees projects they participate in — as PM of record,
+         * a member of an assigned team, or a direct project member.
          */
         $authUser = Auth::user();
         $offices = Office::orderBy('office_name')->get();
@@ -117,12 +117,7 @@ class ProjectController extends Controller
                 });
             }
         } else {
-            $myOfficeIds = $authUser->officeIds()->all();
-            $query->where(function ($q) use ($myOfficeIds) {
-                $q->whereIn('primary_office_id', $myOfficeIds)
-                    ->orWhereHas('offices', fn ($oq) => $oq->whereIn('offices.office_id', $myOfficeIds))
-                    ->orWhereHas('teams.members', fn ($tq) => $tq->where('team_members.user_id', $authUser->user_id));
-            });
+            $query->visibleTo($authUser);
         }
 
         $projects = $query->orderByDesc('project_id')->paginate(15)->withQueryString();
@@ -155,7 +150,11 @@ class ProjectController extends Controller
         $assignableUsers = $project->getAssignableUsersWithRoles();
         $projectRoster = $this->rosterService->getFormattedRoster($project);
         $taskStats = $project->taskStats();
-        $allTeams = Team::where('status', 'Active')->with('leader')->orderBy('team_name')->get();
+        // Only teams from the project's primary or participating offices may be assigned.
+        $allowedOfficeIds = $this->authorizedOfficeIds($project);
+        $allTeams = Team::where('status', 'Active')->with('leader')
+            ->when($allowedOfficeIds->isNotEmpty(), fn ($q) => $q->whereIn('office_id', $allowedOfficeIds))
+            ->orderBy('team_name')->get();
 
         return view('projects.show', compact('project', 'tasks', 'assignableUsers', 'projectRoster', 'taskStats', 'allTeams'));
     }
@@ -173,6 +172,7 @@ class ProjectController extends Controller
             return [
                 'id' => $t->team_id,
                 'name' => $t->team_name,
+                'office_id' => $t->office_id,
                 'leader_name' => optional($t->leader)->full_name ?? 'Unassigned',
                 'members' => $t->members->map(function ($m) {
                     return [
@@ -295,6 +295,18 @@ class ProjectController extends Controller
                 'teams.*' => ['exists:teams,team_id'],
             ]);
             $teamIds = collect($data['teams'])->map(fn ($id) => (int) $id)->unique()->values();
+
+            // Server-side office restriction for the wizard team step.
+            $allowedOfficeIds = $this->authorizedOfficeIds($project);
+            if ($allowedOfficeIds->isNotEmpty()) {
+                $invalid = Team::whereIn('team_id', $teamIds)->whereNotIn('office_id', $allowedOfficeIds)->get();
+                if ($invalid->isNotEmpty()) {
+                    return response()->json([
+                        'message' => 'Some teams belong to offices that are not associated with this project: '.$invalid->pluck('team_name')->implode(', '),
+                    ], 422);
+                }
+            }
+
             $project->update(['team_id' => $teamIds->first()]);
             DB::table('project_teams')->where('project_id', $project->project_id)->delete();
             foreach ($teamIds as $teamId) {
@@ -317,6 +329,16 @@ class ProjectController extends Controller
                 'tasks.*.end_date' => ['nullable', 'date', 'after_or_equal:tasks.*.start_date'],
             ]);
             $firstPhase = $project->phases()->orderBy('sequence_order')->first();
+
+            // Server-side office restriction for task teams.
+            $allowedOfficeIds = $this->authorizedOfficeIds($project);
+            if ($allowedOfficeIds->isNotEmpty()) {
+                $taskTeamIds = collect($data['tasks'] ?? [])->pluck('team_id')->filter()->map(fn ($id) => (int) $id);
+                if ($taskTeamIds->isNotEmpty() && Team::whereIn('team_id', $taskTeamIds)->whereNotIn('office_id', $allowedOfficeIds)->exists()) {
+                    return response()->json(['message' => 'One or more task teams belong to offices that are not associated with this project.'], 422);
+                }
+            }
+
             $project->tasks()->delete();
             foreach ($data['tasks'] ?? [] as $taskData) {
                 if (blank($taskData['task_name'] ?? null)) {
@@ -324,6 +346,15 @@ class ProjectController extends Controller
                 }
 
                 $assigneeId = $this->resolveUserId($taskData['assigned_to'] ?? null, $taskData['team_id'] ?? $project->team_id);
+
+                // Server-side office restriction for task assignees.
+                $assignee = $assigneeId ? User::find($assigneeId) : null;
+                if ($assignee && ! $project->canAssignUser($assignee)) {
+                    return response()->json([
+                        'message' => "{$assignee->full_name} belongs to an office that is not associated with this project.",
+                    ], 422);
+                }
+
                 Task::create([
                     'project_id' => $project->project_id,
                     'phase_id' => $firstPhase?->phase_id,
@@ -409,6 +440,16 @@ class ProjectController extends Controller
 
         $pmInput = $request->input('project_manager_id') ?? $request->input('project_manager_name');
         $resolvedPmId = $this->projectWizardService->resolveUserId($pmInput, $request->input('team_id') ?? $project->team_id);
+
+        // Server-side office restriction for the project manager.
+        if ($resolvedPmId) {
+            $pm = User::find($resolvedPmId);
+            if ($pm && ! $project->canAssignUser($pm)) {
+                return back()->withErrors([
+                    'project_manager_id' => "{$pm->full_name} belongs to an office that is not associated with this project.",
+                ])->withInput();
+            }
+        }
 
         $data = $request->validated();
 
@@ -531,6 +572,15 @@ class ProjectController extends Controller
 
         $team = Team::findOrFail($data['team_id']);
 
+        // Server-side office restriction: the team's office must be one of the
+        // project's primary or participating offices.
+        $allowedOfficeIds = $this->authorizedOfficeIds($project);
+        if ($allowedOfficeIds->isNotEmpty() && ! $allowedOfficeIds->contains((int) $team->office_id)) {
+            return back()->withErrors([
+                'team_id' => "Team \"{$team->team_name}\" belongs to an office that is not associated with this project.",
+            ])->withInput();
+        }
+
         DB::table('project_teams')->insertOrIgnore([
             'project_id' => $project->project_id,
             'team_id' => $team->team_id,
@@ -572,6 +622,15 @@ class ProjectController extends Controller
 
         if (! $resolvedUserId) {
             return back()->withErrors(['user_id' => 'Please provide a valid member name or select from the list.']);
+        }
+
+        // Server-side office restriction: the member's office must be one of
+        // the project's primary or participating offices.
+        $resolvedUser = User::find($resolvedUserId);
+        if ($resolvedUser && ! $project->canAssignUser($resolvedUser)) {
+            return back()->withErrors([
+                'user_id' => "{$resolvedUser->full_name} belongs to an office that is not associated with this project.",
+            ])->withInput();
         }
 
         $specialty = $request->input('specialty');
@@ -737,16 +796,37 @@ class ProjectController extends Controller
      */
     private function eligibleTeamsFor(User $user, ?Project $editingProject = null): Collection
     {
-        if ($user->isDirectorOrAdmin()) {
-            return Team::orderBy('team_name')->get();
+        $query = Team::orderBy('team_name');
+
+        if (! $user->isDirectorOrAdmin()) {
+            $query->where('team_leader_id', $user->user_id);
         }
 
-        $led = Team::where('team_leader_id', $user->user_id)->orderBy('team_name')->get();
+        $teams = $query->get();
 
-        if ($editingProject && $editingProject->isManagedBy($user) && ! $led->contains('team_id', $editingProject->team_id)) {
-            $led->push($editingProject->team);
+        // Restrict to the project's primary or participating offices.
+        if ($editingProject) {
+            $allowedOfficeIds = $this->authorizedOfficeIds($editingProject);
+            if ($allowedOfficeIds->isNotEmpty()) {
+                $teams = $teams->filter(fn ($t) => $allowedOfficeIds->contains((int) $t->office_id))->values();
+            }
+
+            // Keep the currently assigned team selectable even if the offices changed.
+            if ($editingProject->team && ! $teams->contains('team_id', $editingProject->team_id)) {
+                $teams->push($editingProject->team);
+            }
         }
 
-        return $led;
+        return $teams;
+    }
+
+    /**
+     * Offices a project may draw teams from: primary + participating.
+     *
+     * @return Collection<int, int>
+     */
+    private function authorizedOfficeIds(Project $project): Collection
+    {
+        return $project->authorizedOfficeIds();
     }
 }

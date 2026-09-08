@@ -43,9 +43,16 @@ class TaskController extends Controller
 
         $query = Task::with(['project', 'team', 'phase.project', 'assignee', 'comments', 'attachments', 'subtasks'])->orderBy('end_date');
 
-        // Scoping: "mine" vs "all"
+        // Scoping: "mine" shows assigned tasks; "all" shows tasks of projects
+        // the user participates in (plus anything assigned to them).
         if ($filter === 'mine' || ! $user->can('view_projects')) {
             $query->where('assigned_to', $user->user_id);
+        } elseif ($filter === 'all') {
+            $query->where(function ($q) use ($user) {
+                $q->where('assigned_to', $user->user_id)
+                    ->orWhereHas('project', fn ($pq) => $pq->visibleTo($user))
+                    ->orWhereHas('phase.project', fn ($pq) => $pq->visibleTo($user));
+            });
         }
 
         if ($status) {
@@ -92,6 +99,12 @@ class TaskController extends Controller
         $countQuery = Task::query();
         if ($filter === 'mine' || ! $user->can('view_projects')) {
             $countQuery->where('assigned_to', $user->user_id);
+        } elseif ($filter === 'all') {
+            $countQuery->where(function ($q) use ($user) {
+                $q->where('assigned_to', $user->user_id)
+                    ->orWhereHas('project', fn ($pq) => $pq->visibleTo($user))
+                    ->orWhereHas('phase.project', fn ($pq) => $pq->visibleTo($user));
+            });
         }
         $statusCounts = $countQuery->select('status', DB::raw('COUNT(*) as total'))
             ->groupBy('status')
@@ -107,7 +120,7 @@ class TaskController extends Controller
         ];
 
         $myCount = Task::where('assigned_to', $user->user_id)->count();
-        $allCount = Task::count();
+        $allCount = (clone $countQuery)->count();
 
         $projects = Project::orderBy('project_name')->get();
         $teams = Team::where('status', 'Active')->orderBy('team_name')->get();
@@ -229,6 +242,7 @@ class TaskController extends Controller
 
         $assigneeInput = $request->input('assigned_to') ?? $request->input('assignee_name') ?? $request->input('assignee_input');
         $resolvedAssigneeId = $this->resolveAssigneeId($assigneeInput, $project);
+        $this->assertAssigneeAllowed($project, $resolvedAssigneeId);
 
         $data = $request->validated();
 
@@ -350,6 +364,7 @@ class TaskController extends Controller
         $assigneeInput = $request->input('assigned_to') ?? $request->input('assignee_name');
         $reason = $request->input('reason');
         $resolvedAssigneeId = $this->resolveAssigneeId($assigneeInput, $project);
+        $this->assertAssigneeAllowed($project, $resolvedAssigneeId);
 
         $previousAssignee = optional($task->assignee)->full_name ?? 'Unassigned';
         $task->update(['assigned_to' => $resolvedAssigneeId]);
@@ -393,6 +408,7 @@ class TaskController extends Controller
         if ($request->has('assigned_to') || $request->has('assignee_name')) {
             $assigneeInput = $request->input('assigned_to') ?? $request->input('assignee_name');
             $data['assigned_to'] = $this->resolveAssigneeId($assigneeInput, $project);
+            $this->assertAssigneeAllowed($project, $data['assigned_to']);
         }
 
         if (isset($data['status'])) {
@@ -627,6 +643,23 @@ class TaskController extends Controller
         Activity::log('Created team member via task assignment', 'User', $newUser->user_id, "{$newUser->full_name} ({$email})");
 
         return $newUser->user_id;
+    }
+
+    /**
+     * Rejects an assignee whose office is not associated with the task's
+     * project (primary or participating). Users without an office keep the
+     * legacy behaviour.
+     */
+    private function assertAssigneeAllowed(?Project $project, ?int $assigneeId): void
+    {
+        if (! $project || ! $assigneeId) {
+            return;
+        }
+
+        $assignee = User::find($assigneeId);
+        if ($assignee && ! $project->canAssignUser($assignee)) {
+            abort(422, "{$assignee->full_name} belongs to an office that is not associated with this project.");
+        }
     }
 
     public function destroy(Request $request, Task $task)

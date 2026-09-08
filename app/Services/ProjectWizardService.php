@@ -40,6 +40,27 @@ class ProjectWizardService
 
         $data = $request->validated();
 
+        // Offices this project may draw people from: primary + participating.
+        $allowedOfficeIds = collect([(int) ($data['primary_office_id'] ?? null)])
+            ->merge($data['participating_offices'] ?? [])
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        $assertUserAllowed = function (?int $userId) use ($allowedOfficeIds): void {
+            if (! $userId || $allowedOfficeIds->isEmpty()) {
+                return;
+            }
+
+            $candidate = User::find($userId);
+            if ($candidate && $candidate->office_id && ! $allowedOfficeIds->contains((int) $candidate->office_id)) {
+                abort(422, "{$candidate->full_name} belongs to an office that is not associated with this project.");
+            }
+        };
+
+        $assertUserAllowed($resolvedPmId);
+
         $selectedTeamIds = collect($request->input('team_ids', []))
             ->merge($request->input('teams', []))
             ->push($request->input('team_id'))
@@ -49,7 +70,7 @@ class ProjectWizardService
 
         $primaryTeamId = $selectedTeamIds->first() ?? $request->input('team_id');
 
-        $project = DB::transaction(function () use ($user, $data, $resolvedPmId, $selectedTeamIds, $primaryTeamId) {
+        $project = DB::transaction(function () use ($user, $data, $resolvedPmId, $selectedTeamIds, $primaryTeamId, $assertUserAllowed) {
             $project = Project::create([
                 'project_name' => $data['project_name'],
                 'description' => $data['description'] ?? null,
@@ -82,6 +103,7 @@ class ProjectWizardService
                 $assignedUserIds = [];
                 foreach ($data['members'] as $memberData) {
                     if (! empty($memberData['user_id']) && ! in_array($memberData['user_id'], $assignedUserIds)) {
+                        $assertUserAllowed((int) $memberData['user_id']);
                         $assignedUserIds[] = $memberData['user_id'];
                         ProjectMemberRole::create([
                             'project_id' => $project->project_id,
@@ -135,6 +157,7 @@ class ProjectWizardService
                     $assigneeId = null;
                     if (! empty($taskData['assigned_to'])) {
                         $assigneeId = $this->resolveUserId($taskData['assigned_to'], $taskTeamId);
+                        $assertUserAllowed($assigneeId);
                     }
 
                     $status = $taskData['status'] ?? 'To Do';

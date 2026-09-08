@@ -12,7 +12,8 @@ use Illuminate\Support\Facades\DB;
  * Administrative service for creating, updating and deleting roles and
  * managing user-role assignments. Enforces the security edge cases:
  *
- *  - system roles cannot be deleted or have their slug mutated;
+ *  - system roles cannot be deleted and the Administrator's slug/scope
+ *    cannot be mutated;
  *  - deleting a role re-assigns its children to its parent (no orphaned
  *    inheritance branches) and detaches user/permission pivots cleanly;
  *  - permission sync is transactional;
@@ -66,8 +67,11 @@ class RoleManagementService
                 $payload['role_name'] = $data['name'];
             }
 
-            if (array_key_exists('scope', $data) && ! $role->is_system) {
-                $payload['scope'] = $data['scope'];
+            // Scope of the protected Administrator role is immutable.
+            if (array_key_exists('scope', $data)
+                && ! Permissions::isProtectedRoleName($role->role_name)) {
+                $payload['scope'] = in_array($data['scope'], Role::SCOPES, true)
+                    ? $data['scope'] : $role->scope;
             }
 
             $role->update($payload);
