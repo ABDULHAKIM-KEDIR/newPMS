@@ -129,9 +129,8 @@
       </div>
 
       <div class="form-field">
-        <label for="primary_office_id">Primary Office</label>
-        <select id="primary_office_id" name="primary_office_id">
-          <option value="">— No primary office —</option>
+        <label for="primary_office_id">Primary Office <span style="color:var(--accent, #2563eb);">*</span></label>
+        <select id="primary_office_id" name="primary_office_id" required>
           @foreach ($offices as $office)
             <option value="{{ $office->office_id }}" {{ (string) old('primary_office_id') === (string) $office->office_id ? 'selected' : '' }}>
               {{ $office->office_name }}</option>
@@ -143,9 +142,9 @@
         <label>Participating Offices
           <span style="font-weight:400; color:var(--ink-faint);">(cross-office collaboration)</span>
         </label>
-        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:6px;">
+        <div class="office-chip-grid">
           @foreach ($offices as $office)
-            <label style="display:flex; align-items:center; gap:6px; font-weight:400; font-size:13px;">
+            <label class="office-chip">
               <input type="checkbox" name="participating_offices[]" value="{{ $office->office_id }}"
                 {{ in_array((string) $office->office_id, old('participating_offices', [])) ? 'checked' : '' }}>
               {{ $office->office_name }}
@@ -672,7 +671,7 @@
 
     const typeLabelFor = {
       @foreach ($projectTypes as $type)
-      {{ $type->project_type_id }}: {{ json_encode($type->name.($type->office_id ? ' · '.optional($type->office)->office_name : '')) }},
+      {{ $type->project_type_id }}: {!! json_encode($type->name.($type->office_id ? ' · '.optional($type->office)->office_name : '')) !!},
       @endforeach
     };
 

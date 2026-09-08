@@ -40,5 +40,8 @@ class DatabaseSeeder extends Seeder
         // assign specific offices to users via Users → Edit.
         $admin->office_id = null;
         $admin->save();
+
+        // ---- Demo content (2 records per core entity) ----
+        $this->call(SampleDataSeeder::class);
     }
 }

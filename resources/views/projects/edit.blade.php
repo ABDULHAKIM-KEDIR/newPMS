@@ -120,9 +120,9 @@
                 <label>Participating Offices
                     <span style="font-weight:400; color:var(--ink-faint);">(cross-office collaboration)</span>
                 </label>
-                <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:6px;">
+                <div class="office-chip-grid">
                     @foreach ($offices as $office)
-                        <label style="display:flex; align-items:center; gap:6px; font-weight:400; font-size:13px;">
+                        <label class="office-chip">
                             <input type="checkbox" name="participating_offices[]" value="{{ $office->office_id }}"
                                 {{ $project->offices->contains('office_id', $office->office_id) && (int) $project->primary_office_id !== (int) $office->office_id ? 'checked' : '' }}>
                             {{ $office->office_name }}
