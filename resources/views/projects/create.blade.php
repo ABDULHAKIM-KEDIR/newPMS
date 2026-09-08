@@ -143,12 +143,17 @@
         <label>Participating Offices
           <span style="font-weight:400; color:var(--ink-faint);">(cross-office collaboration)</span>
         </label>
-        <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:6px;">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-2">
           @foreach ($offices as $office)
-            <label style="display:flex; align-items:center; gap:6px; font-weight:400; font-size:13px;">
-              <input type="checkbox" name="participating_offices[]" value="{{ $office->office_id }}"
-                {{ in_array((string) $office->office_id, old('participating_offices', [])) ? 'checked' : '' }}>
-              {{ $office->office_name }}
+            <label class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-blue-50/50 border border-slate-200/80 hover:border-blue-300 transition-all cursor-pointer group">
+              <input type="checkbox"
+                     name="participating_offices[]"
+                     value="{{ $office->office_id }}"
+                     {{ in_array((string) $office->office_id, old('participating_offices', [])) ? 'checked' : '' }}
+                     class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 shrink-0 transition-colors cursor-pointer">
+              <span class="text-sm font-medium text-slate-700 group-hover:text-slate-900 select-none">
+                {{ $office->office_name }}
+              </span>
             </label>
           @endforeach
         </div>
