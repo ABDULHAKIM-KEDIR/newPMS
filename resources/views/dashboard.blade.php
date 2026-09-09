@@ -16,36 +16,83 @@
   </div>
 </div>
 
+@if ($officeStats)
+@php
+  $ob = $officeStats['budget'];
+  $obUtil = $ob['allocated'] > 0 ? min(100, round($ob['spent'] / $ob['allocated'] * 100)) : 0;
+  $snapTiles = [
+    ['icon' => '👥', 'label' => 'Teams', 'value' => $officeStats['teams']],
+    ['icon' => '👤', 'label' => 'Users', 'value' => $officeStats['users']],
+    ['icon' => '📁', 'label' => 'Projects', 'value' => $officeStats['projects']],
+    ['icon' => '🚀', 'label' => 'Active', 'value' => $officeStats['active_projects']],
+    ['icon' => '✅', 'label' => 'Completed', 'value' => $officeStats['completed_projects']],
+  ];
+@endphp
+<!-- Office Snapshot -->
+<div class="card card-pad" style="margin-bottom:20px;">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:10px; flex-wrap:wrap;">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <div style="width:34px; height:34px; border-radius:9px; background:color-mix(in srgb, var(--accent) 12%, transparent); display:flex; align-items:center; justify-content:center; font-size:16px;">🏢</div>
+      <div>
+        <h3 style="margin:0; font-size:14.5px; color:var(--ink);">{{ $officeStats['name'] }}</h3>
+        <div style="font-size:11.5px; color:var(--ink-soft); margin-top:1px;">Office snapshot</div>
+      </div>
+    </div>
+    @can('view_offices')
+      <a class="link-small" href="{{ route('admin.offices.index') }}">Office management →</a>
+    @endcan
+  </div>
+
+  <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(96px, 1fr)); gap:10px; margin-bottom:14px;">
+    @foreach ($snapTiles as $tile)
+      <div style="background:var(--bg-card, var(--surface)); border:1px solid var(--line); border-radius:10px; padding:12px 14px;">
+        <div style="font-size:14px; margin-bottom:6px;">{{ $tile['icon'] }}</div>
+        <div style="font-size:20px; font-weight:700; color:var(--ink); font-family:'Space Grotesk', sans-serif; line-height:1;">{{ $tile['value'] }}</div>
+        <div style="font-size:11px; color:var(--ink-soft); margin-top:5px; text-transform:uppercase; letter-spacing:.05em;">{{ $tile['label'] }}</div>
+      </div>
+    @endforeach
+  </div>
+
+  @can('view_budgets')
+    <div style="background:var(--bg-card, var(--surface)); border:1px solid var(--line); border-radius:10px; padding:14px 16px;">
+      <div style="display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:9px;">
+        <span style="font-size:11.5px; font-weight:600; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.05em;">💰 Budget</span>
+        <span class="mono" style="font-size:12px; color:var(--ink-soft);">
+          <b style="color:var(--ink); font-size:13px;">ETB {{ number_format($ob['allocated']) }}</b> allocated
+        </span>
+      </div>
+      <div class="progressbar {{ $obUtil >= 90 ? 'danger' : ($obUtil >= 70 ? 'warn' : '') }}" style="height:7px; border-radius:5px;"><div style="width:{{ $obUtil }}%"></div></div>
+      <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-top:9px; font-size:12px;">
+        <span style="color:var(--ink-soft);">
+          Spent <b class="mono" style="color:var(--ink);">ETB {{ number_format($ob['spent']) }}</b>
+          <span style="color:var(--ink-faint);">({{ $obUtil }}%)</span>
+        </span>
+        <span style="color:var(--ink-soft);">
+          Remaining <b class="mono" style="color:var(--success);">ETB {{ number_format($ob['remaining']) }}</b>
+        </span>
+      </div>
+    </div>
+  @endcan
+</div>
+@endif
+
 <!-- Key Stat Cards -->
-<div class="grid grid-4" style="margin-bottom:20px;">
-  <div class="card stat-card">
-    <div class="stat-label">Active Projects</div>
-    <div class="stat-value">{{ $stats['active_projects'] }}</div>
-    <div class="stat-delta">{{ $scoped ? "Across your team(s)" : "Across all departments" }}</div>
-  </div>
+<div class="grid grid-4 stat-card-grid">
+  <x-stat-card title="Active Projects" :value="$stats['active_projects']" icon="📁" :delta="$scoped ? 'Across your team(s)' : 'Across all departments'" />
 
-  <div class="card stat-card">
-    <div class="stat-label">Open Tasks</div>
-    <div class="stat-value">{{ $stats['open_tasks'] }}</div>
-    <div class="stat-delta {{ $stats['overdue_tasks'] > 0 ? 'down' : '' }}">
-      {{ $stats['overdue_tasks'] }} overdue
-    </div>
-  </div>
+  <x-stat-card title="Open Tasks" :value="$stats['open_tasks']" icon="🗒️" :delta="$stats['overdue_tasks'].' overdue'" :delta-class="$stats['overdue_tasks'] > 0 ? 'down' : ''" />
 
-  <div class="card stat-card">
-    <div class="stat-label">Budget Utilised</div>
-    @php $util = $stats['budget_allocated'] > 0 ? round($stats['budget_spent'] / $stats['budget_allocated'] * 100) : 0; @endphp
-    <div class="stat-value">{{ $util }}%</div>
-    <div class="stat-delta">ETB {{ number_format($stats['budget_spent']) }} of {{ number_format($stats['budget_allocated']) }}</div>
-  </div>
+  @php $util = $stats['budget_allocated'] > 0 ? round($stats['budget_spent'] / $stats['budget_allocated'] * 100) : 0; @endphp
+  <x-stat-card title="Budget Utilised" :value="$util.'%'" icon="💰" :delta="'ETB '.number_format($stats['budget_spent']).' of '.number_format($stats['budget_allocated'])" />
 
-  <div class="card stat-card">
-    <div class="stat-label">Action Items</div>
-    <div class="stat-value" style="color:{{ ($stats['overdue_tasks'] + $stats['pending_change_requests']) > 0 ? 'var(--danger)' : 'var(--success)' }};">
-      {{ $stats['overdue_tasks'] + $stats['pending_change_requests'] }}
-    </div>
-    <div class="stat-delta down">{{ $stats['pending_change_requests'] }} change requests pending</div>
-  </div>
+  <x-stat-card
+    title="Action Items"
+    :value="$stats['overdue_tasks'] + $stats['pending_change_requests']"
+    icon="⚠️"
+    :color="($stats['overdue_tasks'] + $stats['pending_change_requests']) > 0 ? 'var(--danger)' : 'var(--success)'"
+    :delta="$stats['pending_change_requests'].' change requests pending'"
+    delta-class="down"
+  />
 </div>
 
 <!-- Attention Required Alert (If overdue or blocked tasks exist) -->
@@ -99,7 +146,6 @@
             @php
               $pProg = $p->progressPercentage();
               $b = $p->budget;
-              $statusCls = ['active' => 'b-active', 'planning' => 'b-planning', 'risk' => 'b-risk', 'closed' => 'b-closed'][$p->status] ?? 'b-planning';
             @endphp
             <tr onclick="window.location='{{ route('projects.show', $p) }}'" style="cursor:pointer;">
               <td>
@@ -116,8 +162,8 @@
                 <div style="font-size:11.5px; font-weight:600; color:var(--ink-soft); margin-bottom:3px;">{{ $pProg }}% Done</div>
                 <div class="progressbar"><div style="width:{{ $pProg }}%"></div></div>
               </td>
-              <td style="text-align:right;">
-                <span class="badge {{ $statusCls }}"><span class="badge-dot"></span>{{ ucfirst($p->status) }}</span>
+              <td class="cell-align-right">
+                <x-status-badge :status="$p->status" />
               </td>
             </tr>
           @endforeach
@@ -151,8 +197,8 @@
             </div>
           </div>
 
-          <div style="display:flex; align-items:center; gap:8px;">
-            <span class="badge {{ $mt->statusBadgeClass() }}" style="font-size:10.5px;">{{ $mt->status }}</span>
+          <div class="cell-align-right">
+            <x-status-badge :status="$mt->status" />
           </div>
         </div>
       @empty

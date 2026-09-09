@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureAccountApproved;
 use App\Http\Middleware\EnsureUserIsActive;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -16,6 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->redirectUsersTo('/dashboard');
         $middleware->alias([
             'active' => EnsureUserIsActive::class,
+            'approved' => EnsureAccountApproved::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

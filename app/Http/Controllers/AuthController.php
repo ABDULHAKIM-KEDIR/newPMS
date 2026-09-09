@@ -3,12 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\User;
+use App\Rules\NotCommonPassword;
 use App\Support\Activity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
@@ -30,7 +31,7 @@ class AuthController extends Controller
             'password' => ['required', 'string'],
         ]);
 
-        if (! Auth::attempt($credentials)) {
+        if (! Auth::attempt($credentials, $request->boolean('remember'))) {
             throw ValidationException::withMessages([
                 'email' => 'Those credentials don\'t match any account.',
             ]);
@@ -39,20 +40,35 @@ class AuthController extends Controller
         $user = Auth::user();
 
         /*
-         * Pending accounts must be approved first.
+         * Pending guest registrations are logged in immediately,
+         * but land on a restricted page until an administrator
+         * approves the account and assigns a role.
          */
-        if ($user->status === 'Pending') {
-            Auth::logout();
+        if ($user->isGuest() && $user->isPending()) {
+            $request->session()->regenerate();
 
-            throw ValidationException::withMessages([
-                'email' => 'Your account is waiting for administrator approval.',
-            ]);
+            return redirect()
+                ->route('guest.pending')
+                ->with(
+                    'status',
+                    'Registration submitted successfully. Your account is waiting for administrator approval.'
+                );
+        }
+
+        /*
+         * Any pending account (even legacy ones without the guest role)
+         * goes to the pending-approval page rather than the dashboard.
+         */
+        if ($user->isPending()) {
+            $request->session()->regenerate();
+
+            return redirect()->route('guest.pending');
         }
 
         /*
          * Rejected accounts cannot sign in.
          */
-        if ($user->status === 'Rejected') {
+        if (strtolower($user->status) === 'rejected') {
             Auth::logout();
 
             throw ValidationException::withMessages([
@@ -62,8 +78,10 @@ class AuthController extends Controller
 
         /*
          * Inactive accounts cannot sign in.
+         * Pending guests are allowed through — the guest.pending
+         * check above already routed them to /pending-approval.
          */
-        if (! $user->isActive()) {
+        if (strtolower($user->status) === 'inactive') {
             Auth::logout();
 
             throw ValidationException::withMessages([
@@ -121,7 +139,23 @@ class AuthController extends Controller
                 'string',
                 'min:8',
                 'confirmed',
+                'regex:/[a-z]/',              // lowercase letter
+                'regex:/[A-Z]/',              // uppercase letter
+                'regex:/[0-9]/',              // number
+                'regex:/[^A-Za-z0-9]/',       // special character
+                new NotCommonPassword,  // blocked against common/leaked passwords
             ],
+
+            /*
+             * Self-registrants may NEVER claim an Office (or a role).
+             * Even a forged POST containing office_id is rejected here,
+             * server-side — the office is assigned later by a System
+             * Administrator through the admin user-management screens.
+             */
+            'office_id' => ['prohibited'],
+            'role' => ['prohibited'],
+            'role_id' => ['prohibited'],
+            'status' => ['prohibited'],
         ]);
 
         /*
@@ -136,6 +170,7 @@ class AuthController extends Controller
             'email' => $data['email'],
             'phone' => $data['phone'] ?? null,
             'password_hash' => Hash::make($data['password']),
+            'role' => 'guest',
             'status' => 'Pending',
         ]);
 
@@ -143,11 +178,19 @@ class AuthController extends Controller
             'Submitted registration',
             'User',
             $user->user_id,
-            $user->full_name . ' (' . $user->email . ') is awaiting approval'
+            $user->full_name.' ('.$user->email.') is awaiting approval'
         );
 
+        /*
+         * Log the guest in immediately and send them to the
+         * restricted pending-approval landing page.
+         */
+        Auth::login($user);
+
+        $request->session()->regenerate();
+
         return redirect()
-            ->route('login')
+            ->route('guest.pending')
             ->with(
                 'status',
                 'Registration submitted successfully. Your account is waiting for administrator approval.'

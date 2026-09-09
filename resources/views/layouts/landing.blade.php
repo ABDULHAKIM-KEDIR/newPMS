@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>@yield('title', 'ICT PMS — Jimma University')</title>
-<meta name="description" content="The project management system for Jimma University's ICT Directorate — projects, tasks, budgets, and teams in one place.">
+<title>@yield('title', 'PMS — Project Management System')</title>
+<meta name="description" content="The project management system for your organization — projects, tasks, budgets, and teams in one place.">
 <script>
   // Applied before first paint to avoid a flash of the wrong theme.
   try {

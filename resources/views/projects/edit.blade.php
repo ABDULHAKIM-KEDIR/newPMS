@@ -40,11 +40,11 @@
 
             <div class="form-grid">
                 <div class="form-field">
-                    <label for="project_type">Type <span style="color:var(--danger);">*</span></label>
+                    <label for="project_type">Type <span class="required-mark">*</span></label>
                     <select id="project_type" name="project_type" required>
-                        @foreach ($types as $t)
-                            <option value="{{ $t }}" {{ old('project_type', $project->project_type) === $t ? 'selected' : '' }}>
-                                {{ $t }}</option>
+                        @foreach ($projectTypes as $t)
+                            <option value="{{ $t->name }}" data-office="{{ $t->office_id ?? '' }}" {{ old('project_type', $project->project_type) === $t->name ? 'selected' : '' }}>
+                                {{ $t->name }}@if ($t->office_id) · {{ optional($t->office)->office_name }}@endif</option>
                         @endforeach
                     </select>
                 </div>
@@ -104,6 +104,33 @@
                 </div>
             </div>
 
+            <div class="form-field">
+                <label for="primary_office_id">Primary Office</label>
+                <select id="primary_office_id" name="primary_office_id">
+                    <option value="">— No primary office —</option>
+                    @foreach ($offices as $office)
+                        <option value="{{ $office->office_id }}"
+                            {{ (string) old('primary_office_id', $project->primary_office_id) === (string) $office->office_id ? 'selected' : '' }}>
+                            {{ $office->office_name }}</option>
+                    @endforeach
+                </select>
+            </div>
+
+            <div class="form-field">
+                <label>Participating Offices
+                    <span style="font-weight:400; color:var(--ink-faint);">(cross-office collaboration)</span>
+                </label>
+                <div class="office-chip-grid">
+                    @foreach ($offices as $office)
+                        <label class="office-chip">
+                            <input type="checkbox" name="participating_offices[]" value="{{ $office->office_id }}"
+                                {{ $project->offices->contains('office_id', $office->office_id) && (int) $project->primary_office_id !== (int) $office->office_id ? 'checked' : '' }}>
+                            {{ $office->office_name }}
+                        </label>
+                    @endforeach
+                </div>
+            </div>
+
             @if ($canEditBudget)
                 <div class="form-field">
                     <label for="allocated_amount">Budget allocated (ETB)</label>
@@ -132,16 +159,73 @@
         <!-- SEPARATE DELETE FORM (OUTSIDE MAIN FORM) -->
         @can('delete_projects')
             @if ($project->isManagedBy(auth()->user()))
-                <div style="margin-top:-38px; display:flex; justify-content:flex-end;">
-                    <form method="POST" action="{{ route('projects.destroy', $project) }}"
-                        onsubmit="return confirm('Delete \'{{ $project->project_name }}\' permanently? This removes all its phases, tasks, and budget data.');">
+                <div style="margin-top:-38px; display:flex; justify-content:flex-end;"
+                    x-data="{ showDeleteModal: false }">
+                    <form id="deleteProjectForm" method="POST" action="{{ route('projects.destroy', $project) }}">
                         @csrf
                         @method('DELETE')
-                        <button type="submit" class="btn btn-ghost"
-                            style="color:var(--danger); border-color:var(--danger-soft);">Delete project</button>
+                        <button type="button" class="btn btn-ghost"
+                            style="color:var(--danger); border-color:var(--danger-soft);"
+                            @click="showDeleteModal = true">Delete project</button>
                     </form>
+
+                    {{-- Delete confirmation modal --}}
+                    <template x-if="showDeleteModal">
+                        <div>
+                            <div class="overlay show" @click="showDeleteModal = false"></div>
+                            <div class="card card-pad"
+                                style="position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); z-index:1000; width:420px; box-shadow:0 15px 35px rgba(0,0,0,0.2);"
+                                role="dialog" aria-modal="true">
+                                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+                                    <h3 style="margin:0; font-size:16px; font-weight:700;">Delete
+                                        '{{ $project->project_name }}'?</h3>
+                                    <button type="button" @click="showDeleteModal = false"
+                                        style="background:none; border:none; font-size:18px; cursor:pointer; color:var(--ink-faint);">&times;</button>
+                                </div>
+                                <p style="margin:0 0 18px; font-size:14px; line-height:1.55; color:var(--ink-soft);">
+                                    This removes all its phases, tasks, and budget data. This action cannot be undone.
+                                </p>
+                                <div style="display:flex; justify-content:flex-end; gap:8px;">
+                                    <button type="button" class="btn btn-ghost"
+                                        @click="showDeleteModal = false">Cancel</button>
+                                    <button type="button" class="btn"
+                                        style="background:var(--danger); border-color:var(--danger); color:#fff;"
+                                        @click="document.getElementById('deleteProjectForm').submit()">Yes, delete
+                                        it</button>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
                 </div>
             @endif
         @endcan
     </div>
 @endsection
+
+@push('scripts')
+<script>
+    (function () {
+        const officeSelect = document.getElementById('primary_office_id');
+        const typeSelect = document.getElementById('project_type');
+        if (!officeSelect || !typeSelect) return;
+
+        const allOptions = Array.from(typeSelect.options);
+        const currentOffice = officeSelect.value;
+
+        function filterTypes(officeId) {
+            const selected = typeSelect.value;
+            typeSelect.innerHTML = '';
+            const visible = allOptions.filter(o => !o.dataset.office || o.dataset.office === '' || o.dataset.office === officeId);
+            visible.forEach(o => typeSelect.appendChild(o));
+            if (visible.some(o => o.value === selected)) {
+                typeSelect.value = selected;
+            } else {
+                typeSelect.value = '';
+            }
+        }
+
+        filterTypes(currentOffice);
+        officeSelect.addEventListener('change', () => filterTypes(officeSelect.value));
+    })();
+</script>
+@endpush

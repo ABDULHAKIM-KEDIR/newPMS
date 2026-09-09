@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Office;
 use App\Models\Role;
 use App\Models\User;
 use App\Support\Activity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
 class UserController extends Controller
@@ -60,10 +63,11 @@ class UserController extends Controller
             ->withQueryString();
 
         $roles = Role::orderBy('role_name')->get();
+        $offices = Office::orderBy('office_name')->get();
 
         return view(
             'admin.users.index',
-            compact('users', 'roles')
+            compact('users', 'roles', 'offices')
         );
     }
 
@@ -81,10 +85,11 @@ class UserController extends Controller
         );
 
         $roles = Role::orderBy('role_name')->get();
+        $offices = Office::orderBy('office_name')->get();
 
         return view(
             'admin.users.create',
-            compact('roles')
+            compact('roles', 'offices')
         );
     }
 
@@ -125,6 +130,11 @@ class UserController extends Controller
                 'string',
                 'min:8',
             ],
+
+            'office_id' => [
+                'nullable',
+                'exists:offices,office_id',
+            ],
         ]);
 
         /*
@@ -137,6 +147,7 @@ class UserController extends Controller
             'phone' => $data['phone'] ?? null,
             'password_hash' => Hash::make($data['password']),
             'status' => 'Active',
+            'office_id' => $data['office_id'] ?? null,
         ]);
 
         $user->roles()->sync([
@@ -147,7 +158,7 @@ class UserController extends Controller
             'Created user',
             'User',
             $user->user_id,
-            $user->full_name . ' (' . $user->email . ')'
+            $user->full_name.' ('.$user->email.')'
         );
 
         return redirect()
@@ -172,10 +183,11 @@ class UserController extends Controller
         );
 
         $roles = Role::orderBy('role_name')->get();
+        $offices = Office::orderBy('office_name')->get();
 
         return view(
             'admin.users.edit',
-            compact('user', 'roles')
+            compact('user', 'roles', 'offices')
         );
     }
 
@@ -211,6 +223,11 @@ class UserController extends Controller
                 'required',
                 'exists:roles,role_id',
             ],
+
+            'office_id' => [
+                'nullable',
+                'exists:offices,office_id',
+            ],
         ]);
 
         $user->update([
@@ -218,6 +235,31 @@ class UserController extends Controller
             'email' => $data['email'],
             'phone' => $data['phone'] ?? null,
         ]);
+
+        // Office assignment / transfer (audited + user notified).
+        $previousOfficeId = (int) ($user->getOriginal('office_id') ?? 0);
+        $newOfficeId = (int) ($data['office_id'] ?? 0);
+
+        if ($previousOfficeId !== $newOfficeId) {
+            $user->office_id = $newOfficeId ?: null;
+            $user->save();
+
+            $oldOffice = Office::find($previousOfficeId);
+            $newOffice = Office::find($newOfficeId);
+
+            Activity::log(
+                $previousOfficeId ? 'Moved user between offices' : 'Assigned user to office',
+                'User',
+                $user->user_id,
+                $user->full_name.': '.($oldOffice?->office_name ?? 'none').' → '.($newOffice?->office_name ?? 'none')
+            );
+
+            Activity::notify(
+                $user->user_id,
+                'Your office assignment changed to '.($newOffice?->office_name ?? 'none'),
+                'general'
+            );
+        }
 
         $previousRole =
             optional($user->roles->first())->role_name
@@ -288,16 +330,32 @@ class UserController extends Controller
                 'required',
                 'exists:roles,role_id',
             ],
+
+            /*
+             * The office is chosen by the System Administrator at
+             * approval time — never by the registrant. Self-registered
+             * accounts keep office_id = null until this moment.
+             */
+            'office_id' => [
+                'nullable',
+                'exists:offices,office_id',
+            ],
         ]);
 
         $role = Role::findOrFail(
             $data['role_id']
         );
 
+        $assignedOffice = isset($data['office_id'])
+            ? Office::find($data['office_id'])
+            : null;
+
         $user->roles()->sync([
             $role->role_id,
         ]);
 
+        $user->role = $role->role_name;
+        $user->office_id = $assignedOffice?->office_id;
         $user->status = 'Active';
         $user->save();
 
@@ -306,17 +364,19 @@ class UserController extends Controller
             'User',
             $user->user_id,
             "{$user->full_name} approved as {$role->role_name}"
+                .($assignedOffice ? " (office: {$assignedOffice->office_name})" : ' (no office)')
         );
 
         Activity::notify(
             $user->user_id,
-            "Your ICT PMS account has been approved. You have been assigned the {$role->role_name} role.",
+            "Your PMS account has been approved. You have been assigned the {$role->role_name} role.",
             'general'
         );
 
         return back()->with(
             'status',
             "{$user->full_name} was approved as {$role->role_name}."
+                .($assignedOffice ? " Office: {$assignedOffice->office_name}." : '')
         );
     }
 
@@ -350,12 +410,12 @@ class UserController extends Controller
             'Rejected user registration',
             'User',
             $user->user_id,
-            $user->full_name . ' (' . $user->email . ')'
+            $user->full_name.' ('.$user->email.')'
         );
 
         Activity::notify(
             $user->user_id,
-            'Your ICT PMS registration was not approved. Please contact a System Administrator.',
+            'Your PMS registration was not approved. Please contact a System Administrator.',
             'general'
         );
 
@@ -416,5 +476,47 @@ class UserController extends Controller
             'status',
             "{$user->full_name} is now {$user->status}."
         );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | Reset User Password
+    |--------------------------------------------------------------------------
+    */
+
+    public function resetPassword(Request $request, User $user)
+    {
+        Gate::authorize('users.reset-password');
+
+        $validated = $request->validate([
+            'password' => ['nullable', 'string', 'min:8', 'max:64'],
+        ]);
+
+        $newPassword = $validated['password']
+            ?? Str::password(10, symbols: false);
+
+        $user->password_hash = Hash::make($newPassword);
+        $user->save();
+
+        $actor = Auth::user();
+
+        Activity::log(
+            'Reset user password',
+            'User',
+            $user->user_id,
+            "Password reset by {$actor->full_name}"
+        );
+
+        Activity::notify(
+            $user->user_id,
+            'Your password was reset by an administrator. '
+                .'Please change it after signing in.',
+            'general'
+        );
+
+        return redirect()
+            ->route('admin.users.index')
+            ->with('temp_password', $newPassword)
+            ->with('reset_user', $user->full_name);
     }
 }

@@ -17,7 +17,7 @@ class SystemSetting extends Model
     // The fixed set of keys the settings form edits — kept small and
     // explicit rather than an open-ended key/value form.
     public const KEYS = [
-        'directorate_name' => 'Directorate name',
+        'directorate_name' => 'Organization name',
         'default_currency' => 'Default currency',
         'session_timeout_minutes' => 'Session timeout notice (minutes)',
         'support_email' => 'Support contact email',

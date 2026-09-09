@@ -20,5 +20,5 @@ return [
             'lock_path' => storage_path('framework/cache/data'),
         ],
     ],
-    'prefix' => env('CACHE_PREFIX', 'ictpms_cache_'),
+    'prefix' => env('CACHE_PREFIX', 'pms_cache_'),
 ];

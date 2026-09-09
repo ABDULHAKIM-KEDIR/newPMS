@@ -65,7 +65,7 @@
     <div class="form-grid">
       <div class="form-field" style="grid-column:1 / -1;">
         <label for="project_name">Project Name <span style="color:var(--danger);">*</span></label>
-        <input type="text" id="project_name" name="project_name" value="{{ old('project_name') }}" required placeholder="e.g. E-Commerce Website">
+        <input type="text" id="project_name" name="project_name" value="{{ old('project_name') }}" data-required placeholder="e.g. E-Commerce Website">
       </div>
 
       <div class="form-field" style="grid-column:1 / -1;">
@@ -75,15 +75,16 @@
 
       <div class="form-field">
         <label for="client">Client / Organization</label>
-        <input type="text" id="client" name="client" value="{{ old('client') }}" placeholder="e.g. Jimma University">
+        <input type="text" id="client" name="client" value="{{ old('client') }}" placeholder="e.g. Acme Corp">
       </div>
 
       <div class="form-field">
         <label for="project_type">Project Type <span style="color:var(--danger);">*</span></label>
-        <select id="project_type" name="project_type">
+        <select id="project_type" name="project_type_id" data-required>
           <option value="">Select Project Type</option>
-          @foreach ($types as $t)
-            <option value="{{ $t }}" {{ old('project_type') === $t ? 'selected' : '' }}>{{ $t }}</option>
+          @foreach ($projectTypes as $type)
+            <option value="{{ $type->project_type_id }}" {{ (string) old('project_type_id') === (string) $type->project_type_id ? 'selected' : '' }} data-office="{{ $type->office_id ?? '' }}">
+              {{ $type->name }}@if ($type->office_id) · {{ optional($type->office)->office_name }}@endif</option>
           @endforeach
         </select>
       </div>
@@ -126,11 +127,41 @@
         <label for="allocated_amount">Allocated Budget (ETB)</label>
         <input type="number" step="0.01" min="0" id="allocated_amount" name="allocated_amount" value="{{ old('allocated_amount') }}" placeholder="e.g. 750,000 ETB">
       </div>
+
+      <div class="form-field">
+        <label for="primary_office_id">Primary Office <span style="color:var(--accent, #2563eb);">*</span></label>
+        <select id="primary_office_id" name="primary_office_id" data-required>
+          @foreach ($offices as $office)
+            <option value="{{ $office->office_id }}" {{ (string) old('primary_office_id') === (string) $office->office_id ? 'selected' : '' }}>
+              {{ $office->office_name }}</option>
+          @endforeach
+        </select>
+      </div>
+
+      <div class="form-field">
+        <label>Participating Offices
+          <span style="font-weight:400; color:var(--ink-faint);">(cross-office collaboration)</span>
+        </label>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-2">
+          @foreach ($offices as $office)
+            <label class="flex items-center gap-3 p-3 rounded-xl bg-slate-50 hover:bg-blue-50/50 border border-slate-200/80 hover:border-blue-300 transition-all cursor-pointer group">
+              <input type="checkbox"
+                     name="participating_offices[]"
+                     value="{{ $office->office_id }}"
+                     {{ in_array((string) $office->office_id, old('participating_offices', [])) ? 'checked' : '' }}
+                     class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500 shrink-0 transition-colors cursor-pointer">
+              <span class="text-sm font-medium text-slate-700 group-hover:text-slate-900 select-none">
+                {{ $office->office_name }}
+              </span>
+            </label>
+          @endforeach
+        </div>
+      </div>
     </div>
 
     <div class="wizard-actions">
       <div></div>
-      <button type="button" class="btn btn-accent" onclick="validateStep1AndNext()">Continue to Teams →</button>
+      <button type="button" id="btn-step-1-next" class="btn btn-accent" onclick="validateStep1AndNext()">Continue to Teams →</button>
     </div>
   </div>
 
@@ -144,7 +175,7 @@
 
     <div class="teams-selection-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:16px; margin-bottom:20px;">
       @foreach ($teams as $team)
-        <label class="team-select-card" id="team-card-{{ $team->team_id }}" style="display:flex; align-items:flex-start; gap:14px; padding:16px; border:1.5px solid var(--line); border-radius:10px; cursor:pointer; transition:all 0.15s ease; background:var(--bg-card);">
+        <label class="team-select-card" id="team-card-{{ $team->team_id }}" data-office="{{ $team->office_id }}" style="display:flex; align-items:flex-start; gap:14px; padding:16px; border:1.5px solid var(--line); border-radius:10px; cursor:pointer; transition:all 0.15s ease; background:var(--bg-card);">
           <input
             type="checkbox"
             name="teams[]"
@@ -171,6 +202,10 @@
       @endforeach
     </div>
 
+    <p id="teams-empty-message" style="display:none; color:var(--ink-muted); font-size:13px; margin-bottom:16px;">
+      No teams available yet. Choose a primary office and/or participating offices in Step 1 to see the teams you can assign.
+    </p>
+
     <div class="wizard-actions">
       <button type="button" class="btn btn-ghost" onclick="goToStep(1)">← Back to Info</button>
       <button type="button" class="btn btn-accent" onclick="validateStep2AndNext()">Continue to Tasks →</button>
@@ -182,7 +217,7 @@
     <div style="border-bottom:1px solid var(--line); padding-bottom:14px; margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;">
       <div>
         <h2 style="font-size:17px; font-weight:700; margin:0;">Step 3 — Create Tasks by Team</h2>
-        </div>
+      </div>
     </div>
 
     <!-- Dynamic container for task creation sections per selected team -->
@@ -260,6 +295,30 @@
   .wizard-actions { display:flex; justify-content:space-between; align-items:center; margin-top:24px; padding-top:16px; border-top:1px solid var(--line); }
   .team-task-card { background:var(--bg-subtle); border:1px solid var(--line); border-radius:8px; padding:16px; margin-bottom:16px; }
   .task-row-item { display:grid; grid-template-columns:2fr 1.3fr 1fr 1fr 1fr 1fr auto; gap:8px; align-items:center; background:var(--bg-card); border:1px solid var(--line); border-radius:6px; padding:10px 12px; margin-bottom:8px; }
+  .task-row-item input:not([type="hidden"]),
+  .task-row-item select {
+    width:100%;
+    border:1px solid var(--line);
+    border-radius:8px;
+    padding:9px 12px;
+    font-size:13.3px;
+    font-family:inherit;
+    background:var(--surface);
+    color:var(--ink);
+    box-sizing:border-box;
+    transition:border-color .15s ease, box-shadow .15s ease;
+  }
+  .task-row-item input:focus,
+  .task-row-item select:focus {
+    outline:none;
+    border-color:var(--primary);
+    box-shadow:0 0 0 3px var(--primary-soft);
+  }
+  .task-row-item .task-field-label { display:block; font-size:11px; font-weight:600; color:var(--ink-muted); margin-bottom:4px; }
+  .task-row-item .btn-remove-task { background:var(--surface); border:1px solid var(--line); border-radius:8px; width:34px; height:36px; display:inline-flex; align-items:center; justify-content:center; color:var(--danger); font-size:14px; cursor:pointer; transition:background .15s ease, border-color .15s ease; }
+  .task-row-item .btn-remove-task:hover { background:var(--danger-soft); border-color:var(--danger); }
+  .team-task-card .btn-add-task { background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:6px 14px; font-size:12.5px; font-weight:600; color:var(--ink-soft); cursor:pointer; transition:background .15s ease, border-color .15s ease; }
+  .team-task-card .btn-add-task:hover { background:var(--primary-soft); border-color:var(--primary); color:var(--primary); }
   @media (max-width: 768px) {
     .wizard-stepper { flex-direction:column; gap:12px; align-items:flex-start; }
     .wizard-line { display:none; }
@@ -268,6 +327,7 @@
 </style>
 
 <script>
+  document.addEventListener('DOMContentLoaded', function () {
   window.__TEAMS_DATA__ = {!! json_encode($teamsData) !!};
 
   let currentStep = 1;
@@ -281,7 +341,7 @@
     const formData = new FormData(form);
     formData.set('step', step);
     if (savedProjectId) formData.set('project_id', savedProjectId);
-    const response = await fetch('{{ route('projects.wizard.save') }}', {
+    const response = await fetch('{!! route('projects.wizard.save') !!}', {
       method: 'POST', body: formData,
       headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
     });
@@ -364,13 +424,46 @@
   }
 
   function validateStep1() {
-    const name = document.getElementById('project_name').value.trim();
-    if (!name) { showInlineErrors({ project_name: ['Project Name is required.'] }); return false; }
-    return true;
+    clearInlineErrors();
+    let valid = true;
+
+    const fields = [
+      { id: 'project_name', label: 'Project Name' },
+      { id: 'project_type', label: 'Project Type' },
+      { id: 'priority', label: 'Priority' },
+      { id: 'primary_office_id', label: 'Primary Office' },
+    ];
+
+    fields.forEach(function (field) {
+      const input = document.getElementById(field.id);
+      if (!input) return;
+      const value = (input.value || '').trim();
+      const wrapper = input.closest('.form-field');
+      const existingError = wrapper?.querySelector('.field-error');
+
+      if (!value) {
+        valid = false;
+        input.classList.add('border-red-500');
+        if (wrapper && !existingError) {
+          const message = document.createElement('div');
+          message.className = 'field-error';
+          message.style.cssText = 'color:#dc2626; font-size:12px; margin-top:4px; font-weight:600;';
+          message.textContent = field.label + ' is required.';
+          wrapper.appendChild(message);
+        }
+      } else {
+        input.classList.remove('border-red-500');
+        existingError?.remove();
+      }
+    });
+
+    return valid;
   }
 
   function validateStep1AndNext() {
-    saveAndGoToStep(2);
+    if (validateStep1()) {
+      goToStep(2);
+    }
   }
 
   function validateStep2() {
@@ -425,7 +518,7 @@
             <span style="font-weight:700; font-size:15px; color:var(--ink);">${team.name}</span>
             <span style="font-size:12px; color:var(--ink-soft); margin-left:8px;">(Lead: ${team.leader_name})</span>
           </div>
-          <button type="button" class="btn btn-ghost" style="padding:4px 10px; font-size:12px;" onclick="addTaskRow(${team.id})">+ Add Task</button>
+          <button type="button" class="btn-add-task" onclick="addTaskRow(${team.id})">+ Add Task</button>
         </div>
         <div id="task-rows-team-${team.id}"></div>
       `;
@@ -484,15 +577,15 @@
         <input type="number" step="0.01" min="0" name="tasks[${idx}][budget]" value="${prefill.budget || ''}" placeholder="e.g. 25,000 ETB" style="width:100%;">
       </div>
       <div>
-        <label style="font-size:11px; color:var(--ink-muted);">Start date</label>
-        <input type="date" name="tasks[${idx}][start_date]" value="${prefill.start_date || ''}" onchange="validateTaskDates(this)" style="width:100%;">
+        <label class="task-field-label">Start date</label>
+        <input type="date" name="tasks[${idx}][start_date]" value="${prefill.start_date || ''}" onchange="validateTaskDates(this)">
       </div>
       <div>
-        <label style="font-size:11px; color:var(--ink-muted);">End date</label>
-        <input type="date" name="tasks[${idx}][end_date]" value="${prefill.end_date || ''}" onchange="validateTaskDates(this)" style="width:100%;">
+        <label class="task-field-label">End date</label>
+        <input type="date" name="tasks[${idx}][end_date]" value="${prefill.end_date || ''}" onchange="validateTaskDates(this)">
       </div>
       <div>
-        <button type="button" class="btn btn-ghost" style="padding:4px 8px; color:var(--danger);" onclick="removeTaskRow(this)">✕</button>
+        <button type="button" class="btn-remove-task" title="Remove task" aria-label="Remove task" onclick="removeTaskRow(this)">✕</button>
       </div>
     `;
 
@@ -554,7 +647,7 @@
 
       if (name && teamTasksMap[teamId]) {
         validTasksCount++;
-        teamTasksMap[teamId].tasks.push({ name, assignee: assigneeName, priority: pri, due, budget: bgt });
+        teamTasksMap[teamId].tasks.push({ name, assignee: assigneeName, priority: pri, start: row.querySelector('[name*="[start_date]"]')?.value, due, budget: bgt });
       }
     });
 
@@ -606,5 +699,127 @@
   document.querySelectorAll('.team-checkbox').forEach(cb => {
     toggleTeamSelection(cb.value);
   });
+
+  document.getElementById('btn-step-1-next')?.addEventListener('click', function (e) {
+    e.preventDefault();
+    if (validateStep1()) {
+      goToStep(2);
+    }
+  });
+
+  /*
+   * Office-scoped project types: when the Primary Office changes, the
+   * Filtering happens client-side over data-office attributes rendered
+   * server-side; the selection resets when the current type is no longer
+   * valid for the chosen office.
+   */
+  (function () {
+    const officeSelect = document.getElementById('primary_office_id');
+    const typeSelect = document.getElementById('project_type');
+    if (!officeSelect || !typeSelect) return;
+
+    const typeLabelFor = {
+      @foreach ($projectTypes as $type)
+      {{ $type->project_type_id }}: {!! json_encode($type->name.($type->office_id ? ' · '.optional($type->office)->office_name : '')) !!},
+      @endforeach
+    };
+
+    function filterTypes() {
+      const officeId = officeSelect.value;
+      let selectionValid = false;
+
+      typeSelect.querySelectorAll('option').forEach(function (option) {
+        if (!option.value) return; // placeholder
+
+        const optionOffice = option.getAttribute('data-office') || '';
+        const visible = !officeId || !optionOffice || optionOffice === officeId;
+        option.hidden = !visible;
+        option.disabled = !visible;
+
+        if (visible) {
+          option.textContent = typeLabelFor[option.value] || option.textContent;
+        }
+
+        if (option.selected && visible) selectionValid = true;
+      });
+
+      if (!selectionValid) typeSelect.value = '';
+    }
+
+    officeSelect.addEventListener('change', filterTypes);
+
+    // Apply once on load (e.g. validation errors re-rendering the form).
+    filterTypes();
+  })();
+
+<<<<<<< HEAD
+  /*
+   * Office-restricted team selection: teams from unrelated offices are
+   * hidden. Allowed offices = primary office + participating offices.
+   * (The backend enforces the same rule server-side.)
+   */
+  (function () {
+    const officeSelect = document.getElementById('primary_office_id');
+    if (!officeSelect) return;
+
+    function allowedOffices() {
+      const ids = new Set();
+      if (officeSelect.value) ids.add(officeSelect.value);
+      document.querySelectorAll('input[name="participating_offices[]"]:checked').forEach(function (cb) {
+        ids.add(cb.value);
+      });
+      return ids;
+    }
+
+    function filterTeams() {
+      const allowed = allowedOffices();
+      const noOffices = allowed.size === 0;
+      let anyVisible = false;
+
+      document.querySelectorAll('.team-select-card').forEach(function (card) {
+        const teamOffice = card.getAttribute('data-office') || '';
+        const visible = noOffices || !teamOffice || allowed.has(teamOffice);
+        card.style.display = visible ? '' : 'none';
+        if (visible) anyVisible = true;
+
+        if (!visible) {
+          const cb = card.querySelector('.team-checkbox');
+          if (cb && cb.checked) {
+            cb.checked = false;
+            toggleTeamSelection(cb.value);
+          }
+        }
+      });
+
+      const emptyMsg = document.getElementById('teams-empty-message');
+      if (emptyMsg) emptyMsg.style.display = anyVisible ? 'none' : '';
+    }
+
+    officeSelect.addEventListener('change', filterTeams);
+    document.querySelectorAll('input[name="participating_offices[]"]').forEach(function (cb) {
+      cb.addEventListener('change', filterTeams);
+    });
+
+    filterTeams();
+  })();
+=======
+  // Re-expose wizard functions globally so inline onclick handlers keep working.
+  Object.assign(window, {
+    goToStep,
+    validateStep1,
+    validateStep1AndNext,
+    validateStep2,
+    validateStep2AndNext,
+    validateTaskDates,
+    toggleTeamSelection,
+    addTaskRow,
+    removeTaskRow,
+    buildReviewAndNext,
+    buildReviewSummary,
+    finalizeWizard,
+    editWizardStep,
+  });
+  });
+>>>>>>> 3a73bc0050cf8f8dfb5c739e44327f427cf2478f
 </script>
 @endsection

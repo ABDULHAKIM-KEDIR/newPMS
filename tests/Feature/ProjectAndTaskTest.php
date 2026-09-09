@@ -23,7 +23,7 @@ class ProjectAndTaskTest extends TestCase
 
         $project = Project::first();
         $this->assertNotNull($project);
-        $this->assertEquals('Jimma University PMS', $project->project_name);
+        $this->assertEquals('Sample PMS', $project->project_name);
         $this->assertEquals('active', $project->status);
 
         $task = Task::first();
@@ -36,12 +36,12 @@ class ProjectAndTaskTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $director = User::where('email', 'director@ju.edu.et')->first();
+        $director = User::where('email', 'director@example.com')->first();
         $team = Team::first();
 
         $response = $this->actingAs($director)->post(route('projects.store'), [
-            'project_name' => 'New ICT Portal',
-            'description' => 'A new portal for university staff',
+            'project_name' => 'New Client Portal',
+            'description' => 'A new portal for staff',
             'project_type' => 'Software',
             'team_id' => $team->team_id,
             'start_date' => now()->toDateString(),
@@ -49,12 +49,12 @@ class ProjectAndTaskTest extends TestCase
             'allocated_amount' => 200000,
         ]);
 
-        $project = Project::where('project_name', 'New ICT Portal')->first();
+        $project = Project::where('project_name', 'New Client Portal')->first();
         $this->assertNotNull($project);
         $response->assertRedirect(route('projects.show', $project));
 
         $updateResponse = $this->actingAs($director)->put(route('projects.update', $project), [
-            'project_name' => 'New ICT Portal Updated',
+            'project_name' => 'New Client Portal Updated',
             'description' => 'Updated portal description',
             'project_type' => 'Software',
             'team_id' => $team->team_id,
@@ -65,7 +65,7 @@ class ProjectAndTaskTest extends TestCase
         $updateResponse->assertRedirect(route('projects.show', $project));
         $this->assertDatabaseHas('projects', [
             'project_id' => $project->project_id,
-            'project_name' => 'New ICT Portal Updated',
+            'project_name' => 'New Client Portal Updated',
             'status' => 'active',
         ]);
     }
@@ -74,7 +74,7 @@ class ProjectAndTaskTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $director = User::where('email', 'director@ju.edu.et')->first();
+        $director = User::where('email', 'director@example.com')->first();
         $project = Project::first();
         $phase = Phase::where('project_id', $project->project_id)->first();
 
@@ -115,7 +115,7 @@ class ProjectAndTaskTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $director = User::where('email', 'director@ju.edu.et')->first();
+        $director = User::where('email', 'director@example.com')->first();
         $task = Task::first();
         $this->assertNotNull($task);
 
@@ -152,7 +152,7 @@ class ProjectAndTaskTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $director = User::where('email', 'director@ju.edu.et')->first();
+        $director = User::where('email', 'director@example.com')->first();
         $project = Project::first();
         $phase = Phase::where('project_id', $project->project_id)->first();
 
@@ -179,7 +179,7 @@ class ProjectAndTaskTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $director = User::where('email', 'director@ju.edu.et')->first();
+        $director = User::where('email', 'director@example.com')->first();
         $team = Team::first();
 
         // 1. Create project
@@ -216,7 +216,7 @@ class ProjectAndTaskTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $director = User::where('email', 'director@ju.edu.et')->first();
+        $director = User::where('email', 'director@example.com')->first();
         $project = Project::first();
         $phase = $project->phases()->first();
 
@@ -244,7 +244,7 @@ class ProjectAndTaskTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $director = User::where('email', 'director@ju.edu.et')->first();
+        $director = User::where('email', 'director@example.com')->first();
         $project = Project::first();
         $phases = $project->phases()->get();
         $phase1 = $phases[0];
@@ -264,7 +264,7 @@ class ProjectAndTaskTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $director = User::where('email', 'director@ju.edu.et')->first();
+        $director = User::where('email', 'director@example.com')->first();
         $project = Project::first();
         $team = $project->team;
         $phase = $project->phases()->first();
@@ -304,7 +304,7 @@ class ProjectAndTaskTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $director = User::where('email', 'director@ju.edu.et')->first();
+        $director = User::where('email', 'director@example.com')->first();
         $task = Task::first();
 
         $response = $this->actingAs($director)->postJson(route('tasks.comments', $task), [
@@ -325,7 +325,7 @@ class ProjectAndTaskTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $director = User::where('email', 'director@ju.edu.et')->first();
+        $director = User::where('email', 'director@example.com')->first();
         $task = Task::first();
 
         $response = $this->actingAs($director)->putJson(route('tasks.update', $task), [
@@ -351,16 +351,16 @@ class ProjectAndTaskTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $director = User::where('email', 'director@ju.edu.et')->first();
-        $abebe = User::where('email', 'abebe@ju.edu.et')->first();
-        $chaltu = User::where('email', 'chaltu@ju.edu.et')->first();
-        $caala = User::where('email', 'caala@ju.edu.et')->first();
-        $john = User::where('email', 'john@ju.edu.et')->first();
+        $director = User::where('email', 'director@example.com')->first();
+        $abebe = User::where('email', 'abebe@example.com')->first();
+        $chaltu = User::where('email', 'chaltu@example.com')->first();
+        $caala = User::where('email', 'caala@example.com')->first();
+        $john = User::where('email', 'john@example.com')->first();
         $team = Team::where('team_name', 'Software Engineering')->first();
 
         $response = $this->actingAs($director)->post(route('projects.store'), [
             'project_name' => 'Enterprise Resource Planning System',
-            'description' => 'Comprehensive university ERP system',
+            'description' => 'Comprehensive company ERP system',
             'project_type' => 'Software',
             'team_id' => $team->team_id,
             'project_manager_id' => $abebe->user_id,
@@ -406,8 +406,8 @@ class ProjectAndTaskTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $abebe = User::where('email', 'abebe@ju.edu.et')->first();
-        $project = Project::where('project_name', 'Jimma University PMS')->first();
+        $abebe = User::where('email', 'abebe@example.com')->first();
+        $project = Project::where('project_name', 'Sample PMS')->first();
 
         $this->assertTrue($project->isManagedBy($abebe));
 
@@ -430,8 +430,8 @@ class ProjectAndTaskTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $director = User::where('email', 'director@ju.edu.et')->first();
-        $project = Project::where('project_name', 'Jimma University PMS')->first();
+        $director = User::where('email', 'director@example.com')->first();
+        $project = Project::where('project_name', 'Sample PMS')->first();
 
         // 1. Add new member
         $addResponse = $this->actingAs($director)->post(route('projects.members.add', $project), [
@@ -463,7 +463,7 @@ class ProjectAndTaskTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $director = User::where('email', 'director@ju.edu.et')->first();
+        $director = User::where('email', 'director@example.com')->first();
         $project = Project::first();
         $phase = $project->phases->first();
 
@@ -492,7 +492,7 @@ class ProjectAndTaskTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $director = User::where('email', 'director@ju.edu.et')->first();
+        $director = User::where('email', 'director@example.com')->first();
         $team = Team::first();
 
         // Create project typing new PM name "Hana Girma"
@@ -518,7 +518,7 @@ class ProjectAndTaskTest extends TestCase
     {
         $this->seed(DatabaseSeeder::class);
 
-        $director = User::where('email', 'director@ju.edu.et')->first();
+        $director = User::where('email', 'director@example.com')->first();
         $task = Task::first();
 
         $response = $this->actingAs($director)->postJson(route('tasks.assign', $task), [

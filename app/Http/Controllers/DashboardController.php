@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\AuditLog;
 use App\Models\ChangeRequest;
+use App\Models\Office;
 use App\Models\Project;
 use App\Models\ProjectBudget;
 use App\Models\Task;
@@ -22,10 +23,36 @@ class DashboardController extends Controller
         $budgetQuery = ProjectBudget::query();
         $taskQuery = Task::query();
 
+        /*
+         * Participation-aware scoping. Director/Admins see organization-wide
+         * stats. Everyone else sees only projects they participate in — as
+         * PM of record, a member of an assigned team, or a direct project
+         * member — never office-mates' unrelated work.
+         */
+        $office = $user->office;
+
         if ($scoped) {
-            $projectQuery->whereIn('team_id', $teamIds);
-            $budgetQuery->whereHas('project', fn ($q) => $q->whereIn('team_id', $teamIds));
-            $taskQuery->whereHas('phase.project', fn ($q) => $q->whereIn('team_id', $teamIds));
+            $projectQuery->visibleTo($user);
+            $budgetQuery->whereHas('project', fn ($q) => $q->visibleTo($user));
+            $taskQuery->where(function ($q) use ($user) {
+                $q->where('assigned_to', $user->user_id)
+                    ->orWhereHas('phase.project', fn ($pq) => $pq->visibleTo($user))
+                    ->orWhereHas('project', fn ($pq) => $pq->visibleTo($user));
+            });
+        }
+
+        $officeStats = null;
+        if ($office) {
+            $officeBudget = $office->budgetSummary();
+            $officeStats = [
+                'name' => $office->office_name,
+                'teams' => $office->teams()->count(),
+                'users' => $office->users()->count(),
+                'projects' => $office->primaryProjects()->count(),
+                'active_projects' => $office->primaryProjects()->whereNotIn('status', ['closed', 'Closed'])->count(),
+                'completed_projects' => $office->primaryProjects()->whereIn('status', ['closed', 'Closed', 'Completed'])->count(),
+                'budget' => $officeBudget,
+            ];
         }
 
         $projects = (clone $projectQuery)->orderByDesc('project_id')->take(4)->get();
@@ -37,12 +64,12 @@ class DashboardController extends Controller
             'budget_allocated' => (float) (clone $budgetQuery)->sum('allocated_amount'),
             'budget_spent' => (float) (clone $budgetQuery)->sum('spent_amount'),
             'pending_change_requests' => $scoped
-                ? ChangeRequest::where('status', 'Pending')->whereHas('project', fn ($q) => $q->whereIn('team_id', $teamIds))->count()
+                ? ChangeRequest::where('status', 'Pending')->whereHas('project', fn ($q) => $q->visibleTo($user))->count()
                 : ChangeRequest::where('status', 'Pending')->count(),
         ];
 
         // The audit log isn't team-tagged in a way that's safe to filter
-        // precisely, and it's already a directorate-wide transparency page —
+        // precisely, and it's already a organization-wide transparency page —
         // show the same recent activity to everyone rather than fake-scoping it.
         $activity = AuditLog::with('user')->orderByDesc('timestamp')->take(6)->get();
 
@@ -65,6 +92,10 @@ class DashboardController extends Controller
         $overdueTasksList = Task::whereNotNull('end_date')
             ->whereDate('end_date', '<', today())
             ->whereNotIn('status', ['Done', 'Completed'])
+            ->when($scoped, fn ($q) => $q->where(function ($w) use ($user) {
+                $w->whereHas('phase.project', fn ($pq) => $pq->visibleTo($user))
+                    ->orWhereHas('project', fn ($pq) => $pq->visibleTo($user));
+            }))
             ->with(['project', 'assignee'])
             ->take(4)
             ->get();
@@ -75,7 +106,7 @@ class DashboardController extends Controller
             ->get();
 
         return view('dashboard', compact(
-            'projects', 'stats', 'activity', 'teamLoad', 'scoped',
+            'projects', 'stats', 'activity', 'teamLoad', 'scoped', 'officeStats',
             'myAssignedTasks', 'overdueTasksList', 'blockedTasksList'
         ));
     }

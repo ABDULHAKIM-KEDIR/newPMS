@@ -1,6 +1,6 @@
-# ICT PMS — Jimma University
+# PMS — Project Management System
 
-A Laravel 11 implementation of the ICT Project Management System database design —
+A Laravel 11 implementation of the general-purpose Project Management System design —
 built to run locally with **Laravel Herd**.
 
 This ships as application code only (no `vendor/` or `node_modules/` — those are
@@ -27,9 +27,9 @@ installed by Composer/npm on your machine, as usual for any Laravel project).
 1. **Unzip this folder** into Herd's sites directory (Herd → Settings → Sites shows
    the path, typically `~/Herd`), e.g.:
    ```
-   ~/Herd/ict-pms
+   ~/Herd/pms
    ```
-   Herd auto-detects the folder and serves it at **`http://ict-pms.test`**.
+   Herd auto-detects the folder and serves it at **`http://pms.test`**.
 
 2. **Install PHP dependencies** (Herd bundles PHP + Composer — open a terminal in
    the project folder):
@@ -59,16 +59,16 @@ installed by Composer/npm on your machine, as usual for any Laravel project).
    ```
    (or `npm run dev` while you're actively editing styles)
 
-6. Open **`http://ict-pms.test`** — Herd starts serving automatically once the site
+6. Open **`http://pms.test`** — Herd starts serving automatically once the site
    is detected; no need to run `php artisan serve`. You'll land on `/login` — sign
-   in with `admin@ju.edu.et` / `ChangeMe123!` (the one seeded account — see
+   in with `admin@example.com` / `ChangeMe123!` (the one seeded account — see
    "Notes on this app" below for what to do with it).
 
 ### Using MySQL instead of SQLite
 Herd includes a one-click MySQL service if you'd rather use that. In `.env`,
 comment out the `DB_CONNECTION=sqlite` line and uncomment the MySQL block below it,
-then create the `ict_pms` database (Herd's "Databases" tab, or `mysql -u root -e
-"create database ict_pms"`) before running `php artisan migrate --seed`.
+then create the `project_pms` database (Herd's "Databases" tab, or `mysql -u root -e
+"create database project_pms"`) before running `php artisan migrate --seed`.
 
 ## Notes on this app
 
@@ -80,14 +80,14 @@ then create the `ict_pms` database (Herd's "Databases" tab, or `mysql -u root -e
 
 - **The one account that exists after a fresh install:**
   ```
-  admin@ju.edu.et
+  admin@example.com
   ChangeMe123!
   ```
   This is a **System Administrator** — by design, that role can manage users
   and roles but doesn't have project/team/budget permissions (see the RBAC
   breakdown below). Its first real job is to create the actual people who'll
   use the system: go to **Users → + New User**, create someone as an
-  **ICT Director** (or promote a Team Leader later), then let that account
+  **Administrator** (or promote a Team Lead later), then let that account
   create the first teams and projects. Change this password after logging in
   for the first time — there's no in-app "change my own password" screen yet,
   so for now that means editing the user's password hash directly or adding
@@ -103,18 +103,18 @@ then create the `ict_pms` database (Herd's "Databases" tab, or `mysql -u root -e
   list and each role's starting grant live in one place, `app/Support/Permissions.php`.
 
   Default grants:
-  - **ICT Director** — full project/task/team/budget/change-request authority,
+  - **Administrator** — full project/task/team/budget/change-request authority,
     plus viewing the audit log. Not user or role management.
-  - **Team Leader** — can create and edit projects, create/assign tasks, manage
+  - **Team Lead** — can create and edit projects, create/assign tasks, manage
     team membership. Actual "is this your project" scoping still comes from
     being set as a specific team's `team_leader_id`, not the role label alone.
   - **Team Member** — read access everywhere, can update the status of tasks
     assigned to them. Can't create or edit anything organizational.
   - **System Administrator** — manages users, roles, permissions, the audit
     log, and system settings. Deliberately *not* given project/budget
-    authority by default — that's an ICT Director's job. A System
+    authority by default — that's an Administrator's job. A System
     Administrator can grant themselves more from Roles & Access if a
-    directorate wants to run that way, but it's not the default.
+    organization wants to run that way, but it's not the default.
 
   Every sensitive route carries `->middleware('can:...')` **and** a matching
   controller-level check — hitting a restricted URL directly returns a
@@ -128,7 +128,7 @@ then create the `ict_pms` database (Herd's "Databases" tab, or `mysql -u root -e
   session the moment their status flips.
 
 - **System Settings** (`/admin/settings`, System Administrator only) —
-  directorate name, default currency, session-timeout notice, support email,
+  organization name, default currency, session-timeout notice, support email,
   stored in a `system_settings` key/value table.
 
 - **The audit log captures more than before**: IP address on every entry, plus
@@ -143,14 +143,14 @@ then create the `ict_pms` database (Herd's "Databases" tab, or `mysql -u root -e
   the slide-over panel. Status changes, comments, and reassignment there are
   all real, permission-checked writes.
 
-- **Dashboard is scoped by role** — an ICT Director/System Administrator sees
-  directorate-wide numbers; anyone else sees only their own team(s).
+- **Dashboard is scoped by role** — an Administrator/System Administrator sees
+  organization-wide numbers; anyone else sees only their own team(s).
 
 
 ## Folder structure
 
 ```
-ict-pms/
+pms/
 ├── app/
 │   ├── Http/Controllers/     Dashboard, Project, Task, Team, Budget, Role, AuditLog, Notification
 │   ├── Models/                20 Eloquent models mapped to the 22 tables

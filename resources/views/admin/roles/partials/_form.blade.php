@@ -1,0 +1,497 @@
+@php /** @var \Illuminate\Support\Collection $groupedPermissions */ @endphp
+@php /** @var \Illuminate\Support\Collection $allowedParents */ @endphp
+@php /** @var \App\Models\Role|null $role */ @endphp
+@php /** @var array<int, int> $inheritedPermissionIds */ @endphp
+@php $inheritedPermissionIds ??= []; @endphp
+@php $rolesPermissions = app(App\Http\Controllers\RoleController::class)->rolePermissionsMap(); @endphp
+
+<div class="role-form-grid">
+
+    <div class="card role-form-card">
+
+        <h2 class="section-title">{{ isset($role) ? 'Role details' : 'New role' }}</h2>
+
+        <div class="form-field">
+            <label class="form-label" for="role_name">
+                Role name
+            </label>
+
+            <input
+                type="text"
+                id="role_name"
+                name="role_name"
+                value="{{ old('role_name', $role->role_name ?? '') }}"
+                required
+                maxlength="100"
+                class="form-input"
+                @if ($role?->is_system)
+                    readonly
+                @endif
+            >
+
+            @error('role_name')
+                <div class="form-error">{{ $message }}</div>
+            @enderror
+
+            @if ($role?->is_system)
+                <div class="form-hint">
+                    System role — the name cannot be changed.
+                </div>
+            @endif
+        </div>
+
+        <div class="form-field">
+            <label class="form-label" for="description">
+                Description
+            </label>
+
+            <textarea
+                id="description"
+                name="description"
+                rows="3"
+                maxlength="500"
+                class="form-input"
+            >{{ old('description', $role->description ?? '') }}</textarea>
+
+            @error('description')
+                <div class="form-error">{{ $message }}</div>
+            @enderror
+        </div>
+
+        <div class="form-field">
+            <label class="form-label" for="scope">
+                Scope
+            </label>
+
+            @php $protectedRole = $role !== null && \App\Support\Permissions::isProtectedRoleName($role->role_name); @endphp
+
+            <select
+                id="scope"
+                name="scope"
+                class="form-input"
+                @if ($protectedRole)
+                    disabled
+                @endif
+            >
+                @foreach (\App\Models\Role::SCOPES as $scopeOption)
+                    <option
+                        value="{{ $scopeOption }}"
+                        @selected(old('scope', $role->scope ?? 'organization') === $scopeOption)
+                    >
+                        {{ ucfirst($scopeOption) }}
+                        @if ($scopeOption === 'organization')
+                            — applies system-wide
+                        @elseif ($scopeOption === 'project')
+                            — granted per project
+                        @else
+                            — granted per team
+                        @endif
+                    </option>
+                @endforeach
+            </select>
+
+            @if ($protectedRole)
+                <input type="hidden" name="scope" value="{{ $role->scope }}">
+                <div class="form-hint">
+                    Protected system role — the scope cannot be changed.
+                </div>
+            @elseif ($role?->is_system)
+                <div class="form-hint">
+                    Changing the scope re-applies this role's permissions to
+                    all of its holders in the new scope.
+                </div>
+            @endif
+
+            @error('scope')
+                <div class="form-error">{{ $message }}</div>
+            @enderror
+        </div>
+
+        <div class="form-field">
+            <label class="form-label" for="parent_role_id">
+                Parent role
+            </label>
+
+            <select
+                id="parent_role_id"
+                name="parent_role_id"
+                class="form-input"
+            >
+                <option value="">
+                    — No parent (standalone) —
+                </option>
+
+                @foreach ($allowedParents as $candidate)
+                    <option
+                        value="{{ $candidate->role_id }}"
+                        @selected(old('parent_role_id', $role->parent_role_id ?? '') == $candidate->role_id)
+                    >
+                        {{ $candidate->role_name }}
+                        ({{ ucfirst($candidate->scope) }})
+                    </option>
+                @endforeach
+            </select>
+
+            <div class="form-hint">
+                The role inherits all permissions of its parent. Roles that
+                would create an inheritance loop are hidden automatically.
+            </div>
+
+            @error('parent_role_id')
+                <div class="form-error">{{ $message }}</div>
+            @enderror
+        </div>
+
+    </div>
+
+    <div class="card role-form-card">
+
+        <h2 class="section-title">Permissions</h2>
+
+        <div class="form-hint" style="margin-bottom:14px;">
+            Directly granted permissions are checked. Permissions inherited
+            from the parent role are shown locked
+            (<span class="perm-inherited-badge">inherited</span>) and always
+            apply, even when unchecked.
+        </div>
+
+        @error('permissions.*')
+            <div class="form-error">{{ $message }}</div>
+        @enderror
+
+        @foreach ($groupedPermissions as $groupName => $groupPermissions)
+            <fieldset class="perm-group">
+
+                <legend class="perm-group-title">
+                    <span>{{ $groupName }}</span>
+
+                    <button
+                        type="button"
+                        class="link-small perm-group-toggle"
+                        data-group="{{ \Illuminate\Support\Str::slug($groupName) }}"
+                        style="background:none; border:none; cursor:pointer;"
+                    >
+                        Select all in group
+                    </button>
+                </legend>
+
+                <div class="perm-group-grid">
+                    @foreach ($groupPermissions as $permission)
+                        @php
+                            $directlyGranted = isset($role)
+                                && $role->permissions
+                                    ->contains('permission_id', $permission->permission_id);
+                            $isInherited = in_array($permission->permission_id, $inheritedPermissionIds, true);
+                        @endphp
+
+                        <label
+                            class="perm-check
+                                {{ $directlyGranted ? 'perm-checked' : '' }}
+                                {{ $isInherited ? 'perm-inherited' : '' }}"
+                        >
+                            <input
+                                type="checkbox"
+                                name="permissions[]"
+                                value="{{ $permission->permission_id }}"
+                                data-permission="{{ $permission->permission_id }}"
+                                @checked($directlyGranted || $isInherited || old('permissions', []) !== [] && in_array($permission->permission_id, old('permissions')))
+                                @disabled($isInherited)
+                            >
+
+                            <span>
+                                <span class="perm-slug">
+                                    {{ $permission->permission_name }}
+                                    @if ($isInherited)
+                                        <span class="perm-inherited-badge">inherited</span>
+                                    @endif
+                                </span>
+                                <span class="perm-desc">
+                                    {{ $permission->description }}
+                                </span>
+                            </span>
+                        </label>
+                    @endforeach
+                </div>
+
+            </fieldset>
+        @endforeach
+
+    </div>
+
+</div>
+
+@once
+<style>
+    .role-form-grid {
+        display: grid;
+        grid-template-columns: minmax(300px, 380px) 1fr;
+        gap: 20px;
+        align-items: start;
+    }
+
+    .role-form-card {
+        padding: 22px 24px;
+    }
+
+    @media (max-width: 1024px) {
+        .role-form-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .section-title {
+        font-size: 15px;
+        margin: 0 0 16px;
+    }
+
+    .form-field {
+        margin-bottom: 16px;
+    }
+
+    .form-label {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+        margin-bottom: 6px;
+    }
+
+    .form-input {
+        width: 100%;
+        border: 1px solid var(--line, #e2e8f0);
+        border-radius: 8px;
+        padding: 9px 12px;
+        font-size: 13px;
+        font-family: inherit;
+        background: var(--surface, #fff);
+        transition: border-color 0.15s, box-shadow 0.15s;
+    }
+
+    .form-input:focus {
+        outline: none;
+        border-color: var(--primary, #2563eb);
+        box-shadow: 0 0 0 3px var(--primary-soft, #eff6ff);
+    }
+
+    .form-input[readonly],
+    .form-input:disabled {
+        background: var(--muted-soft, #f1f5f9);
+        color: var(--muted, #64748b);
+        cursor: not-allowed;
+        border-style: dashed;
+    }
+
+    .form-error {
+        color: var(--danger, #dc2626);
+        font-size: 12px;
+        margin-top: 5px;
+    }
+
+    .form-hint {
+        color: var(--muted, #64748b);
+        font-size: 12px;
+        margin-top: 5px;
+    }
+
+    .perm-group {
+        border: 1px solid var(--line, #e2e8f0);
+        border-radius: 10px;
+        padding: 14px 16px 16px;
+        margin: 0 0 14px;
+        transition: border-color 0.18s ease;
+    }
+
+    .perm-group:hover {
+        border-color: var(--primary-muted, #bfdbfe);
+    }
+
+    .perm-group-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        font-size: 13px;
+        font-weight: 700;
+        padding: 0 4px;
+        margin-bottom: 10px;
+    }
+
+    .perm-group-title .link-small {
+        color: var(--primary, #2563eb);
+        font-size: 12px;
+        font-weight: 600;
+    }
+
+    .perm-group-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 8px;
+    }
+
+    .perm-check {
+        display: flex;
+        align-items: flex-start;
+        gap: 9px;
+        border: 1px solid var(--line, #e2e8f0);
+        border-radius: 8px;
+        padding: 9px 11px;
+        cursor: pointer;
+        user-select: none;
+        transition: border-color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+    }
+
+    .perm-check:hover {
+        border-color: var(--primary, #2563eb);
+        box-shadow: 0 1px 4px rgba(37, 99, 235, 0.12);
+    }
+
+    .perm-check.perm-checked,
+    .perm-check:has(input:checked) {
+        background: var(--primary-soft, #eff6ff);
+        border-color: var(--primary, #2563eb);
+    }
+
+    .perm-check input {
+        margin-top: 2px;
+        width: 15px;
+        height: 15px;
+        accent-color: var(--primary, #2563eb);
+        cursor: pointer;
+    }
+
+    .perm-slug {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+    }
+
+    .perm-desc {
+        display: block;
+        font-size: 11.5px;
+        color: var(--muted, #64748b);
+    }
+
+    .perm-inherited-badge {
+        display: inline-block;
+        font-size: 9.5px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        padding: 1px 6px;
+        border-radius: 10px;
+        background: var(--surface-alt, #eaf3fa);
+        color: var(--primary-dark, #004a87);
+        margin-left: 4px;
+        vertical-align: 1px;
+    }
+
+    .perm-check.perm-inherited {
+        background: var(--surface-alt, #eaf3fa);
+        border-style: dashed;
+        border-color: var(--line, #d7e3ec);
+        cursor: not-allowed;
+    }
+
+    .perm-check.perm-inherited .perm-slug {
+        color: var(--ink-soft, #5b6b78);
+    }
+
+    .perm-check.perm-inherited input {
+        cursor: not-allowed;
+    }
+</style>
+@endonce
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+
+    /* "Select all in group" toggles every checkbox in its fieldset. */
+    document.querySelectorAll('.perm-group-toggle').forEach(function (button) {
+
+        button.addEventListener('click', function () {
+            var fieldset = button.closest('.perm-group');
+            var checkboxes = fieldset.querySelectorAll('input[type="checkbox"]');
+            var allChecked = Array.from(checkboxes).every(function (cb) {
+                return cb.checked;
+            });
+
+            checkboxes.forEach(function (cb) {
+                cb.checked = !allChecked;
+            });
+
+            button.textContent = allChecked
+                ? 'Select all in group'
+                : 'Clear group';
+        });
+
+    });
+
+    /* Highlight the label while its checkbox is checked. */
+    document.querySelectorAll('.perm-check input').forEach(function (cb) {
+        cb.addEventListener('change', function () {
+            cb.closest('.perm-check').classList.toggle('perm-checked', cb.checked);
+        });
+    });
+
+    /* Live inheritance preview: when the parent role changes, recompute
+       the union of permissions across its whole ancestor chain and show
+       them as locked "inherited" checkboxes. */
+    var rolePermissions = @json($rolesPermissions);
+    var parentSelect = document.getElementById('parent_role_id');
+
+    function inheritedIdsFor(parentId) {
+        var ids = [];
+        var seen = {};
+        var current = parentId ? String(parentId) : null;
+        var depth = 0;
+
+        while (current && depth < 10 && !seen[current] && rolePermissions[current]) {
+            seen[current] = true;
+            rolePermissions[current].forEach(function (id) {
+                if (ids.indexOf(id) === -1) {
+                    ids.push(id);
+                }
+            });
+            current = (window.__ROLE_PARENTS__ || {})[current] || null;
+            depth++;
+        }
+
+        return ids;
+    }
+
+    if (parentSelect) {
+        window.__ROLE_PARENTS__ = @json($allowedParents->mapWithKeys(
+            fn ($r) => [$r->role_id => $r->parent_role_id]
+        )->all());
+
+        parentSelect.addEventListener('change', function () {
+            var inherited = inheritedIdsFor(parentSelect.value);
+
+            document.querySelectorAll('.perm-check input').forEach(function (cb) {
+                var isInherited = inherited.indexOf(Number(cb.value)) !== -1;
+                var label = cb.closest('.perm-check');
+                var slug = label.querySelector('.perm-slug');
+                var badge = slug.querySelector('.perm-inherited-badge');
+
+                cb.disabled = isInherited;
+
+                if (isInherited) {
+                    cb.checked = true;
+                    label.classList.add('perm-inherited');
+                    if (!badge) {
+                        badge = document.createElement('span');
+                        badge.className = 'perm-inherited-badge';
+                        badge.textContent = 'inherited';
+                        slug.appendChild(badge);
+                    }
+                } else {
+                    label.classList.remove('perm-inherited');
+                    if (badge) {
+                        badge.remove();
+                    }
+                }
+            });
+        });
+    }
+
+});
+</script>

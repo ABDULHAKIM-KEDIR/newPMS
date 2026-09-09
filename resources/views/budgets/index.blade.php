@@ -6,8 +6,8 @@
 <div x-data="{ editModal: false, selectedProject: null, allocated: 0, spent: 0 }">
   <div class="page-head">
     <div>
-      <h1>Directorate Budgets</h1>
-      <div class="page-sub">Financial allocation, expenditure tracking, and utilization across all ICT projects</div>
+      <h1>Organization Budgets</h1>
+      <div class="page-sub">Financial allocation, expenditure tracking, and utilization across all projects</div>
     </div>
   </div>
 
@@ -56,7 +56,6 @@
           @php
             $b = $p->budget;
             $util = $b ? $b->utilisationPercent() : 0;
-            $statusCls = ['active' => 'b-active', 'planning' => 'b-planning', 'risk' => 'b-risk', 'closed' => 'b-closed'][$p->status] ?? 'b-planning';
           @endphp
           <tr onclick="window.location='{{ route('projects.show', $p) }}'" style="cursor:pointer;">
             <td>

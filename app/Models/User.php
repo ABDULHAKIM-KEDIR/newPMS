@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use App\Services\RbacService;
 use Illuminate\Foundation\Auth\User as Authenticatable;
+use Illuminate\Support\Collection;
 
 class User extends Authenticatable
 {
@@ -10,7 +12,7 @@ class User extends Authenticatable
 
     public $timestamps = false;
 
-    protected $fillable = ['full_name', 'email', 'password_hash', 'phone', 'department', 'avatar', 'status'];
+    protected $fillable = ['full_name', 'email', 'password_hash', 'phone', 'department', 'avatar', 'status', 'role', 'office_id'];
 
     protected $hidden = ['password_hash'];
 
@@ -61,26 +63,70 @@ class User extends Authenticatable
     }
 
     /**
-     * True if the user carries the given directorate-wide role
-     * (e.g. 'ICT Director', 'System Administrator'). Roles are loaded
-     * eagerly where possible to avoid N+1 queries.
+     * True if the user carries the given role. When $project is provided,
+     * project/team-scoped role assignments for that project also count.
      */
     public function hasRole(string $roleName): bool
     {
         return $this->roles->contains('role_name', $roleName);
     }
 
-    /** Every permission this user's role(s) grant, as a flat set of slugs. */
+    /**
+     * Every permission this user's org roles grant, as a flat set of slugs.
+     * Delegates to the RBAC engine so inheritance is honoured.
+     */
     public function permissionSlugs()
     {
-        return $this->roles->flatMap(function ($role) {
-            return $role->relationLoaded('permissions') ? $role->permissions : $role->permissions()->get();
-        })->pluck('permission_name')->unique();
+        return app(RbacService::class)
+            ->effectivePermissions($this);
     }
 
-    public function hasPermission(string $slug): bool
+    /**
+     * Permission check. When a $project is passed, project-level grants
+     * (direct project roles, team assignments, team-scoped roles) are
+     * merged with organization grants; otherwise only organization-wide
+     * grants apply.
+     */
+    public function hasPermission(string $slug, ?Project $project = null): bool
     {
-        return $this->permissionSlugs()->contains($slug);
+        return app(RbacService::class)->can($this, $slug, $project);
+    }
+
+    public function office()
+    {
+        return $this->belongsTo(Office::class, 'office_id', 'office_id');
+    }
+
+    /**
+     * Offices whose projects this user may browse beyond their own office
+     * grants: their own office, plus any office their teams/projects already
+     * connect them to (cross-office participation is honoured via the RBAC
+     * engine's project-scoped sources, this is just a quick scoping aid).
+     */
+    public function officeIds(): Collection
+    {
+        $ids = collect();
+
+        if ($this->office_id) {
+            $ids->push((int) $this->office_id);
+        }
+
+        $viaTeams = Team::whereIn('team_id', $this->teamIds())
+            ->whereNotNull('office_id')->pluck('office_id');
+
+        return $ids->merge($viaTeams)->unique()->values();
+    }
+
+    /** True if the user heads this office. */
+    public function headsOffice(Office $office): bool
+    {
+        return (int) $office->head_user_id === (int) $this->user_id;
+    }
+
+    /** True if the user heads any office at all. */
+    public function headsAnyOffice(): bool
+    {
+        return Office::where('head_user_id', $this->user_id)->exists();
     }
 
     public function isActive(): bool
@@ -88,29 +134,50 @@ class User extends Authenticatable
         return $this->status === 'Active';
     }
 
+    /** True if this account is still an unassigned public registrant.
+     *  A user with any RBAC role attached is never a guest, even if the
+     *  column was not updated by older code paths. */
+    public function isGuest(): bool
+    {
+        return $this->role === 'guest'
+            && $this->roles()->exists() === false;
+    }
+
+    /** True if the registration has not been approved/rejected yet. */
+    public function isPending(): bool
+    {
+        return strtolower((string) $this->status) === 'pending';
+    }
+
     public function isDirectorOrAdmin(): bool
     {
-        return $this->hasRole('ICT Director') || $this->hasRole('System Administrator') || $this->hasRole('Admin') || $this->hasRole('Project Manager');
+        return $this->hasPermission('edit_projects');
     }
 
     public function isAdmin(): bool
     {
-        return $this->hasRole('Admin') || $this->hasRole('System Administrator');
+        return $this->hasPermission('manage_users') || $this->hasPermission('manage_system_settings');
     }
 
     public function isProjectManager(): bool
     {
-        return $this->hasRole('Project Manager') || $this->hasRole('ICT Director');
+        return $this->hasPermission('create_projects');
     }
 
     public function isTeamLead(): bool
     {
-        return $this->hasRole('Team Lead') || $this->hasRole('Team Leader');
+        return $this->hasPermission('assign_tasks') && ! $this->hasPermission('manage_users');
     }
 
     public function isTeamMember(): bool
     {
-        return $this->hasRole('Team Member');
+        return ! $this->isTeamLead() && ! $this->isAdmin() && $this->hasPermission('update_task_status');
+    }
+
+    /** Org-scoped roles only (ignores project/team-scoped assignments). */
+    public function organizationRoles()
+    {
+        return $this->roles->where('pivot.scope_type', null);
     }
 
     /** True if the user is allowed to spin up new projects — delegates to

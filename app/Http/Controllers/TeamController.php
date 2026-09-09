@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Project;
+use App\Models\Office;
 use App\Models\Role;
 use App\Models\Team;
 use App\Models\TeamMember;
@@ -17,7 +17,13 @@ class TeamController extends Controller
     {
         abort_unless(Auth::user()->can('view_projects'), 403);
 
-        $teams = Team::with(['leader', 'members', 'projects'])->get();
+        $authUser = Auth::user();
+        $canViewAllOffices = $authUser->isAdmin() || $authUser->isDirectorOrAdmin();
+        $myOfficeIds = $authUser->officeIds();
+
+        $teams = Team::with(['leader', 'members', 'projects', 'office'])
+            ->when(! $canViewAllOffices, fn ($q) => $q->whereIn('office_id', $myOfficeIds))
+            ->get();
 
         return view('teams.index', compact('teams'));
     }
@@ -25,14 +31,15 @@ class TeamController extends Controller
     public function create()
     {
         // Standing up a brand-new team is an org-structure change — reserved
-        // for whoever holds manage_team AND the ICT Director role specifically.
-        // A Team Leader has manage_team too, but only to run the team(s) they
+        // for whoever holds manage_team AND the Administrator role specifically.
+        // A Team Lead has manage_team too, but only to run the team(s) they
         // already lead, not to create new ones.
         abort_unless($this->canCreateTeams(), 403);
 
         $users = User::orderBy('full_name')->get();
+        $offices = Office::active()->orderBy('office_name')->get();
 
-        return view('teams.create', compact('users'));
+        return view('teams.create', compact('users', 'offices'));
     }
 
     public function store(Request $request)
@@ -43,15 +50,28 @@ class TeamController extends Controller
             'team_name' => ['required', 'string', 'max:100'],
             'team_leader_id' => ['nullable', 'exists:users,user_id'],
             'description' => ['nullable', 'string', 'max:1000'],
+            'office_id' => ['nullable', 'exists:offices,office_id'],
         ]);
 
         $team = Team::create($data);
+
+        // Server-side office restriction for the team leader.
+        if ($team->team_leader_id && $team->office_id) {
+            $leader = User::find($team->team_leader_id);
+            if ($leader && $leader->office_id && (int) $leader->office_id !== (int) $team->office_id) {
+                $team->delete();
+
+                return back()->withErrors([
+                    'team_leader_id' => "{$leader->full_name} belongs to an office that is not associated with this team.",
+                ])->withInput();
+            }
+        }
 
         if ($team->team_leader_id) {
             TeamMember::create(['team_id' => $team->team_id, 'user_id' => $team->team_leader_id, 'joined_date' => now()]);
         }
 
-        Activity::log('Created team', 'Team', $team->team_id, $team->team_name);
+        Activity::log('Created team', 'Team', $team->team_id, $team->team_name.($team->office_id ? ' → '.optional($team->office)->office_name : ''));
 
         return redirect()->route('teams.show', $team)->with('status', 'Team created.');
     }
@@ -79,12 +99,21 @@ class TeamController extends Controller
         }
 
         $memberIds = $team->members->pluck('user_id');
+        $teamOfficeId = $team->office_id ? (int) $team->office_id : null;
+
+        $officeScope = fn ($q) => $q->where(function ($q2) use ($teamOfficeId) {
+            // Users without an office keep the legacy behaviour; users with an
+            // office must belong to the team's office.
+            $q2->when($teamOfficeId, fn ($q3) => $q3->whereNull('office_id')->orWhere('office_id', $teamOfficeId));
+        });
+
         $availableUsers = $canManage
-            ? User::whereNotIn('user_id', $memberIds)->where('status', 'Active')->orderBy('full_name')->get()
+            ? User::whereNotIn('user_id', $memberIds)->where('status', 'Active')
+                ->when($teamOfficeId, $officeScope)->orderBy('full_name')->get()
             : collect();
 
         $leaderCandidates = $canManage
-            ? User::where('status', 'Active')->orderBy('full_name')->get()
+            ? User::where('status', 'Active')->when($teamOfficeId, $officeScope)->orderBy('full_name')->get()
             : collect();
 
         return view('teams.show', compact('team', 'canManage', 'availableUsers', 'leaderCandidates', 'allProjects', 'taskStats', 'teamTasks'));
@@ -100,6 +129,13 @@ class TeamController extends Controller
 
         if (! $resolvedUserId) {
             return back()->withErrors(['user_id' => 'Please provide a valid user name or select a member.']);
+        }
+
+        $added = User::find($resolvedUserId);
+        if ($added && ! $this->canAssignUserToTeam($team, $added)) {
+            return back()->withErrors([
+                'user_id' => "{$added->full_name} belongs to an office that is not associated with this team.",
+            ])->withInput();
         }
 
         if (! $team->members()->where('user_id', $resolvedUserId)->exists()) {
@@ -143,6 +179,12 @@ class TeamController extends Controller
         $oldLeader = optional($team->leader)->full_name ?? 'None';
         $newLeader = User::find($resolvedUserId);
 
+        if ($newLeader && ! $this->canAssignUserToTeam($team, $newLeader)) {
+            return back()->withErrors([
+                'team_leader_id' => "{$newLeader->full_name} belongs to an office that is not associated with this team.",
+            ])->withInput();
+        }
+
         // A leader must be on the team — add them if they aren't already.
         if (! $team->members()->where('user_id', $resolvedUserId)->exists()) {
             TeamMember::create(['team_id' => $team->team_id, 'user_id' => $resolvedUserId, 'joined_date' => now()]);
@@ -150,67 +192,20 @@ class TeamController extends Controller
 
         $team->update(['team_leader_id' => $resolvedUserId]);
 
-        Activity::log('Changed team leader', 'Team', $team->team_id, "{$oldLeader} → {$newLeader->full_name} ({$team->team_name})");
+        Activity::log('Changed Team Lead', 'Team', $team->team_id, "{$oldLeader} → {$newLeader->full_name} ({$team->team_name})");
         Activity::notify((int) $resolvedUserId, "You are now the leader of the {$team->team_name} team", 'general');
 
-        return back()->with('status', "Team leader changed to {$newLeader->full_name}.");
+        return back()->with('status', "Team Lead changed to {$newLeader->full_name}.");
     }
 
-    public function edit(Team $team)
+    /**
+     * Server-side office restriction for team membership: a user with an
+     * office must belong to the team's office.
+     */
+    private function canAssignUserToTeam(Team $team, User $candidate): bool
     {
-        $user = Auth::user();
-        abort_unless($this->canManageTeam($user, $team), 403);
-
-        $users = User::orderBy('full_name')->get();
-
-        return view('teams.edit', compact('team', 'users'));
-    }
-
-    public function update(Request $request, Team $team)
-    {
-        $user = Auth::user();
-        abort_unless($this->canManageTeam($user, $team), 403);
-
-        $data = $request->validate([
-            'team_name' => ['required', 'string', 'max:100'],
-            'team_leader_id' => ['nullable', 'exists:users,user_id'],
-            'description' => ['nullable', 'string', 'max:1000'],
-            'status' => ['nullable', 'in:Active,Inactive'],
-        ]);
-
-        $team->update([
-            'team_name' => $data['team_name'],
-            'team_leader_id' => $data['team_leader_id'] ?? null,
-            'description' => $data['description'] ?? null,
-            'status' => $data['status'] ?? $team->status,
-        ]);
-
-        // A leader must be a member of the team — add them if they aren't yet.
-        if ($team->team_leader_id && ! $team->members()->where('user_id', $team->team_leader_id)->exists()) {
-            TeamMember::create(['team_id' => $team->team_id, 'user_id' => $team->team_leader_id, 'joined_date' => now()]);
-        }
-
-        Activity::log('Updated team', 'Team', $team->team_id, $team->team_name);
-
-        return redirect()->route('teams.show', $team)->with('status', 'Team updated.');
-    }
-
-    public function destroy(Team $team)
-    {
-        $user = Auth::user();
-        abort_unless($this->canManageTeam($user, $team), 403);
-
-        $name = $team->team_name;
-
-        // Detach projects first — projects.team_id cascades on delete, and we
-        // don't want to destroy projects when their team is removed. Tasks
-        // referencing this team are nulled automatically at the DB level.
-        Project::where('team_id', $team->team_id)->update(['team_id' => null]);
-
-        Activity::log('Deleted team', 'Team', $team->team_id, $name);
-        $team->delete();
-
-        return redirect()->route('teams.index')->with('status', "\"{$name}\" was deleted.");
+        return empty($team->office_id) || empty($candidate->office_id)
+            || (int) $team->office_id === (int) $candidate->office_id;
     }
 
     private function resolveUserId($input, ?int $teamId = null): ?int
@@ -227,7 +222,7 @@ class TeamController extends Controller
         }
 
         $trimmed = trim((string) $input);
-        if ($trimmed === '' || $trimmed === '— Select Member —' || $trimmed === '— Select Team Leader —' || $trimmed === 'None') {
+        if ($trimmed === '' || $trimmed === '— Select Member —' || $trimmed === '— Select Team Lead —' || $trimmed === 'None') {
             return null;
         }
 
@@ -251,10 +246,10 @@ class TeamController extends Controller
             $slug = 'member.'.rand(100, 999);
         }
 
-        $email = $slug.'@ju.edu.et';
+        $email = $slug.'@example.com';
         $counter = 1;
         while (User::where('email', $email)->exists()) {
-            $email = $slug.$counter.'@ju.edu.et';
+            $email = $slug.$counter.'@example.com';
             $counter++;
         }
 

@@ -6,7 +6,7 @@
 <div class="page-head">
   <div>
     <h1>Projects</h1>
-    <div class="page-sub">All software, network-infrastructure and training engagements run by the directorate</div>
+    <div class="page-sub">All software, network-infrastructure and training engagements run across the organization</div>
   </div>
   @if (auth()->user()->canCreateProjects())
     <a href="{{ route('projects.create') }}" class="btn btn-accent">+ New Project</a>
@@ -14,10 +14,27 @@
 </div>
 
 <div class="filter-row">
-  <a href="{{ route('projects.index') }}" class="pill {{ !request('type') ? 'active' : '' }}">All</a>
-  <a href="{{ route('projects.index', ['type' => 'Software']) }}" class="pill {{ request('type')==='Software' ? 'active' : '' }}">Software</a>
-  <a href="{{ route('projects.index', ['type' => 'Network & Infrastructure']) }}" class="pill {{ request('type')==='Network & Infrastructure' ? 'active' : '' }}">Network &amp; Infrastructure</a>
-  <a href="{{ route('projects.index', ['type' => 'Training & Consultancy']) }}" class="pill {{ request('type')==='Training & Consultancy' ? 'active' : '' }}">Training &amp; Consultancy</a>
+  @php $filterBase = request()->only(['status', 'priority', 'q', 'office']); @endphp
+  <a href="{{ route('projects.index', array_filter($filterBase)) }}"
+     class="pill {{ !request('type') ? 'active' : '' }}">All</a>
+  @foreach ($projectTypes as $type)
+    <a href="{{ route('projects.index', array_filter(array_merge($filterBase, ['type' => $type->name]))) }}"
+       class="pill {{ request('type') === $type->name ? 'active' : '' }}">{{ $type->name }}</a>
+  @endforeach
+
+  @can('manage_offices')
+    <form method="GET" action="{{ route('projects.index') }}" style="display:inline-flex; gap:8px; align-items:center; margin-left:auto;">
+      @foreach (request()->only(['status', 'priority', 'q', 'type']) as $k => $v)
+        @if ($v)<input type="hidden" name="{{ $k }}" value="{{ $v }}">@endif
+      @endforeach
+      <select name="office" onchange="this.form.submit()" style="padding:6px 10px; font-size:13px;">
+        <option value="">All Offices</option>
+        @foreach ($offices as $office)
+          <option value="{{ $office->office_id }}" {{ request('office') == $office->office_id ? 'selected' : '' }}>{{ $office->office_name }}</option>
+        @endforeach
+      </select>
+    </form>
+  @endcan
 </div>
 
 <div class="card">
@@ -35,7 +52,6 @@
       @foreach ($projects as $p)
         @php
           $b = $p->budget; $util = $b ? $b->utilisationPercent() : 0;
-          $statusCls = ['active' => 'b-active', 'planning' => 'b-planning', 'risk' => 'b-risk', 'closed' => 'b-closed'][$p->status] ?? 'b-planning';
           $pTasks = $p->allTasks();
           $totalTasksCount = $pTasks->count();
           $completedTasksCount = $pTasks->filter(fn($t) => in_array($t->status, ['Done', 'Completed']))->count();
@@ -70,7 +86,7 @@
             </div>
             <div class="progressbar"><div style="width:{{ $taskPct }}%"></div></div>
           </td>
-          <td><span class="badge {{ $statusCls }}"><span class="badge-dot"></span>{{ ucfirst($p->status) }}</span></td>
+          <td><x-status-badge :status="$p->status" /></td>
           <td>
             <div class="cell-sub" style="margin-bottom:4px;">{{ $util }}% · ETB {{ number_format($b->spent_amount ?? 0) }}</div>
             <div class="progressbar {{ $util>85?'danger':($util>65?'warn':'') }}"><div style="width:{{ $util }}%"></div></div>

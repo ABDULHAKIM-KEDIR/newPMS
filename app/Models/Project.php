@@ -2,7 +2,11 @@
 
 namespace App\Models;
 
+use App\Services\RbacService;
+use App\Services\RosterService;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 class Project extends Model
 {
@@ -11,9 +15,13 @@ class Project extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'project_name', 'description', 'client', 'project_type', 'team_id', 'template_id',
+        'project_name', 'description', 'client', 'project_type', 'project_type_id', 'team_id', 'template_id',
         'project_manager_id', 'scope_statement', 'start_date', 'end_date', 'priority', 'status', 'progress', 'created_by',
+        'primary_office_id',
     ];
+
+    /** Valid access levels for teams assigned to this project. */
+    public const TEAM_ACCESS_LEVELS = ['view', 'contribute', 'manage'];
 
     protected $casts = [
         'start_date' => 'date',
@@ -25,9 +33,55 @@ class Project extends Model
         return $this->belongsTo(Team::class, 'team_id', 'team_id');
     }
 
+    public function projectType()
+    {
+        return $this->belongsTo(ProjectType::class, 'project_type_id', 'project_type_id');
+    }
+
+    public function primaryOffice()
+    {
+        return $this->belongsTo(Office::class, 'primary_office_id', 'office_id');
+    }
+
+    /** All participating offices, including the primary one. */
+    public function offices()
+    {
+        return $this->belongsToMany(Office::class, 'project_office', 'project_id', 'office_id')
+            ->withPivot('participation_type')
+            ->withTimestamps();
+    }
+
+    /** Participating offices only (excludes the primary office). */
+    public function participatingOffices()
+    {
+        return $this->belongsToMany(Office::class, 'project_office', 'project_id', 'office_id')
+            ->wherePivot('participation_type', 'participating')
+            ->withPivot('participation_type')
+            ->withTimestamps();
+    }
+
+    /** True when the given office has a stake in this project (primary or participating). */
+    public function involvesOffice(int $officeId): bool
+    {
+        if ((int) $this->primary_office_id === $officeId) {
+            return true;
+        }
+
+        return $this->offices()->where('offices.office_id', $officeId)->exists();
+    }
+
     public function teams()
     {
-        return $this->belongsToMany(Team::class, 'project_teams', 'project_id', 'team_id')->withPivot('assigned_date');
+        return $this->belongsToMany(Team::class, 'project_teams', 'project_id', 'team_id')
+            ->withPivot('assigned_date', 'access_level', 'project_role_id');
+    }
+
+    /**
+     * Pivots with access metadata, for the multi-team collaboration UI.
+     */
+    public function teamAssignments()
+    {
+        return $this->hasMany(ProjectTeam::class, 'project_id', 'project_id');
     }
 
     /**
@@ -67,6 +121,50 @@ class Project extends Model
     }
 
     /**
+     * True when the user participates in this project in any capacity:
+     * PM of record, member of the primary/assigned team, or a direct
+     * project member role. This is the sole visibility criterion for
+     * non-oversight roles.
+     */
+    public function participatesIn(User $user): bool
+    {
+        if ($this->project_manager_id && (int) $this->project_manager_id === (int) $user->user_id) {
+            return true;
+        }
+
+        if ($this->relationLoaded('memberRoles')) {
+            if ($this->memberRoles->contains('user_id', $user->user_id)) {
+                return true;
+            }
+        } elseif ($this->memberRoles()->where('user_id', $user->user_id)->exists()) {
+            return true;
+        }
+
+        return $this->allTeams()
+            ->filter()
+            ->contains(fn ($team) => $team->members->contains('user_id', $user->user_id));
+    }
+
+    /**
+     * Query scope restricting projects to those the user participates in
+     * (PM of record, any assigned team they belong to, or direct project
+     * membership). System administrators see everything.
+     */
+    public function scopeVisibleTo($query, User $user)
+    {
+        if ($user->hasPermission('manage_system_settings')) {
+            return $query;
+        }
+
+        return $query->where(function ($q) use ($user) {
+            $q->where('project_manager_id', $user->user_id)
+                ->orWhereHas('memberRoles', fn ($mq) => $mq->where('project_member_roles.user_id', $user->user_id))
+                ->orWhereHas('team.members', fn ($tq) => $tq->where('team_members.user_id', $user->user_id))
+                ->orWhereHas('teams.members', fn ($tq) => $tq->where('team_members.user_id', $user->user_id));
+        });
+    }
+
+    /**
      * Everyone who can be assigned work on this project: the project manager,
      * the team leader, team members, and members assigned directly with roles/specialties.
      * Deduplicated by user id so a person holding multiple roles appears once.
@@ -97,107 +195,13 @@ class Project extends Model
     }
 
     /**
-     * Structured roster of all participants on this project with their roles and specialties.
+     * Structured roster of all participants on this project with their roles
+     * and specialties. Presentation logic lives in RosterService; this thin
+     * delegate keeps the historical model API for callers and tests.
      */
     public function getProjectRoster()
     {
-        $this->loadMissing(['projectManager', 'team.leader', 'team.members.user', 'teams.leader', 'teams.members.user', 'memberRoles.user', 'memberRoles.role']);
-
-        $roster = collect();
-        $seen = [];
-        $memberRoleMap = $this->memberRoles->keyBy('user_id');
-
-        // 1. Project Manager
-        if ($this->projectManager) {
-            $pm = $this->projectManager;
-            $roster->push((object) [
-                'user_id' => $pm->user_id,
-                'user' => $pm,
-                'full_name' => $pm->full_name,
-                'email' => $pm->email,
-                'team_name' => 'Project Management',
-                'project_role' => 'Project Manager',
-                'specialty' => 'Project Management & Delivery',
-                'badge_class' => 'b-active',
-                'is_pm' => true,
-                'is_leader' => false,
-                'member_role_id' => null,
-            ]);
-            $seen[$pm->user_id] = true;
-        }
-
-        // 2. Team Leaders & Members from all assigned teams
-        foreach ($this->allTeams() as $assignedTeam) {
-            if ($assignedTeam->leader && ! isset($seen[$assignedTeam->leader->user_id])) {
-                $tl = $assignedTeam->leader;
-                $mr = $memberRoleMap->get($tl->user_id);
-                $specialty = ($mr && $mr->specialty) ? $mr->specialty : "{$assignedTeam->team_name} Lead";
-                $projectRole = ($mr && $mr->role) ? $mr->role->role_name : 'Team Lead';
-
-                $roster->push((object) [
-                    'user_id' => $tl->user_id,
-                    'user' => $tl,
-                    'full_name' => $tl->full_name,
-                    'email' => $tl->email,
-                    'team_name' => $assignedTeam->team_name,
-                    'project_role' => $projectRole,
-                    'specialty' => $specialty,
-                    'badge_class' => 'b-planning',
-                    'is_pm' => false,
-                    'is_leader' => true,
-                    'member_role_id' => $mr ? $mr->id : null,
-                ]);
-                $seen[$tl->user_id] = true;
-            }
-
-            foreach ($assignedTeam->members as $tm) {
-                if ($tm->user && ! isset($seen[$tm->user_id])) {
-                    $u = $tm->user;
-                    $mr = $memberRoleMap->get($u->user_id);
-                    $specialty = ($mr && $mr->specialty) ? $mr->specialty : (optional(optional($u)->roles->first())->role_name ?: 'Team Member');
-                    $projectRole = ($mr && $mr->role) ? $mr->role->role_name : ($mr && $mr->specialty ? $mr->specialty : 'Team Member');
-
-                    $roster->push((object) [
-                        'user_id' => $u->user_id,
-                        'user' => $u,
-                        'full_name' => $u->full_name,
-                        'email' => $u->email,
-                        'team_name' => $assignedTeam->team_name,
-                        'project_role' => $projectRole,
-                        'specialty' => $specialty,
-                        'badge_class' => 'b-risk',
-                        'is_pm' => false,
-                        'is_leader' => false,
-                        'member_role_id' => $mr ? $mr->id : null,
-                    ]);
-                    $seen[$u->user_id] = true;
-                }
-            }
-        }
-
-        // 3. Project Member Roles (Specialists)
-        foreach ($this->memberRoles as $mr) {
-            if ($mr->user && ! isset($seen[$mr->user_id])) {
-                $u = $mr->user;
-                $specialtyName = $mr->specialty ?: (optional($mr->role)->role_name ?: 'Team Member');
-                $roster->push((object) [
-                    'user_id' => $u->user_id,
-                    'user' => $u,
-                    'full_name' => $u->full_name,
-                    'email' => $u->email,
-                    'team_name' => 'Specialist',
-                    'project_role' => optional($mr->role)->role_name ?: 'Specialist',
-                    'specialty' => $specialtyName,
-                    'badge_class' => 'b-planning',
-                    'is_pm' => false,
-                    'is_leader' => false,
-                    'member_role_id' => $mr->id,
-                ]);
-                $seen[$u->user_id] = true;
-            }
-        }
-
-        return $roster;
+        return app(RosterService::class)->getFormattedRoster($this);
     }
 
     /**
@@ -224,9 +228,15 @@ class Project extends Model
             ];
         });
 
-        // Also allow assigning any other active user from the organization
+        // Also allow assigning other active users, restricted to the
+        // project's primary and participating offices.
+        $allowedOfficeIds = $this->authorizedOfficeIds();
+
         $otherUsers = User::where('status', 'Active')
             ->whereNotIn('user_id', $rosterUserIds)
+            ->when($allowedOfficeIds->isNotEmpty(), fn ($q) => $q->where(function ($q2) use ($allowedOfficeIds) {
+                $q2->whereNull('office_id')->orWhereIn('office_id', $allowedOfficeIds->all());
+            }))
             ->orderBy('full_name')
             ->get();
 
@@ -242,6 +252,37 @@ class Project extends Model
         }
 
         return $list->values();
+    }
+
+    /**
+     * Offices this project may draw members/users from: primary + participating.
+     *
+     * @return Collection<int, int>
+     */
+    public function authorizedOfficeIds(): Collection
+    {
+        return collect([$this->primary_office_id])
+            ->merge($this->offices()->pluck('offices.office_id'))
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+    }
+
+    /**
+     * True when a user may be assigned to this project. Users with an office
+     * must belong to one of the project's offices; legacy users without an
+     * office (and projects without offices) keep working as before.
+     */
+    public function canAssignUser(User $user): bool
+    {
+        $allowedOfficeIds = $this->authorizedOfficeIds();
+
+        if ($allowedOfficeIds->isEmpty() || ! $user->office_id) {
+            return true;
+        }
+
+        return $allowedOfficeIds->contains((int) $user->office_id);
     }
 
     public function deliverables()
@@ -270,10 +311,15 @@ class Project extends Model
     }
 
     /**
-     * Get all tasks associated with this project (via direct project_id or via phases)
+     * Get all tasks associated with this project (via direct project_id or via phases).
+     * Reuses an already-eager-loaded `tasks` relation to avoid re-querying.
      */
     public function allTasks()
     {
+        if ($this->relationLoaded('tasks') && $this->tasks->isNotEmpty()) {
+            return $this->tasks;
+        }
+
         $direct = $this->tasks()->with(['assignee', 'phase', 'team', 'comments', 'attachments'])->get();
         if ($direct->isNotEmpty()) {
             return $direct;
@@ -283,18 +329,20 @@ class Project extends Model
     }
 
     /**
-     * Calculate dynamic progress percentage from completed tasks
+     * Calculate dynamic progress percentage from completed tasks.
+     * Uses a SQL aggregate instead of loading task models into memory.
      */
     public function progressPercentage(): int
     {
-        $tasks = $this->allTasks();
-        if ($tasks->isEmpty()) {
+        $stats = $this->taskCountByStatus();
+        $total = array_sum($stats);
+        if ($total === 0) {
             return (int) ($this->progress ?: 0);
         }
 
-        $done = $tasks->filter(fn ($t) => in_array($t->status, ['Done', 'Completed']))->count();
+        $done = ($stats['Done'] ?? 0) + ($stats['Completed'] ?? 0);
 
-        return (int) round(($done / $tasks->count()) * 100);
+        return (int) round(($done / $total) * 100);
     }
 
     /**
@@ -309,18 +357,52 @@ class Project extends Model
     }
 
     /**
-     * Comprehensive task stats for dashboard cards
+     * Task counts grouped by status in a single SQL aggregate query,
+     * covering tasks linked directly or through phases. Returns an
+     * associative array of [status => count].
+     *
+     * @return array<string, int>
+     */
+    public function taskCountByStatus(): array
+    {
+        $rows = DB::table('tasks')
+            ->leftJoin('phases', 'phases.phase_id', '=', 'tasks.phase_id')
+            ->where(function ($q) {
+                $q->where('tasks.project_id', $this->project_id)
+                    ->orWhere('phases.project_id', $this->project_id);
+            })
+            ->groupBy('tasks.status')
+            ->select('tasks.status', DB::raw('COUNT(*) as total'))
+            ->pluck('total', 'status')
+            ->all();
+
+        return array_map('intval', $rows);
+    }
+
+    /**
+     * Comprehensive task stats for dashboard cards, aggregated in SQL
+     * instead of filtering a loaded collection in PHP.
      */
     public function taskStats(): array
     {
-        $tasks = $this->allTasks();
-        $total = $tasks->count();
-        $completed = $tasks->filter(fn ($t) => in_array($t->status, ['Done', 'Completed']))->count();
-        $inProgress = $tasks->filter(fn ($t) => $t->status === 'In Progress')->count();
-        $inReview = $tasks->filter(fn ($t) => $t->status === 'In Review')->count();
-        $toDo = $tasks->filter(fn ($t) => in_array($t->status, ['Pending', 'To Do', 'Not started']))->count();
-        $blocked = $tasks->filter(fn ($t) => $t->status === 'Blocked')->count();
-        $overdue = $tasks->filter(fn ($t) => ! in_array($t->status, ['Done', 'Completed']) && $t->end_date && $t->end_date->isPast())->count();
+        $byStatus = $this->taskCountByStatus();
+        $total = array_sum($byStatus);
+        $completed = ($byStatus['Done'] ?? 0) + ($byStatus['Completed'] ?? 0);
+        $inProgress = $byStatus['In Progress'] ?? 0;
+        $inReview = $byStatus['In Review'] ?? 0;
+        $toDo = ($byStatus['Pending'] ?? 0) + ($byStatus['To Do'] ?? 0) + ($byStatus['Not started'] ?? 0);
+        $blocked = $byStatus['Blocked'] ?? 0;
+
+        $overdue = (int) DB::table('tasks')
+            ->leftJoin('phases', 'phases.phase_id', '=', 'tasks.phase_id')
+            ->where(function ($q) {
+                $q->where('tasks.project_id', $this->project_id)
+                    ->orWhere('phases.project_id', $this->project_id);
+            })
+            ->whereNotIn('tasks.status', ['Done', 'Completed'])
+            ->whereNotNull('tasks.end_date')
+            ->where('tasks.end_date', '<', now()->toDateString())
+            ->count();
 
         return [
             'total' => $total,
@@ -348,20 +430,14 @@ class Project extends Model
     }
 
     /**
-     * True if the user can manage this project's tasks/assignments —
-     * either they lead the project's team, or they hold a directorate-wide
-     * management role (ICT Director / System Administrator).
-     */
-    /**
-     * Blanket "manages this project" access is Director-scoped, not
-     * Director-or-Admin — an Administrator only gets project authority if
-     * a Director explicitly grants edit_projects/delete_projects to their
-     * role from Roles & Access. This is checked alongside a permission gate
-     * in the controller, not instead of one.
+     * Blanket "manages this project" authority is resolved through the
+     * RBAC engine (org roles, the PM of record, team leaders with a
+     * manage-level team assignment, or explicit project roles) rather
+     * than hard-coded role names.
      */
     public function isManagedBy(User $user): bool
     {
-        if ($user->hasRole('ICT Director') || $user->hasRole('System Administrator') || $user->hasRole('Admin') || $user->hasRole('Project Manager')) {
+        if ($user->hasPermission('edit_projects')) {
             return true;
         }
 
@@ -369,14 +445,10 @@ class Project extends Model
             return true;
         }
 
-        if (optional($this->team)->team_leader_id === $user->user_id) {
-            return true;
-        }
+        $rbac = app(RbacService::class);
 
-        if ($this->teams()->where('team_leader_id', $user->user_id)->exists()) {
-            return true;
-        }
-
-        return false;
+        // A team leader whose team is assigned with manage access manages
+        // the project; a direct project role granting edit_projects too.
+        return $rbac->can($user, 'edit_projects', $this);
     }
 }

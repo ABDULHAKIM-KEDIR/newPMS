@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreTaskCommentRequest;
+use App\Http\Requests\StoreTaskRequest;
+use App\Http\Requests\UpdateTaskRequest;
 use App\Models\Attachment;
 use App\Models\Phase;
 use App\Models\Project;
@@ -12,10 +15,12 @@ use App\Models\TaskProgressLog;
 use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\User;
+use App\Services\MentionService;
 use App\Support\Activity;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 
 class TaskController extends Controller
@@ -38,9 +43,16 @@ class TaskController extends Controller
 
         $query = Task::with(['project', 'team', 'phase.project', 'assignee', 'comments', 'attachments', 'subtasks'])->orderBy('end_date');
 
-        // Scoping: "mine" vs "all"
+        // Scoping: "mine" shows assigned tasks; "all" shows tasks of projects
+        // the user participates in (plus anything assigned to them).
         if ($filter === 'mine' || ! $user->can('view_projects')) {
             $query->where('assigned_to', $user->user_id);
+        } elseif ($filter === 'all') {
+            $query->where(function ($q) use ($user) {
+                $q->where('assigned_to', $user->user_id)
+                    ->orWhereHas('project', fn ($pq) => $pq->visibleTo($user))
+                    ->orWhereHas('phase.project', fn ($pq) => $pq->visibleTo($user));
+            });
         }
 
         if ($status) {
@@ -82,8 +94,33 @@ class TaskController extends Controller
 
         $tasks = $query->get();
 
+        // Status counts computed in SQL (single GROUP BY) instead of counting
+        // the loaded collection in PHP — keeps memory flat for large tables.
+        $countQuery = Task::query();
+        if ($filter === 'mine' || ! $user->can('view_projects')) {
+            $countQuery->where('assigned_to', $user->user_id);
+        } elseif ($filter === 'all') {
+            $countQuery->where(function ($q) use ($user) {
+                $q->where('assigned_to', $user->user_id)
+                    ->orWhereHas('project', fn ($pq) => $pq->visibleTo($user))
+                    ->orWhereHas('phase.project', fn ($pq) => $pq->visibleTo($user));
+            });
+        }
+        $statusCounts = $countQuery->select('status', DB::raw('COUNT(*) as total'))
+            ->groupBy('status')
+            ->pluck('total', 'status')
+            ->all();
+
+        $kanbanCounts = [
+            'todo' => ($statusCounts['To Do'] ?? 0) + ($statusCounts['Pending'] ?? 0) + ($statusCounts['Not started'] ?? 0),
+            'in-progress' => $statusCounts['In Progress'] ?? 0,
+            'in-review' => $statusCounts['In Review'] ?? 0,
+            'completed' => ($statusCounts['Completed'] ?? 0) + ($statusCounts['Done'] ?? 0),
+            'blocked' => $statusCounts['Blocked'] ?? 0,
+        ];
+
         $myCount = Task::where('assigned_to', $user->user_id)->count();
-        $allCount = Task::count();
+        $allCount = (clone $countQuery)->count();
 
         $projects = Project::orderBy('project_name')->get();
         $teams = Team::where('status', 'Active')->orderBy('team_name')->get();
@@ -92,7 +129,7 @@ class TaskController extends Controller
         return view('tasks.index', compact(
             'tasks', 'filter', 'view', 'status', 'priority', 'search',
             'projectId', 'teamId', 'assigneeId', 'dueDate',
-            'myCount', 'allCount', 'projects', 'teams', 'assignableUsers'
+            'myCount', 'allCount', 'projects', 'teams', 'assignableUsers', 'kanbanCounts'
         ));
     }
 
@@ -103,6 +140,9 @@ class TaskController extends Controller
             'attachments.uploader', 'dependencies', 'assignee', 'phase.project.team', 'progressLogs.user',
         ]);
 
+        $this->authorize('view', $task);
+
+        /** @var User $user */
         $user = Auth::user();
         $project = $task->project ?? optional($task->phase)->project;
 
@@ -177,7 +217,7 @@ class TaskController extends Controller
         ]);
     }
 
-    public function store(Request $request)
+    public function store(StoreTaskRequest $request)
     {
         $user = Auth::user();
         abort_unless($user->can('create_tasks'), 403);
@@ -202,28 +242,9 @@ class TaskController extends Controller
 
         $assigneeInput = $request->input('assigned_to') ?? $request->input('assignee_name') ?? $request->input('assignee_input');
         $resolvedAssigneeId = $this->resolveAssigneeId($assigneeInput, $project);
+        $this->assertAssigneeAllowed($project, $resolvedAssigneeId);
 
-        $data = $request->validate([
-            'project_id' => ['nullable', 'exists:projects,project_id'],
-            'phase_id' => ['nullable', 'exists:phases,phase_id'],
-            'team_id' => ['nullable', 'exists:teams,team_id'],
-            'task_name' => ['required', 'string', 'max:150'],
-            'description' => ['nullable', 'string', 'max:2000'],
-            'priority' => ['required', 'in:High,Medium,Low,Urgent'],
-            'status' => ['nullable', 'in:'.implode(',', self::STATUSES)],
-            'progress' => ['nullable', 'integer', 'min:0', 'max:100'],
-            'budget' => ['nullable', 'numeric', 'min:0'],
-            'start_date' => ['nullable', 'date'],
-            'end_date' => [
-                'nullable',
-                'date',
-                function ($attribute, $value, $fail) use ($request) {
-                    if ($value && $request->filled('start_date') && $value < $request->input('start_date')) {
-                        $fail('The end date must be a date after or equal to start date.');
-                    }
-                },
-            ],
-        ]);
+        $data = $request->validated();
 
         $status = $data['status'] ?? 'To Do';
         $taskProjectId = $project ? $project->project_id : ($data['project_id'] ?? null);
@@ -272,6 +293,7 @@ class TaskController extends Controller
         $user = Auth::user();
 
         $isAssignee = (int) $task->assigned_to === (int) $user->user_id;
+        $this->authorize('updateStatus', $task);
         abort_unless($user->can('update_task_status') && ($isAssignee || ($project && $project->isManagedBy($user)) || $user->isDirectorOrAdmin()), 403);
 
         $data = $request->validate([
@@ -322,6 +344,8 @@ class TaskController extends Controller
         }
 
         return response()->json([
+            'success' => true,
+            'message' => 'Status updated',
             'status' => $task->status,
             'progress' => $task->progress,
             'blocker_reason' => $task->blocker_reason,
@@ -340,6 +364,7 @@ class TaskController extends Controller
         $assigneeInput = $request->input('assigned_to') ?? $request->input('assignee_name');
         $reason = $request->input('reason');
         $resolvedAssigneeId = $this->resolveAssigneeId($assigneeInput, $project);
+        $this->assertAssigneeAllowed($project, $resolvedAssigneeId);
 
         $previousAssignee = optional($task->assignee)->full_name ?? 'Unassigned';
         $task->update(['assigned_to' => $resolvedAssigneeId]);
@@ -367,7 +392,7 @@ class TaskController extends Controller
         ]);
     }
 
-    public function update(Request $request, Task $task)
+    public function update(UpdateTaskRequest $request, Task $task)
     {
         $task->load('phase.project', 'project');
         $project = $task->project ?? optional($task->phase)->project;
@@ -378,32 +403,12 @@ class TaskController extends Controller
 
         abort_unless($user->can('create_tasks') || $canManage || $isAssignee || $user->isDirectorOrAdmin(), 403);
 
-        if ($request->has('start_date') && $request->input('start_date') === '') {
-            $request->merge(['start_date' => null]);
-        }
-        if ($request->has('end_date') && $request->input('end_date') === '') {
-            $request->merge(['end_date' => null]);
-        }
-        if ($request->has('description') && $request->input('description') === '') {
-            $request->merge(['description' => null]);
-        }
-
-        $data = $request->validate([
-            'task_name' => ['sometimes', 'required', 'string', 'max:150'],
-            'description' => ['nullable', 'string', 'max:2000'],
-            'phase_id' => ['nullable', 'exists:phases,phase_id'],
-            'team_id' => ['nullable', 'exists:teams,team_id'],
-            'priority' => ['sometimes', 'required', 'in:High,Medium,Low,Urgent'],
-            'status' => ['sometimes', 'required', 'in:'.implode(',', self::STATUSES)],
-            'progress' => ['nullable', 'integer', 'min:0', 'max:100'],
-            'budget' => ['nullable', 'numeric', 'min:0'],
-            'start_date' => ['nullable', 'date'],
-            'end_date' => ['nullable', 'date'],
-        ]);
+        $data = $request->validated();
 
         if ($request->has('assigned_to') || $request->has('assignee_name')) {
             $assigneeInput = $request->input('assigned_to') ?? $request->input('assignee_name');
             $data['assigned_to'] = $this->resolveAssigneeId($assigneeInput, $project);
+            $this->assertAssigneeAllowed($project, $data['assigned_to']);
         }
 
         if (isset($data['status'])) {
@@ -432,11 +437,9 @@ class TaskController extends Controller
         return back()->with('status', 'Task updated successfully.');
     }
 
-    public function addComment(Request $request, Task $task)
+    public function addComment(StoreTaskCommentRequest $request, Task $task)
     {
-        $data = $request->validate([
-            'comment_text' => ['required', 'string', 'max:2000'],
-        ]);
+        $data = $request->validated();
 
         $user = Auth::user();
 
@@ -451,6 +454,13 @@ class TaskController extends Controller
         if ($task->assigned_to && (int) $task->assigned_to !== (int) $user->user_id) {
             Activity::notify((int) $task->assigned_to, $user->full_name." commented on \"{$task->task_name}\"", 'mention');
         }
+
+        // @mention parsing: notify every active user tagged in the comment
+        // body (never the author) with a deep link back to the task.
+        $mentioned = app(MentionService::class)
+            ->extractMentionedUsers($comment->comment_text, (int) $user->user_id);
+        app(MentionService::class)
+            ->notifyMentionedUsers($task, $mentioned, $comment->comment_text);
 
         return response()->json([
             'id' => $comment->comment_id,
@@ -510,6 +520,16 @@ class TaskController extends Controller
 
     public function downloadAttachment(Attachment $attachment)
     {
+        // IDOR guard: the attachment must belong to a task the current user
+        // can view (entity_type 'Task'), or belong to an unknown type and be
+        // rejected outright.
+        abort_unless($attachment->entity_type === 'Task', 404);
+
+        $task = Task::find((int) $attachment->entity_id);
+        abort_unless($task !== null, 404);
+
+        $this->authorize('view', $task);
+
         abort_unless(Storage::disk('public')->exists($attachment->file_path), 404);
 
         return Storage::disk('public')->download($attachment->file_path, $attachment->file_name);
@@ -592,10 +612,10 @@ class TaskController extends Controller
             $slug = 'member.'.rand(100, 999);
         }
 
-        $email = $slug.'@ju.edu.et';
+        $email = $slug.'@example.com';
         $counter = 1;
         while (User::where('email', $email)->exists()) {
-            $email = $slug.$counter.'@ju.edu.et';
+            $email = $slug.$counter.'@example.com';
             $counter++;
         }
 
@@ -623,6 +643,23 @@ class TaskController extends Controller
         Activity::log('Created team member via task assignment', 'User', $newUser->user_id, "{$newUser->full_name} ({$email})");
 
         return $newUser->user_id;
+    }
+
+    /**
+     * Rejects an assignee whose office is not associated with the task's
+     * project (primary or participating). Users without an office keep the
+     * legacy behaviour.
+     */
+    private function assertAssigneeAllowed(?Project $project, ?int $assigneeId): void
+    {
+        if (! $project || ! $assigneeId) {
+            return;
+        }
+
+        $assignee = User::find($assigneeId);
+        if ($assignee && ! $project->canAssignUser($assignee)) {
+            abort(422, "{$assignee->full_name} belongs to an office that is not associated with this project.");
+        }
     }
 
     public function destroy(Request $request, Task $task)

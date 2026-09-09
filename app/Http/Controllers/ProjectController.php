@@ -2,29 +2,38 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreProjectRequest;
+use App\Http\Requests\UpdateProjectRequest;
 use App\Models\ChangeRequest;
+use App\Models\Office;
 use App\Models\Phase;
 use App\Models\PhaseBudget;
 use App\Models\Project;
 use App\Models\ProjectBudget;
 use App\Models\ProjectDeliverable;
 use App\Models\ProjectMemberRole;
-use App\Models\Role;
+use App\Models\ProjectType;
 use App\Models\Task;
 use App\Models\Team;
-use App\Models\TeamMember;
 use App\Models\User;
+use App\Services\ProjectWizardService;
+use App\Services\RosterService;
 use App\Support\Activity;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
 
 class ProjectController extends Controller
 {
-    private const PHASES = ['Initiation', 'Planning', 'Execution', 'Monitoring', 'Closure'];
+    public function __construct(
+        private ProjectWizardService $projectWizardService,
+        private RosterService $rosterService,
+    ) {}
 
-    private const TYPES = ['Software', 'Network & Infrastructure', 'Training & Consultancy', 'Enterprise Systems', 'Research & Development'];
+    private const PHASES = ['Initiation', 'Planning', 'Execution', 'Monitoring', 'Closure'];
 
     private const STATUSES = ['planning', 'active', 'risk', 'closed'];
 
@@ -46,12 +55,33 @@ class ProjectController extends Controller
 
     public function index(Request $request)
     {
-        abort_unless(Auth::user()->can('view_projects'), 403);
+        Gate::authorize('view_projects');
 
         $query = Project::with(['team.leader', 'teams.leader', 'projectManager', 'budget', 'tasks', 'phases.tasks', 'memberRoles.user']);
 
+        $projectTypes = ProjectType::where('is_active', true)->orderBy('name')->get();
+
+        /*
+         * When an office filter is active, only show project types that are
+         * either global or belong to that office, so the pills follow the
+         * office dropdown.
+         */
+        if ($officeFilter = $request->get('office')) {
+            $projectTypes = $projectTypes->filter(
+                fn ($t) => empty($t->office_id) || $t->office_id == $officeFilter
+            )->values();
+        }
+
         if ($type = $request->get('type')) {
-            $query->where('project_type', $type);
+            $typeModel = $projectTypes->firstWhere('name', $type);
+
+            $query->where(function ($q) use ($type, $typeModel) {
+                $q->where('project_type', $type);
+
+                if ($typeModel) {
+                    $q->orWhere('project_type_id', $typeModel->project_type_id);
+                }
+            });
         }
 
         if ($status = $request->get('status')) {
@@ -70,14 +100,34 @@ class ProjectController extends Controller
             });
         }
 
+        /*
+         * Participation scoping. System Administrators/Directors see
+         * everything and may filter with the office dropdown; every other
+         * role only sees projects they participate in — as PM of record,
+         * a member of an assigned team, or a direct project member.
+         */
+        $authUser = Auth::user();
+        $offices = Office::orderBy('office_name')->get();
+
+        if ($authUser->isAdmin() || $authUser->isDirectorOrAdmin()) {
+            if ($officeFilter = $request->get('office')) {
+                $query->where(function ($q) use ($officeFilter) {
+                    $q->where('primary_office_id', $officeFilter)
+                        ->orWhereHas('offices', fn ($oq) => $oq->where('offices.office_id', $officeFilter));
+                });
+            }
+        } else {
+            $query->visibleTo($authUser);
+        }
+
         $projects = $query->orderByDesc('project_id')->paginate(15)->withQueryString();
 
-        return view('projects.index', compact('projects'));
+        return view('projects.index', compact('projects', 'projectTypes', 'offices'));
     }
 
     public function show(Project $project)
     {
-        abort_unless(Auth::user()->can('view_projects'), 403);
+        $this->authorize('view', $project);
 
         $project->load([
             'team.leader',
@@ -98,62 +148,84 @@ class ProjectController extends Controller
 
         $tasks = $project->allTasks();
         $assignableUsers = $project->getAssignableUsersWithRoles();
-        $projectRoster = $project->getProjectRoster();
+        $projectRoster = $this->rosterService->getFormattedRoster($project);
         $taskStats = $project->taskStats();
-        $allTeams = Team::where('status', 'Active')->with('leader')->orderBy('team_name')->get();
+        // Only teams from the project's primary or participating offices may be assigned.
+        $allowedOfficeIds = $this->authorizedOfficeIds($project);
+        $allTeams = Team::where('status', 'Active')->with('leader')
+            ->when($allowedOfficeIds->isNotEmpty(), fn ($q) => $q->whereIn('office_id', $allowedOfficeIds))
+            ->orderBy('team_name')->get();
 
         return view('projects.show', compact('project', 'tasks', 'assignableUsers', 'projectRoster', 'taskStats', 'allTeams'));
     }
 
     public function create()
     {
-        abort_unless(Auth::user()->can('create_projects'), 403);
+        Gate::authorize('create_projects');
 
-        $teams = Team::with(['leader', 'members.user'])->orderBy('team_name')->get();
+        $teams = Team::with(['leader', 'members.user', 'office'])->orderBy('team_name')->get();
         $projectManagers = User::where('status', 'Active')->orderBy('full_name')->get();
+        $projectTypes = ProjectType::where('is_active', true)->orderBy('name')->get();
+        $offices = Office::active()->orderBy('office_name')->get();
 
         $teamsData = $teams->map(function ($t) {
             return [
                 'id' => $t->team_id,
                 'name' => $t->team_name,
+                'office_id' => $t->office_id,
                 'leader_name' => optional($t->leader)->full_name ?? 'Unassigned',
                 'members' => $t->members->map(function ($m) {
                     return [
                         'id' => $m->user ? $m->user->user_id : null,
                         'name' => $m->user ? $m->user->full_name : 'Member',
                     ];
-                })->filter(fn($m) => !is_null($m['id']))->values()->all(),
+                })->filter(fn ($m) => ! is_null($m['id']))->values()->all(),
             ];
         })->values()->all();
 
         return view('projects.create', [
             'teams' => $teams,
             'teamsData' => $teamsData,
-            'types' => self::TYPES,
+            'projectTypes' => $projectTypes,
             'priorities' => self::PRIORITIES,
             'projectManagers' => $projectManagers,
+            'offices' => $offices,
         ]);
     }
 
     public function saveWizardStep(Request $request)
     {
+        Gate::authorize('create_projects');
+
+        /** @var User $user */
         $user = Auth::user();
-        abort_unless($user->can('create_projects'), 403);
 
         $step = (int) $request->input('step');
         $projectId = $request->input('project_id');
 
         if ($step === 1) {
+            $officeScope = $request->input('primary_office_id');
             $data = $request->validate([
                 'project_name' => ['required', 'string', 'max:150'],
                 'description' => ['nullable', 'string', 'max:2000'],
                 'client' => ['nullable', 'string', 'max:150'],
                 'project_type' => ['nullable', 'string', 'max:100'],
+                'project_type_id' => [
+                    'nullable',
+                    Rule::exists('project_types', 'project_type_id')->where(function ($q) use ($officeScope) {
+                        $q->where(function ($q2) use ($officeScope) {
+                            $q2->whereNull('office_id')->orWhere('office_id', $officeScope);
+                        });
+                    }),
+                ],
                 'project_manager_id' => ['nullable', 'exists:users,user_id'],
                 'priority' => ['nullable', 'in:Low,Medium,High,Urgent'],
                 'start_date' => ['nullable', 'date'],
                 'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
                 'allocated_amount' => ['nullable', 'numeric', 'min:0'],
+                'primary_office_id' => ['nullable', 'exists:offices,office_id'],
+                'participating_offices' => ['nullable', 'array'],
+                'participating_offices.*' => ['exists:offices,office_id'],
             ]);
 
             $project = $projectId ? Project::findOrFail($projectId) : new Project;
@@ -161,7 +233,8 @@ class ProjectController extends Controller
                 'project_name' => $data['project_name'],
                 'description' => $data['description'] ?? null,
                 'client' => $data['client'] ?? null,
-                'project_type' => $data['project_type'] ?? 'Software',
+                'project_type' => $data['project_type'] ?? optional(ProjectType::find($data['project_type_id'] ?? null))->name ?? 'Software',
+                'project_type_id' => $this->resolveProjectTypeId($data),
                 'project_manager_id' => $data['project_manager_id'] ?? null,
                 'priority' => $data['priority'] ?? 'Medium',
                 'start_date' => $data['start_date'] ?? null,
@@ -171,6 +244,28 @@ class ProjectController extends Controller
                 'created_by' => $project->created_by ?: $user->user_id,
             ]);
             $project->save();
+
+            // Primary + participating offices. The primary office is stored
+            // on the project row AND represented in the pivot so the
+            // many-to-many stays complete without duplicate rows.
+            $project->primary_office_id = $data['primary_office_id'] ?? null;
+            $project->save();
+
+            $officePivot = [];
+            if (! empty($data['primary_office_id'])) {
+                $officePivot[$data['primary_office_id']] = ['participation_type' => 'primary'];
+            }
+            foreach (collect($data['participating_offices'] ?? [])->unique() as $poId) {
+                if ((int) $poId !== (int) ($data['primary_office_id'] ?? 0)) {
+                    $officePivot[$poId] = ['participation_type' => 'participating'];
+                }
+            }
+            $project->offices()->sync($officePivot);
+
+            if (! empty($data['primary_office_id']) || ! empty($officePivot)) {
+                Activity::log('Assigned office to project', 'Project', $project->project_id,
+                    optional(Office::find($data['primary_office_id'] ?? null))->office_name ?? 'cross-office');
+            }
 
             ProjectBudget::updateOrCreate(['project_id' => $project->project_id], [
                 'allocated_amount' => $data['allocated_amount'] ?? 0,
@@ -199,7 +294,19 @@ class ProjectController extends Controller
                 'teams' => ['required', 'array', 'min:1'],
                 'teams.*' => ['exists:teams,team_id'],
             ]);
-            $teamIds = collect($data['teams'])->map(fn($id) => (int) $id)->unique()->values();
+            $teamIds = collect($data['teams'])->map(fn ($id) => (int) $id)->unique()->values();
+
+            // Server-side office restriction for the wizard team step.
+            $allowedOfficeIds = $this->authorizedOfficeIds($project);
+            if ($allowedOfficeIds->isNotEmpty()) {
+                $invalid = Team::whereIn('team_id', $teamIds)->whereNotIn('office_id', $allowedOfficeIds)->get();
+                if ($invalid->isNotEmpty()) {
+                    return response()->json([
+                        'message' => 'Some teams belong to offices that are not associated with this project: '.$invalid->pluck('team_name')->implode(', '),
+                    ], 422);
+                }
+            }
+
             $project->update(['team_id' => $teamIds->first()]);
             DB::table('project_teams')->where('project_id', $project->project_id)->delete();
             foreach ($teamIds as $teamId) {
@@ -222,6 +329,16 @@ class ProjectController extends Controller
                 'tasks.*.end_date' => ['nullable', 'date', 'after_or_equal:tasks.*.start_date'],
             ]);
             $firstPhase = $project->phases()->orderBy('sequence_order')->first();
+
+            // Server-side office restriction for task teams.
+            $allowedOfficeIds = $this->authorizedOfficeIds($project);
+            if ($allowedOfficeIds->isNotEmpty()) {
+                $taskTeamIds = collect($data['tasks'] ?? [])->pluck('team_id')->filter()->map(fn ($id) => (int) $id);
+                if ($taskTeamIds->isNotEmpty() && Team::whereIn('team_id', $taskTeamIds)->whereNotIn('office_id', $allowedOfficeIds)->exists()) {
+                    return response()->json(['message' => 'One or more task teams belong to offices that are not associated with this project.'], 422);
+                }
+            }
+
             $project->tasks()->delete();
             foreach ($data['tasks'] ?? [] as $taskData) {
                 if (blank($taskData['task_name'] ?? null)) {
@@ -229,6 +346,15 @@ class ProjectController extends Controller
                 }
 
                 $assigneeId = $this->resolveUserId($taskData['assigned_to'] ?? null, $taskData['team_id'] ?? $project->team_id);
+
+                // Server-side office restriction for task assignees.
+                $assignee = $assigneeId ? User::find($assigneeId) : null;
+                if ($assignee && ! $project->canAssignUser($assignee)) {
+                    return response()->json([
+                        'message' => "{$assignee->full_name} belongs to an office that is not associated with this project.",
+                    ], 422);
+                }
+
                 Task::create([
                     'project_id' => $project->project_id,
                     'phase_id' => $firstPhase?->phase_id,
@@ -258,221 +384,94 @@ class ProjectController extends Controller
         ]);
     }
 
-    public function store(Request $request)
+    /**
+     * Prefers an explicit project_type_id; otherwise falls back to the
+     * legacy free-text project_type string so old clients keep working.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function resolveProjectTypeId(array $data): ?int
     {
-        $user = Auth::user();
-        abort_unless($user->can('create_projects'), 403);
-
-        $pmInput = $request->input('project_manager_id') ?? $request->input('project_manager_name');
-        $resolvedPmId = $this->resolveUserId($pmInput, $request->input('team_id'));
-
-        $data = $request->validate([
-            'project_name' => ['required', 'string', 'max:150'],
-            'description' => ['nullable', 'string', 'max:2000'],
-            'client' => ['nullable', 'string', 'max:150'],
-            'project_type' => ['nullable', 'string', 'max:100'],
-            'team_id' => ['nullable', 'exists:teams,team_id'],
-            'team_ids' => ['nullable', 'array'],
-            'team_ids.*' => ['exists:teams,team_id'],
-            'teams' => ['nullable', 'array'],
-            'teams.*' => ['exists:teams,team_id'],
-            'priority' => ['nullable', 'string', 'in:Low,Medium,High,Urgent'],
-            'start_date' => ['nullable', 'date'],
-            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
-            'allocated_amount' => ['nullable', 'numeric', 'min:0'],
-            'members' => ['nullable', 'array'],
-            'members.*.user_id' => ['nullable', 'exists:users,user_id'],
-            'members.*.role_id' => ['nullable', 'exists:roles,role_id'],
-            'members.*.specialty' => ['nullable', 'string', 'max:100'],
-            'tasks' => ['nullable', 'array'],
-            'tasks.*.task_name' => ['nullable', 'string', 'max:150'],
-            'tasks.*.team_id' => ['nullable', 'exists:teams,team_id'],
-            'tasks.*.assigned_to' => ['nullable'],
-            'tasks.*.priority' => ['nullable', 'in:Low,Medium,High,Urgent'],
-            'tasks.*.status' => ['nullable', 'string'],
-            'tasks.*.budget' => ['nullable', 'numeric', 'min:0'],
-            'tasks.*.end_date' => ['nullable', 'date'],
-            'tasks.*.description' => ['nullable', 'string'],
-        ]);
-
-        $selectedTeamIds = collect($request->input('team_ids', []))
-            ->merge($request->input('teams', []))
-            ->push($request->input('team_id'))
-            ->filter()
-            ->unique()
-            ->values();
-
-        $primaryTeamId = $selectedTeamIds->first() ?? $request->input('team_id');
-
-        $project = Project::create([
-            'project_name' => $data['project_name'],
-            'description' => $data['description'] ?? null,
-            'client' => $data['client'] ?? null,
-            'project_type' => $data['project_type'] ?? 'Software',
-            'team_id' => $primaryTeamId,
-            'project_manager_id' => $resolvedPmId,
-            'priority' => $data['priority'] ?? 'Medium',
-            'start_date' => $data['start_date'] ?? null,
-            'end_date' => $data['end_date'] ?? null,
-            'status' => 'planning',
-            'progress' => 0,
-            'created_by' => $user->user_id,
-        ]);
-
-        // Attach all selected teams in project_teams pivot
-        if ($selectedTeamIds->isNotEmpty()) {
-            foreach ($selectedTeamIds as $tid) {
-                DB::table('project_teams')->insertOrIgnore([
-                    'project_id' => $project->project_id,
-                    'team_id' => $tid,
-                    'assigned_date' => now(),
-                ]);
-            }
+        if (! empty($data['project_type_id'])) {
+            return (int) $data['project_type_id'];
         }
 
-        // Save flexible member assignments
-        if (!empty($data['members']) && is_array($data['members'])) {
-            $assignedUserIds = [];
-            foreach ($data['members'] as $memberData) {
-                if (!empty($memberData['user_id']) && !in_array($memberData['user_id'], $assignedUserIds)) {
-                    $assignedUserIds[] = $memberData['user_id'];
-                    ProjectMemberRole::create([
-                        'project_id' => $project->project_id,
-                        'user_id' => $memberData['user_id'],
-                        'role_id' => $memberData['role_id'] ?? null,
-                        'specialty' => $memberData['specialty'] ?? null,
-                        'assigned_date' => now()->toDateString(),
-                    ]);
+        $legacy = trim((string) ($data['project_type'] ?? ''));
 
-                    if ((int) $memberData['user_id'] !== (int) $user->user_id) {
-                        $roleName = !empty($memberData['specialty']) ? " as {$memberData['specialty']}" : '';
-                        Activity::notify((int) $memberData['user_id'], "You were assigned to \"{$project->project_name}\"{$roleName}", 'project');
-                    }
-                }
-            }
+        if ($legacy === '') {
+            return null;
         }
 
-        ProjectBudget::create([
-            'project_id' => $project->project_id,
-            'allocated_amount' => $data['allocated_amount'] ?? 0,
-            'spent_amount' => 0,
-            'currency' => 'ETB',
-        ]);
+        return ProjectType::whereRaw('lower(name) = ?', [strtolower($legacy)])
+            ->value('project_type_id');
+    }
 
-        $defaultPhases = [];
-        foreach (self::PHASES as $i => $phaseName) {
-            $phase = Phase::create([
-                'project_id' => $project->project_id,
-                'phase_name' => $phaseName,
-                'status' => $i === 0 ? 'In Progress' : 'Not started',
-                'sequence_order' => $i,
-            ]);
+    public function store(StoreProjectRequest $request)
+    {
+        Gate::authorize('create_projects');
 
-            PhaseBudget::create([
-                'phase_id' => $phase->phase_id,
-                'allocated_amount' => round(($data['allocated_amount'] ?? 0) / 5),
-                'spent_amount' => 0,
-            ]);
-
-            $defaultPhases[] = $phase;
-        }
-
-        $firstPhase = $defaultPhases[0] ?? null;
-
-        // Step 3: Create initial tasks if provided in workflow
-        if (!empty($data['tasks']) && is_array($data['tasks'])) {
-            foreach ($data['tasks'] as $taskData) {
-                if (empty($taskData['task_name'])) {
-                    continue;
-                }
-
-                $taskTeamId = !empty($taskData['team_id']) ? (int) $taskData['team_id'] : $primaryTeamId;
-                $assigneeId = null;
-                if (!empty($taskData['assigned_to'])) {
-                    $assigneeId = $this->resolveUserId($taskData['assigned_to'], $taskTeamId);
-                }
-
-                $status = $taskData['status'] ?? 'To Do';
-                if ($status === 'Pending') {
-                    $status = 'To Do';
-                }
-
-                $task = Task::create([
-                    'project_id' => $project->project_id,
-                    'phase_id' => $firstPhase ? $firstPhase->phase_id : null,
-                    'team_id' => $taskTeamId,
-                    'task_name' => $taskData['task_name'],
-                    'description' => $taskData['description'] ?? null,
-                    'assigned_to' => $assigneeId,
-                    'priority' => $taskData['priority'] ?? 'Medium',
-                    'status' => $status,
-                    'budget' => isset($taskData['budget']) ? (float) $taskData['budget'] : 0,
-                    'start_date' => $data['start_date'] ?? now()->toDateString(),
-                    'end_date' => $taskData['end_date'] ?? $data['end_date'] ?? null,
-                    'progress' => in_array($status, ['Done', 'Completed']) ? 100 : 0,
-                ]);
-
-                if ($task->assigned_to && (int) $task->assigned_to !== (int) $user->user_id) {
-                    Activity::notify($task->assigned_to, "You have been assigned: \"{$task->task_name}\" on {$project->project_name}", 'task');
-                }
-            }
-
-            $project->recalculateProgress();
-        }
-
-        Activity::log('Created project', 'Project', $project->project_id, $project->project_name);
-
-        if ($project->project_manager_id && (int) $project->project_manager_id !== (int) $user->user_id) {
-            Activity::notify((int) $project->project_manager_id, $user->full_name . " assigned you as Project Manager for \"{$project->project_name}\"", 'project');
-        }
+        $project = $this->projectWizardService->handleWizardSave($request);
 
         return redirect()->route('projects.show', $project)->with('status', 'Project created.');
     }
 
     public function edit(Project $project)
     {
+        $this->authorize('update', $project);
+        /** @var User $user */
         $user = Auth::user();
-        abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
 
         return view('projects.edit', [
-            'project' => $project->load(['budget', 'memberRoles.user', 'memberRoles.role', 'projectManager', 'team.leader']),
+            'project' => $project->load(['budget', 'memberRoles.user', 'memberRoles.role', 'projectManager', 'team.leader', 'offices']),
             'teams' => $this->eligibleTeamsFor($user, $project),
-            'types' => self::TYPES,
+            'projectTypes' => ProjectType::where('is_active', true)->orderBy('name')->get(),
             'statuses' => self::STATUSES,
             'projectManagers' => User::where('status', 'Active')->orderBy('full_name')->get(),
+            'offices' => Office::active()->orderBy('office_name')->get(),
             'canEditBudget' => $user->can('manage_budgets'),
         ]);
     }
 
-    public function update(Request $request, Project $project)
+    public function update(UpdateProjectRequest $request, Project $project)
     {
+        $this->authorize('update', $project);
+        /** @var User $user */
         $user = Auth::user();
-        abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
-
-        $eligibleTeamIds = $this->eligibleTeamsFor($user, $project)->pluck('team_id');
 
         $pmInput = $request->input('project_manager_id') ?? $request->input('project_manager_name');
-        $resolvedPmId = $this->resolveUserId($pmInput, $request->input('team_id') ?? $project->team_id);
+        $resolvedPmId = $this->projectWizardService->resolveUserId($pmInput, $request->input('team_id') ?? $project->team_id);
 
-        $data = $request->validate([
-            'project_name' => ['required', 'string', 'max:150'],
-            'description' => ['nullable', 'string', 'max:2000'],
-            'project_type' => ['required', 'in:' . implode(',', self::TYPES)],
-            'team_id' => ['required', Rule::in($eligibleTeamIds)],
-            'status' => ['required', 'in:' . implode(',', self::STATUSES)],
-            'start_date' => ['nullable', 'date'],
-            'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
-            'allocated_amount' => ['nullable', 'numeric', 'min:0'],
-            'members' => ['nullable', 'array'],
-            'members.*.user_id' => ['nullable', 'exists:users,user_id'],
-            'members.*.role_id' => ['nullable', 'exists:roles,role_id'],
-            'members.*.specialty' => ['nullable', 'string', 'max:100'],
-        ]);
+        // Server-side office restriction for the project manager.
+        if ($resolvedPmId) {
+            $pm = User::find($resolvedPmId);
+            if ($pm && ! $project->canAssignUser($pm)) {
+                return back()->withErrors([
+                    'project_manager_id' => "{$pm->full_name} belongs to an office that is not associated with this project.",
+                ])->withInput();
+            }
+        }
+
+        $data = $request->validated();
+
+        // Resolve the submitted type name to a type valid for the (possibly
+        // new) primary office: office-scoped types take precedence over
+        // global ones. Falls back to the legacy free-text value.
+        $primaryOfficeId = $data['primary_office_id'] ?? null;
+        $resolvedTypeId = ProjectType::whereRaw('lower(name) = ?', [strtolower($data['project_type'])])
+            ->when($primaryOfficeId, fn ($q) => $q->orderByRaw('CASE WHEN office_id = ? THEN 0 ELSE 1 END', [$primaryOfficeId]))
+            ->where(function ($q) use ($primaryOfficeId) {
+                $q->whereNull('office_id');
+                if ($primaryOfficeId) {
+                    $q->orWhere('office_id', $primaryOfficeId);
+                }
+            })
+            ->value('project_type_id');
 
         $project->update([
             'project_name' => $data['project_name'],
             'description' => $data['description'] ?? null,
             'project_type' => $data['project_type'],
+            'project_type_id' => $resolvedTypeId ?? $project->project_type_id,
             'team_id' => $data['team_id'],
             'project_manager_id' => $resolvedPmId,
             'status' => $data['status'],
@@ -480,12 +479,31 @@ class ProjectController extends Controller
             'end_date' => $data['end_date'] ?? null,
         ]);
 
+        // Primary + participating offices on edit (validated IDs only).
+        $officePivot = [];
+        if ($primaryOfficeId) {
+            $officePivot[$primaryOfficeId] = ['participation_type' => 'primary'];
+        }
+        foreach (collect($data['participating_offices'] ?? [])->unique() as $poId) {
+            if ((int) $poId !== (int) $primaryOfficeId) {
+                $officePivot[$poId] = ['participation_type' => 'participating'];
+            }
+        }
+        $project->offices()->sync($officePivot);
+
+        if ((int) ($project->getOriginal('primary_office_id') ?? 0) !== (int) ($primaryOfficeId ?? 0)) {
+            $project->primary_office_id = $primaryOfficeId;
+            $project->save();
+            Activity::log('Changed project primary office', 'Project', $project->project_id,
+                optional(Office::find($primaryOfficeId))->office_name ?? 'none');
+        }
+
         // Safe Member Synchronization
         if ($request->has('members') && is_array($request->input('members'))) {
             $submittedUserIds = [];
 
             foreach ($request->input('members') as $memberData) {
-                if (!empty($memberData['user_id'])) {
+                if (! empty($memberData['user_id'])) {
                     $submittedUserIds[] = $memberData['user_id'];
 
                     ProjectMemberRole::updateOrCreate(
@@ -503,7 +521,7 @@ class ProjectController extends Controller
             }
 
             // Only remove members that were explicitly removed from the form list
-            if (!empty($submittedUserIds)) {
+            if (! empty($submittedUserIds)) {
                 $project->memberRoles()->whereNotIn('user_id', $submittedUserIds)->delete();
             }
         }
@@ -513,7 +531,7 @@ class ProjectController extends Controller
             $previous = $project->budget->allocated_amount;
             $project->budget->update(['allocated_amount' => $data['allocated_amount']]);
             if ((float) $previous !== (float) $data['allocated_amount']) {
-                Activity::log('Updated project budget', 'Project', $project->project_id, "{$project->project_name}: ETB " . number_format($previous) . ' → ETB ' . number_format($data['allocated_amount']));
+                Activity::log('Updated project budget', 'Project', $project->project_id, "{$project->project_name}: ETB ".number_format($previous).' → ETB '.number_format($data['allocated_amount']));
             }
         }
 
@@ -524,8 +542,7 @@ class ProjectController extends Controller
 
     public function updateSchedule(Request $request, Project $project)
     {
-        $user = Auth::user();
-        abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
+        $this->authorize('update', $project);
 
         $data = $request->validate([
             'start_date' => ['nullable', 'date'],
@@ -544,14 +561,25 @@ class ProjectController extends Controller
 
     public function assignTeam(Request $request, Project $project)
     {
+        $this->authorize('update', $project);
+
+        /** @var User $user */
         $user = Auth::user();
-        abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
 
         $data = $request->validate([
             'team_id' => ['required', 'exists:teams,team_id'],
         ]);
 
         $team = Team::findOrFail($data['team_id']);
+
+        // Server-side office restriction: the team's office must be one of the
+        // project's primary or participating offices.
+        $allowedOfficeIds = $this->authorizedOfficeIds($project);
+        if ($allowedOfficeIds->isNotEmpty() && ! $allowedOfficeIds->contains((int) $team->office_id)) {
+            return back()->withErrors([
+                'team_id' => "Team \"{$team->team_name}\" belongs to an office that is not associated with this project.",
+            ])->withInput();
+        }
 
         DB::table('project_teams')->insertOrIgnore([
             'project_id' => $project->project_id,
@@ -570,8 +598,7 @@ class ProjectController extends Controller
 
     public function removeTeam(Project $project, Team $team)
     {
-        $user = Auth::user();
-        abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
+        $this->authorize('update', $project);
 
         DB::table('project_teams')
             ->where('project_id', $project->project_id)
@@ -585,14 +612,25 @@ class ProjectController extends Controller
 
     public function addMember(Request $request, Project $project)
     {
+        $this->authorize('update', $project);
+
+        /** @var User $user */
         $user = Auth::user();
-        abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
 
         $input = $request->input('user_id') ?? $request->input('user_name') ?? $request->input('name');
-        $resolvedUserId = $this->resolveUserId($input, $project->team_id);
+        $resolvedUserId = $this->projectWizardService->resolveUserId($input, $project->team_id);
 
-        if (!$resolvedUserId) {
+        if (! $resolvedUserId) {
             return back()->withErrors(['user_id' => 'Please provide a valid member name or select from the list.']);
+        }
+
+        // Server-side office restriction: the member's office must be one of
+        // the project's primary or participating offices.
+        $resolvedUser = User::find($resolvedUserId);
+        if ($resolvedUser && ! $project->canAssignUser($resolvedUser)) {
+            return back()->withErrors([
+                'user_id' => "{$resolvedUser->full_name} belongs to an office that is not associated with this project.",
+            ])->withInput();
         }
 
         $specialty = $request->input('specialty');
@@ -627,8 +665,7 @@ class ProjectController extends Controller
 
     public function storeDeliverable(Request $request, Project $project)
     {
-        $user = Auth::user();
-        abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
+        $this->authorize('update', $project);
 
         $data = $request->validate([
             'deliverable_name' => ['required', 'string', 'max:150'],
@@ -652,8 +689,7 @@ class ProjectController extends Controller
 
     public function toggleDeliverable(Project $project, ProjectDeliverable $deliverable)
     {
-        $user = Auth::user();
-        abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
+        $this->authorize('update', $project);
         abort_unless((int) $deliverable->project_id === (int) $project->project_id, 404);
 
         $newStatus = $deliverable->status === 'Delivered' ? 'Pending' : 'Delivered';
@@ -666,8 +702,7 @@ class ProjectController extends Controller
 
     public function destroyDeliverable(Project $project, ProjectDeliverable $deliverable)
     {
-        $user = Auth::user();
-        abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
+        $this->authorize('update', $project);
         abort_unless((int) $deliverable->project_id === (int) $project->project_id, 404);
 
         $name = $deliverable->deliverable_name;
@@ -680,8 +715,7 @@ class ProjectController extends Controller
 
     public function updateMember(Request $request, Project $project, ProjectMemberRole $memberRole)
     {
-        $user = Auth::user();
-        abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
+        $this->authorize('update', $project);
         abort_unless((int) $memberRole->project_id === (int) $project->project_id, 404);
 
         $data = $request->validate([
@@ -703,8 +737,7 @@ class ProjectController extends Controller
 
     public function removeMember(Project $project, ProjectMemberRole $memberRole)
     {
-        $user = Auth::user();
-        abort_unless($user->can('edit_projects') && $project->isManagedBy($user), 403);
+        $this->authorize('update', $project);
         abort_unless((int) $memberRole->project_id === (int) $project->project_id, 404);
 
         $userName = optional($memberRole->user)->full_name ?? 'A member';
@@ -717,8 +750,7 @@ class ProjectController extends Controller
 
     public function destroy(Project $project)
     {
-        $user = Auth::user();
-        abort_unless($user->can('delete_projects') && $project->isManagedBy($user), 403);
+        $this->authorize('delete', $project);
 
         $name = $project->project_name;
         Activity::log('Deleted project', 'Project', $project->project_id, $name);
@@ -729,7 +761,7 @@ class ProjectController extends Controller
 
     public function storeChangeRequest(Request $request, Project $project)
     {
-        abort_unless(Auth::user()->can('view_projects'), 403);
+        Gate::authorize('view', $project);
 
         $data = $request->validate([
             'description' => ['required', 'string', 'max:1000'],
@@ -746,84 +778,15 @@ class ProjectController extends Controller
         Activity::log('Created change request', 'ChangeRequest', $cr->change_request_id, $data['description']);
 
         if (optional($project->team)->team_leader_id) {
-            Activity::notify($project->team->team_leader_id, Auth::user()->full_name . " filed a change request on \"{$project->project_name}\"", 'approval');
+            Activity::notify($project->team->team_leader_id, Auth::user()->full_name." filed a change request on \"{$project->project_name}\"", 'approval');
         }
 
         return back()->with('status', 'Change request submitted.');
     }
 
-    /**
-     * Resolve a user ID or typed user name.
-     */
-    private function resolveUserId($input, ?int $teamId = null): ?int
+    private function resolveUserId(string|int|null $input, ?int $teamId = null): ?int
     {
-        if ($input === null || $input === '') {
-            return null;
-        }
-
-        if (is_numeric($input)) {
-            $user = User::find((int) $input);
-            if ($user) {
-                return $user->user_id;
-            }
-        }
-
-        $trimmed = trim((string) $input);
-        if ($trimmed === '' || $trimmed === '— Select Project Manager —' || $trimmed === 'None') {
-            return null;
-        }
-
-        $user = User::where('email', $trimmed)
-            ->orWhere('full_name', $trimmed)
-            ->orWhereRaw('LOWER(full_name) = ?', [strtolower($trimmed)])
-            ->first();
-
-        if ($user) {
-            return $user->user_id;
-        }
-
-        $user = User::where('full_name', 'LIKE', "%{$trimmed}%")->first();
-        if ($user) {
-            return $user->user_id;
-        }
-
-        $slug = strtolower(preg_replace('/[^a-zA-Z0-9]+/', '.', $trimmed));
-        $slug = trim($slug, '.');
-        if (empty($slug)) {
-            $slug = 'pm.' . rand(100, 999);
-        }
-
-        $email = $slug . '@ju.edu.et';
-        $counter = 1;
-        while (User::where('email', $email)->exists()) {
-            $email = $slug . $counter . '@ju.edu.et';
-            $counter++;
-        }
-
-        $newUser = User::create([
-            'full_name' => $trimmed,
-            'email' => $email,
-            'password_hash' => bcrypt('ChangeMe123!'),
-            'status' => 'Active',
-        ]);
-
-        $role = Role::where('role_name', 'Team Leader')->first() ?: Role::where('role_name', 'Team Member')->first();
-        if ($role) {
-            $newUser->roles()->attach($role->role_id);
-        }
-
-        if ($teamId) {
-            TeamMember::firstOrCreate([
-                'team_id' => $teamId,
-                'user_id' => $newUser->user_id,
-            ], [
-                'joined_date' => now()->toDateString(),
-            ]);
-        }
-
-        Activity::log('Created user for project leadership', 'User', $newUser->user_id, "{$newUser->full_name} ({$email})");
-
-        return $newUser->user_id;
+        return $this->projectWizardService->resolveUserId($input, $teamId);
     }
 
     /**
@@ -831,18 +794,39 @@ class ProjectController extends Controller
      * for a Director/Admin (or anyone editing a project they already manage),
      * otherwise only teams they actually lead.
      */
-    private function eligibleTeamsFor($user, ?Project $editingProject = null)
+    private function eligibleTeamsFor(User $user, ?Project $editingProject = null): Collection
     {
-        if ($user->isDirectorOrAdmin()) {
-            return Team::orderBy('team_name')->get();
+        $query = Team::orderBy('team_name');
+
+        if (! $user->isDirectorOrAdmin()) {
+            $query->where('team_leader_id', $user->user_id);
         }
 
-        $led = Team::where('team_leader_id', $user->user_id)->orderBy('team_name')->get();
+        $teams = $query->get();
 
-        if ($editingProject && $editingProject->isManagedBy($user) && !$led->contains('team_id', $editingProject->team_id)) {
-            $led->push($editingProject->team);
+        // Restrict to the project's primary or participating offices.
+        if ($editingProject) {
+            $allowedOfficeIds = $this->authorizedOfficeIds($editingProject);
+            if ($allowedOfficeIds->isNotEmpty()) {
+                $teams = $teams->filter(fn ($t) => $allowedOfficeIds->contains((int) $t->office_id))->values();
+            }
+
+            // Keep the currently assigned team selectable even if the offices changed.
+            if ($editingProject->team && ! $teams->contains('team_id', $editingProject->team_id)) {
+                $teams->push($editingProject->team);
+            }
         }
 
-        return $led;
+        return $teams;
+    }
+
+    /**
+     * Offices a project may draw teams from: primary + participating.
+     *
+     * @return Collection<int, int>
+     */
+    private function authorizedOfficeIds(Project $project): Collection
+    {
+        return $project->authorizedOfficeIds();
     }
 }

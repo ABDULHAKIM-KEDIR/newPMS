@@ -10,7 +10,7 @@ return new class extends Migration
     {
         Schema::create('roles', function (Blueprint $table) {
             $table->id('role_id');
-            $table->string('role_name', 100); // ICT Director, Team Leader, Team Member, System Administrator
+            $table->string('role_name', 100); // Administrator, Team Lead, Team Member, System Administrator
             $table->text('description')->nullable();
         });
     }

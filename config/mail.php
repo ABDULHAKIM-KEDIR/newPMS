@@ -21,7 +21,7 @@ return [
         'array' => ['transport' => 'array'],
     ],
     'from' => [
-        'address' => env('MAIL_FROM_ADDRESS', 'noreply@ju.edu.et'),
-        'name' => env('MAIL_FROM_NAME', 'ICT PMS'),
+        'address' => env('MAIL_FROM_ADDRESS', 'noreply@example.com'),
+        'name' => env('MAIL_FROM_NAME', 'PMS'),
     ],
 ];

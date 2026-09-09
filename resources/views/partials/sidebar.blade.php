@@ -3,14 +3,14 @@
     <div class="brand">
         <div class="brand-mark">
             <img
-                src="{{ asset('images/jimma-university-logo.png') }}"
-                alt="Jimma University"
+                src="{{ asset('images/logo.png') }}"
+                alt="Project Management System"
             >
         </div>
 
         <div class="brand-text">
-            <div class="t1">ICT PMS</div>
-            <div class="t2">Jimma University</div>
+            <div class="t1">PMS</div>
+            <div class="t2">Project Management System</div>
         </div>
     </div>
 
@@ -175,9 +175,9 @@
             )
 
                 <a
-                    href="{{ route('admin.roles') }}"
-                    class="nav-item {{ request()->routeIs('admin.roles') ? 'active' : '' }}"
-                >
+    href="{{ route('admin.roles.index') }}"
+    class="nav-item {{ request()->routeIs('admin.roles.*') ? 'active' : '' }}"
+>
                     <svg width="16" height="16" viewBox="0 0 24 24"
                         fill="none" stroke="currentColor" stroke-width="2">
                         <path d="M12 3l1.6 3.2 3.5.4-2.6 2.5.7 3.5L12 10.9 8.8 12.6l.7-3.5-2.6-2.5 3.5-.4L12 3Z" />
@@ -212,6 +212,23 @@
 
             @endcan
 
+            @can('view_offices')
+
+                <a
+                    href="{{ route('admin.offices.index') }}"
+                    class="nav-item {{ request()->routeIs('admin.offices.*') ? 'active' : '' }}"
+                >
+                    <svg width="16" height="16" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M3 21h18M5 21V7l7-4 7 4v14" />
+                        <path d="M9 21v-4h6v4" />
+                    </svg>
+
+                    <span>Offices</span>
+                </a>
+
+            @endcan
+
             @can('view_audit_logs')
 
                 <a
@@ -225,6 +242,23 @@
                     </svg>
 
                     <span>Audit Log</span>
+                </a>
+
+            @endcan
+
+            @can('manage_project_types')
+
+                <a
+                    href="{{ route('admin.project-types.index') }}"
+                    class="nav-item {{ request()->routeIs('*project-types*') ? 'active' : '' }}"
+                >
+                    <svg width="16" height="16" viewBox="0 0 24 24"
+                        fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0l-7-7A2 2 0 0 1 3 12.2V5a2 2 0 0 1 2-2h7.2a2 2 0 0 1 1.4.6l7 7a2 2 0 0 1 0 2.8Z" />
+                        <circle cx="7.5" cy="7.5" r="1" />
+                    </svg>
+
+                    <span>Project Types</span>
                 </a>
 
             @endcan
@@ -259,7 +293,12 @@
             $currentUser = auth()->user();
         @endphp
 
-        <div class="user-chip">
+        <a
+            href="{{ route('profile.edit') }}"
+            class="user-chip"
+            style="text-decoration:none; color:inherit;"
+            title="Edit profile"
+        >
 
             <div class="avatar">
                 {{ $currentUser->initials() }}
@@ -275,7 +314,7 @@
                 </div>
             </div>
 
-        </div>
+        </a>
 
         <form
             method="POST"
