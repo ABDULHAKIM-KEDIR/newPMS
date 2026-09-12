@@ -11,14 +11,23 @@ use Illuminate\Validation\Rule;
 
 class ProjectTypeController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
         Gate::authorize('manage_project_types');
 
-        $projectTypes = ProjectType::withCount('projects')
-            ->with('office')
-            ->orderBy('name')
-            ->get();
+        $officeId = $request->query('office_id');
+
+        $query = ProjectType::with('office')->withCount('projects')->orderBy('name');
+
+        if ($officeId && $officeId !== 'all') {
+            if ($officeId === 'global') {
+                $query->whereNull('office_id');
+            } else {
+                $query->where('office_id', (int) $officeId);
+            }
+        }
+
+        $projectTypes = $query->get();
 
         return view('admin.project-types.index', [
             'projectTypes' => $projectTypes,
@@ -28,14 +37,23 @@ class ProjectTypeController extends Controller
     }
 
     /** Loads a record into the inline editor on the index page. */
-    public function edit(ProjectType $projectType)
+    public function edit(Request $request, ProjectType $projectType)
     {
         Gate::authorize('manage_project_types');
 
-        $projectTypes = ProjectType::withCount('projects')
-            ->with('office')
-            ->orderBy('name')
-            ->get();
+        $officeId = $request->query('office_id');
+
+        $query = ProjectType::with('office')->withCount('projects')->orderBy('name');
+
+        if ($officeId && $officeId !== 'all') {
+            if ($officeId === 'global') {
+                $query->whereNull('office_id');
+            } else {
+                $query->where('office_id', (int) $officeId);
+            }
+        }
+
+        $projectTypes = $query->get();
 
         return view('admin.project-types.index', [
             'projectTypes' => $projectTypes,
