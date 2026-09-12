@@ -63,10 +63,11 @@ class UserController extends Controller
             ->withQueryString();
 
         $roles = Role::orderBy('role_name')->get();
+        $offices = Office::orderBy('office_name')->get();
 
         return view(
             'admin.users.index',
-            compact('users', 'roles')
+            compact('users', 'roles', 'offices')
         );
     }
 
@@ -329,17 +330,32 @@ class UserController extends Controller
                 'required',
                 'exists:roles,role_id',
             ],
+
+            /*
+             * The office is chosen by the System Administrator at
+             * approval time — never by the registrant. Self-registered
+             * accounts keep office_id = null until this moment.
+             */
+            'office_id' => [
+                'nullable',
+                'exists:offices,office_id',
+            ],
         ]);
 
         $role = Role::findOrFail(
             $data['role_id']
         );
 
+        $assignedOffice = isset($data['office_id'])
+            ? Office::find($data['office_id'])
+            : null;
+
         $user->roles()->sync([
             $role->role_id,
         ]);
 
         $user->role = $role->role_name;
+        $user->office_id = $assignedOffice?->office_id;
         $user->status = 'Active';
         $user->save();
 
@@ -348,6 +364,7 @@ class UserController extends Controller
             'User',
             $user->user_id,
             "{$user->full_name} approved as {$role->role_name}"
+                .($assignedOffice ? " (office: {$assignedOffice->office_name})" : ' (no office)')
         );
 
         Activity::notify(
@@ -359,6 +376,7 @@ class UserController extends Controller
         return back()->with(
             'status',
             "{$user->full_name} was approved as {$role->role_name}."
+                .($assignedOffice ? " Office: {$assignedOffice->office_name}." : '')
         );
     }
 

@@ -17,26 +17,62 @@
 </div>
 
 @if ($officeStats)
+@php
+  $ob = $officeStats['budget'];
+  $obUtil = $ob['allocated'] > 0 ? min(100, round($ob['spent'] / $ob['allocated'] * 100)) : 0;
+  $snapTiles = [
+    ['icon' => '👥', 'label' => 'Teams', 'value' => $officeStats['teams']],
+    ['icon' => '👤', 'label' => 'Users', 'value' => $officeStats['users']],
+    ['icon' => '📁', 'label' => 'Projects', 'value' => $officeStats['projects']],
+    ['icon' => '🚀', 'label' => 'Active', 'value' => $officeStats['active_projects']],
+    ['icon' => '✅', 'label' => 'Completed', 'value' => $officeStats['completed_projects']],
+  ];
+@endphp
 <!-- Office Snapshot -->
 <div class="card card-pad" style="margin-bottom:20px;">
-  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-    <h3 style="margin:0; font-size:14px; text-transform:uppercase; color:var(--ink-soft);">{{ $officeStats['name'] }} Snapshot</h3>
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; gap:10px; flex-wrap:wrap;">
+    <div style="display:flex; align-items:center; gap:10px;">
+      <div style="width:34px; height:34px; border-radius:9px; background:color-mix(in srgb, var(--accent) 12%, transparent); display:flex; align-items:center; justify-content:center; font-size:16px;">🏢</div>
+      <div>
+        <h3 style="margin:0; font-size:14.5px; color:var(--ink);">{{ $officeStats['name'] }}</h3>
+        <div style="font-size:11.5px; color:var(--ink-soft); margin-top:1px;">Office snapshot</div>
+      </div>
+    </div>
     @can('view_offices')
       <a class="link-small" href="{{ route('admin.offices.index') }}">Office management →</a>
     @endcan
   </div>
-  <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:14px;">
-    <div><span class="k">Teams</span><div class="v">{{ $officeStats['teams'] }}</div></div>
-    <div><span class="k">Users</span><div class="v">{{ $officeStats['users'] }}</div></div>
-    <div><span class="k">Projects</span><div class="v">{{ $officeStats['projects'] }}</div></div>
-    <div><span class="k">Active</span><div class="v">{{ $officeStats['active_projects'] }}</div></div>
-    <div><span class="k">Completed</span><div class="v">{{ $officeStats['completed_projects'] }}</div></div>
-    @can('view_budgets')
-      <div><span class="k">Budget</span><div class="v">ETB {{ number_format($officeStats['budget']['allocated']) }}</div></div>
-      <div><span class="k">Spent</span><div class="v">ETB {{ number_format($officeStats['budget']['spent']) }}</div></div>
-      <div><span class="k">Remaining</span><div class="v">ETB {{ number_format($officeStats['budget']['remaining']) }}</div></div>
-    @endcan
+
+  <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(96px, 1fr)); gap:10px; margin-bottom:14px;">
+    @foreach ($snapTiles as $tile)
+      <div style="background:var(--bg-card, var(--surface)); border:1px solid var(--line); border-radius:10px; padding:12px 14px;">
+        <div style="font-size:14px; margin-bottom:6px;">{{ $tile['icon'] }}</div>
+        <div style="font-size:20px; font-weight:700; color:var(--ink); font-family:'Space Grotesk', sans-serif; line-height:1;">{{ $tile['value'] }}</div>
+        <div style="font-size:11px; color:var(--ink-soft); margin-top:5px; text-transform:uppercase; letter-spacing:.05em;">{{ $tile['label'] }}</div>
+      </div>
+    @endforeach
   </div>
+
+  @can('view_budgets')
+    <div style="background:var(--bg-card, var(--surface)); border:1px solid var(--line); border-radius:10px; padding:14px 16px;">
+      <div style="display:flex; justify-content:space-between; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:9px;">
+        <span style="font-size:11.5px; font-weight:600; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.05em;">💰 Budget</span>
+        <span class="mono" style="font-size:12px; color:var(--ink-soft);">
+          <b style="color:var(--ink); font-size:13px;">ETB {{ number_format($ob['allocated']) }}</b> allocated
+        </span>
+      </div>
+      <div class="progressbar {{ $obUtil >= 90 ? 'danger' : ($obUtil >= 70 ? 'warn' : '') }}" style="height:7px; border-radius:5px;"><div style="width:{{ $obUtil }}%"></div></div>
+      <div style="display:flex; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-top:9px; font-size:12px;">
+        <span style="color:var(--ink-soft);">
+          Spent <b class="mono" style="color:var(--ink);">ETB {{ number_format($ob['spent']) }}</b>
+          <span style="color:var(--ink-faint);">({{ $obUtil }}%)</span>
+        </span>
+        <span style="color:var(--ink-soft);">
+          Remaining <b class="mono" style="color:var(--success);">ETB {{ number_format($ob['remaining']) }}</b>
+        </span>
+      </div>
+    </div>
+  @endcan
 </div>
 @endif
 

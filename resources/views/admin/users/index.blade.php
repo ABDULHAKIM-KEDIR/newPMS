@@ -349,6 +349,28 @@
         @endforeach
     </select>
 
+    <select
+        name="office_id"
+        class="approve-role-select"
+        style="
+            border:1px solid var(--line);
+            border-radius:7px;
+            padding:6px 8px;
+            font-size:12px;
+            background:var(--surface);
+        "
+    >
+        <option value="">
+            No office
+        </option>
+
+        @foreach ($offices as $office)
+            <option value="{{ $office->office_id }}">
+                {{ $office->office_name }}
+            </option>
+        @endforeach
+    </select>
+
     <button
         type="button"
         class="link-small approve-user-btn"

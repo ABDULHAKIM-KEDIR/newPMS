@@ -55,6 +55,18 @@ class TeamController extends Controller
 
         $team = Team::create($data);
 
+        // Server-side office restriction for the team leader.
+        if ($team->team_leader_id && $team->office_id) {
+            $leader = User::find($team->team_leader_id);
+            if ($leader && $leader->office_id && (int) $leader->office_id !== (int) $team->office_id) {
+                $team->delete();
+
+                return back()->withErrors([
+                    'team_leader_id' => "{$leader->full_name} belongs to an office that is not associated with this team.",
+                ])->withInput();
+            }
+        }
+
         if ($team->team_leader_id) {
             TeamMember::create(['team_id' => $team->team_id, 'user_id' => $team->team_leader_id, 'joined_date' => now()]);
         }
@@ -87,12 +99,21 @@ class TeamController extends Controller
         }
 
         $memberIds = $team->members->pluck('user_id');
+        $teamOfficeId = $team->office_id ? (int) $team->office_id : null;
+
+        $officeScope = fn ($q) => $q->where(function ($q2) use ($teamOfficeId) {
+            // Users without an office keep the legacy behaviour; users with an
+            // office must belong to the team's office.
+            $q2->when($teamOfficeId, fn ($q3) => $q3->whereNull('office_id')->orWhere('office_id', $teamOfficeId));
+        });
+
         $availableUsers = $canManage
-            ? User::whereNotIn('user_id', $memberIds)->where('status', 'Active')->orderBy('full_name')->get()
+            ? User::whereNotIn('user_id', $memberIds)->where('status', 'Active')
+                ->when($teamOfficeId, $officeScope)->orderBy('full_name')->get()
             : collect();
 
         $leaderCandidates = $canManage
-            ? User::where('status', 'Active')->orderBy('full_name')->get()
+            ? User::where('status', 'Active')->when($teamOfficeId, $officeScope)->orderBy('full_name')->get()
             : collect();
 
         return view('teams.show', compact('team', 'canManage', 'availableUsers', 'leaderCandidates', 'allProjects', 'taskStats', 'teamTasks'));
@@ -108,6 +129,13 @@ class TeamController extends Controller
 
         if (! $resolvedUserId) {
             return back()->withErrors(['user_id' => 'Please provide a valid user name or select a member.']);
+        }
+
+        $added = User::find($resolvedUserId);
+        if ($added && ! $this->canAssignUserToTeam($team, $added)) {
+            return back()->withErrors([
+                'user_id' => "{$added->full_name} belongs to an office that is not associated with this team.",
+            ])->withInput();
         }
 
         if (! $team->members()->where('user_id', $resolvedUserId)->exists()) {
@@ -151,6 +179,12 @@ class TeamController extends Controller
         $oldLeader = optional($team->leader)->full_name ?? 'None';
         $newLeader = User::find($resolvedUserId);
 
+        if ($newLeader && ! $this->canAssignUserToTeam($team, $newLeader)) {
+            return back()->withErrors([
+                'team_leader_id' => "{$newLeader->full_name} belongs to an office that is not associated with this team.",
+            ])->withInput();
+        }
+
         // A leader must be on the team — add them if they aren't already.
         if (! $team->members()->where('user_id', $resolvedUserId)->exists()) {
             TeamMember::create(['team_id' => $team->team_id, 'user_id' => $resolvedUserId, 'joined_date' => now()]);
@@ -162,6 +196,16 @@ class TeamController extends Controller
         Activity::notify((int) $resolvedUserId, "You are now the leader of the {$team->team_name} team", 'general');
 
         return back()->with('status', "Team Lead changed to {$newLeader->full_name}.");
+    }
+
+    /**
+     * Server-side office restriction for team membership: a user with an
+     * office must belong to the team's office.
+     */
+    private function canAssignUserToTeam(Team $team, User $candidate): bool
+    {
+        return empty($team->office_id) || empty($candidate->office_id)
+            || (int) $team->office_id === (int) $candidate->office_id;
     }
 
     private function resolveUserId($input, ?int $teamId = null): ?int

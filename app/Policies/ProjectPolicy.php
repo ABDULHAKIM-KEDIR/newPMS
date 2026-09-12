@@ -4,7 +4,6 @@ namespace App\Policies;
 
 use App\Models\Project;
 use App\Models\User;
-use App\Services\RbacService;
 
 /**
  * Object-level authorization for projects.
@@ -19,55 +18,20 @@ use App\Services\RbacService;
 class ProjectPolicy
 {
     /**
-     * A user may view a project when an organization-wide grant gives them
-     * view_projects, or when any project-scoped grant source (PM of record,
-     * team assignment with view/contribute/manage access, direct project
-     * role) includes them.
+     * A user may view a project when they hold oversight authority
+     * (system administrator or org-level edit_projects), or when they
+     * participate in the project itself: PM of record, member of an
+     * assigned team, or a direct project member role. Office membership
+     * and org-level view grants alone no longer confer visibility.
      */
     public function view(User $user, Project $project): bool
     {
-        // System Administrators see everything.
-        if ($user->hasPermission('manage_system_settings')) {
+        // System Administrators and Directors see everything.
+        if ($user->hasPermission('manage_system_settings') || $user->isDirectorOrAdmin()) {
             return true;
         }
 
-        // PM of record.
-        if ((int) $project->project_manager_id === (int) $user->user_id) {
-            return true;
-        }
-
-        // Member of any team assigned to the project.
-        $project->loadMissing('teams.members', 'team.members');
-        $memberIds = $project->teams
-            ->merge([$project->team])
-            ->filter()
-            ->flatMap(fn ($team) => $team->members->pluck('user_id'))
-            ->unique();
-
-        if ($memberIds->contains((int) $user->user_id)) {
-            return true;
-        }
-
-        /*
-         * Office scoping: an org-level view_projects grant no longer grants
-         * blanket visibility across offices. Users scoped to an office can
-         * only see projects whose primary office is their own (or that their
-         * office participates in) — unless they hold manage-level authority
-         * (edit_projects covers directors who manage all offices).
-         */
-        if ($user->office_id && ! $user->hasPermission('edit_projects')) {
-            $inOfficeScope = (int) $project->primary_office_id === (int) $user->office_id
-                || $project->offices()
-                    ->wherePivot('office_id', $user->office_id)
-                    ->exists();
-
-            if (! $inOfficeScope) {
-                return false;
-            }
-        }
-
-        return app(RbacService::class)
-            ->can($user, 'view_projects', $project);
+        return $project->participatesIn($user);
     }
 
     /**
