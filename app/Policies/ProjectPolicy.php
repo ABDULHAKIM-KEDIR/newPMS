@@ -18,16 +18,20 @@ use App\Models\User;
 class ProjectPolicy
 {
     /**
-     * A user may view a project when they hold oversight authority
-     * (system administrator or org-level edit_projects), or when they
-     * participate in the project itself: PM of record, member of an
-     * assigned team, or a direct project member role. Office membership
-     * and org-level view grants alone no longer confer visibility.
+     * A user may view a project when they are a system administrator,
+     * or when the project sits under their office (primary or
+     * participating), or when they participate in the project itself:
+     * PM of record, member of an assigned team, or a direct project
+     * member role.
      */
     public function view(User $user, Project $project): bool
     {
-        // System Administrators and Directors see everything.
-        if ($user->hasPermission('manage_system_settings') || $user->isDirectorOrAdmin()) {
+        // System Administrators see everything.
+        if ($user->isAdmin()) {
+            return true;
+        }
+
+        if ($user->officeIds()->contains(fn ($id) => $project->involvesOffice((int) $id))) {
             return true;
         }
 

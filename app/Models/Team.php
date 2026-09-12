@@ -11,11 +11,26 @@ class Team extends Model
 
     public $timestamps = false;
 
-    protected $fillable = ['team_name', 'team_leader_id', 'description', 'status', 'office_id'];
+    protected $fillable = ['team_name', 'team_leader_id', 'description', 'status', 'office_id', 'parent_team_id'];
 
     public function office()
     {
         return $this->belongsTo(Office::class, 'office_id', 'office_id');
+    }
+
+    public function parentTeam()
+    {
+        return $this->belongsTo(self::class, 'parent_team_id', 'team_id');
+    }
+
+    public function childTeams()
+    {
+        return $this->hasMany(self::class, 'parent_team_id', 'team_id');
+    }
+
+    public function heads()
+    {
+        return $this->morphMany(OrgUnitHead::class, 'headable');
     }
 
     public function leader()

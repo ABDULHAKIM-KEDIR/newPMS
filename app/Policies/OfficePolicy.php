@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\Models\Office;
 use App\Models\User;
+use App\Services\RbacService;
 
 /**
  * Object-level authorization for offices.
@@ -23,7 +24,7 @@ class OfficePolicy
 
     public function view(User $user, Office $office): bool
     {
-        return $user->hasPermission('view_offices')
+        return app(RbacService::class)->canForScope($user, 'view_offices', $office)
             || $user->hasPermission('manage_offices')
             || $user->headsOffice($office);
     }
@@ -35,11 +36,11 @@ class OfficePolicy
 
     public function update(User $user, Office $office): bool
     {
-        return $user->hasPermission('manage_offices');
+        return app(RbacService::class)->canForScope($user, 'manage_offices', $office);
     }
 
     public function delete(User $user, Office $office): bool
     {
-        return $user->hasPermission('manage_offices');
+        return app(RbacService::class)->canForScope($user, 'manage_offices', $office);
     }
 }

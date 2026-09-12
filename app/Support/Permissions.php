@@ -57,6 +57,12 @@ class Permissions
      * `parent` models Asana-style composition instead of a fixed chain.
      */
     public const DEFAULT_ROLES = [
+        'Super Admin' => [
+            'scope' => 'organization',
+            'rank' => 1,
+            'parent' => null,
+            'permissions' => '*',
+        ],
         'Administrator' => [
             'scope' => 'organization',
             'rank' => 10,
@@ -102,6 +108,30 @@ class Permissions
             'parent' => null,
             'permissions' => ['view_projects', 'view_tasks', 'view_calendar', 'view_notifications'],
         ],
+        'Head of Department' => [
+            'scope' => 'department',
+            'rank' => 15,
+            'parent' => null,
+            'permissions' => '*',
+        ],
+        'Head of Office' => [
+            'scope' => 'office',
+            'rank' => 25,
+            'parent' => null,
+            'permissions' => '*',
+        ],
+        'Head of Project' => [
+            'scope' => 'project',
+            'rank' => 30,
+            'parent' => null,
+            'permissions' => '*',
+        ],
+        'Head of Team' => [
+            'scope' => 'team',
+            'rank' => 35,
+            'parent' => null,
+            'permissions' => '*',
+        ],
     ];
 
     /** Legacy role names kept so existing data keeps resolving. */
@@ -120,6 +150,6 @@ class Permissions
     {
         $canonical = self::LEGACY_ROLE_ALIASES[$name] ?? $name;
 
-        return $canonical === 'Administrator';
+        return in_array($canonical, ['Administrator', 'Super Admin'], true);
     }
 }

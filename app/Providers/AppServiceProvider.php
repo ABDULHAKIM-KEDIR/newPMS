@@ -32,7 +32,7 @@ class AppServiceProvider extends ServiceProvider
         Gate::before(function (User $user, string $ability) use ($rbac): ?bool {
             if (
                 $rbac->can($user, 'manage_system_settings')
-                || (method_exists($user, 'hasRole') && ($user->hasRole('System Administrator') || $user->hasRole('Administrator')))
+                || (method_exists($user, 'hasRole') && ($user->hasRole('System Administrator') || $user->hasRole('Administrator') || $user->hasRole('Super Admin')))
             ) {
                 return true;
             }

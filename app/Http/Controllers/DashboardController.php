@@ -16,7 +16,7 @@ class DashboardController extends Controller
     public function index()
     {
         $user = Auth::user();
-        $scoped = ! $user->isDirectorOrAdmin();
+        $scoped = ! $user->isAdmin();
         $teamIds = $scoped ? $user->teamIds() : null;
 
         $projectQuery = Project::with(['team', 'budget', 'phases']);
@@ -24,8 +24,9 @@ class DashboardController extends Controller
         $taskQuery = Task::query();
 
         /*
-         * Participation-aware scoping. Director/Admins see organization-wide
-         * stats. Everyone else sees only projects they participate in — as
+         * Participation-aware scoping. System Admins see organization-wide
+         * stats. Everyone else (including Project Managers) sees only
+         * projects under their office(s) or ones they participate in — as
          * PM of record, a member of an assigned team, or a direct project
          * member — never office-mates' unrelated work.
          */

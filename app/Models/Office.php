@@ -10,12 +10,32 @@ class Office extends Model
     protected $primaryKey = 'office_id';
 
     protected $fillable = [
-        'office_name', 'office_code', 'description', 'head_user_id', 'status',
+        'office_name', 'office_code', 'department_id', 'parent_office_id', 'description', 'head_user_id', 'status',
     ];
 
     public function head()
     {
         return $this->belongsTo(User::class, 'head_user_id', 'user_id');
+    }
+
+    public function department()
+    {
+        return $this->belongsTo(Department::class, 'department_id', 'department_id');
+    }
+
+    public function parentOffice()
+    {
+        return $this->belongsTo(self::class, 'parent_office_id', 'office_id');
+    }
+
+    public function childOffices()
+    {
+        return $this->hasMany(self::class, 'parent_office_id', 'office_id');
+    }
+
+    public function heads()
+    {
+        return $this->morphMany(OrgUnitHead::class, 'headable');
     }
 
     public function users()
