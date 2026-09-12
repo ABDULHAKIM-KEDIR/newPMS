@@ -500,6 +500,27 @@ Route::middleware(['auth', 'active', 'approved'])->group(function () {
         ->middleware('can:manage_team');
 
     Route::get(
+        '/teams/{team}/edit',
+        [TeamController::class, 'edit']
+    )
+        ->name('teams.edit')
+        ->middleware('can:manage_team');
+
+    Route::put(
+        '/teams/{team}',
+        [TeamController::class, 'update']
+    )
+        ->name('teams.update')
+        ->middleware('can:manage_team');
+
+    Route::delete(
+        '/teams/{team}',
+        [TeamController::class, 'destroy']
+    )
+        ->name('teams.destroy')
+        ->middleware('can:manage_team');
+
+    Route::get(
         '/teams/{team}',
         [TeamController::class, 'show']
     )
