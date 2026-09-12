@@ -10,10 +10,6 @@ class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        // ---- Roles & permissions ----
-        // The dynamic RBAC catalogue: permissions + default roles (with
-        // inheritance and scopes) live in RbacSeeder, which also aliases
-        // legacy role names onto canonical ones.
         // 1. Roles & permissions, then offices (FK dependencies first).
         $this->call([
             RbacSeeder::class,

@@ -65,7 +65,7 @@
     <div class="form-grid">
       <div class="form-field" style="grid-column:1 / -1;">
         <label for="project_name">Project Name <span style="color:var(--danger);">*</span></label>
-        <input type="text" id="project_name" name="project_name" value="{{ old('project_name') }}" required placeholder="e.g. E-Commerce Website">
+        <input type="text" id="project_name" name="project_name" value="{{ old('project_name') }}" data-required placeholder="e.g. E-Commerce Website">
       </div>
 
       <div class="form-field" style="grid-column:1 / -1;">
@@ -80,7 +80,7 @@
 
       <div class="form-field">
         <label for="project_type">Project Type <span style="color:var(--danger);">*</span></label>
-        <select id="project_type" name="project_type_id" required>
+        <select id="project_type" name="project_type_id" data-required>
           <option value="">Select Project Type</option>
           @foreach ($projectTypes as $type)
             <option value="{{ $type->project_type_id }}" {{ (string) old('project_type_id') === (string) $type->project_type_id ? 'selected' : '' }} data-office="{{ $type->office_id ?? '' }}">
@@ -129,9 +129,8 @@
       </div>
 
       <div class="form-field">
-        <label for="primary_office_id">Primary Office</label>
-        <select id="primary_office_id" name="primary_office_id">
-          <option value="">— No primary office —</option>
+        <label for="primary_office_id">Primary Office <span style="color:var(--accent, #2563eb);">*</span></label>
+        <select id="primary_office_id" name="primary_office_id" data-required>
           @foreach ($offices as $office)
             <option value="{{ $office->office_id }}" {{ (string) old('primary_office_id') === (string) $office->office_id ? 'selected' : '' }}>
               {{ $office->office_name }}</option>
@@ -162,7 +161,7 @@
 
     <div class="wizard-actions">
       <div></div>
-      <button type="button" class="btn btn-accent" onclick="validateStep1AndNext()">Continue to Teams →</button>
+      <button type="button" id="btn-step-1-next" class="btn btn-accent" onclick="validateStep1AndNext()">Continue to Teams →</button>
     </div>
   </div>
 
@@ -324,6 +323,7 @@
 </style>
 
 <script>
+  document.addEventListener('DOMContentLoaded', function () {
   window.__TEAMS_DATA__ = {!! json_encode($teamsData) !!};
 
   let currentStep = 1;
@@ -337,7 +337,7 @@
     const formData = new FormData(form);
     formData.set('step', step);
     if (savedProjectId) formData.set('project_id', savedProjectId);
-    const response = await fetch('{{ route('projects.wizard.save') }}', {
+    const response = await fetch('{!! route('projects.wizard.save') !!}', {
       method: 'POST', body: formData,
       headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
     });
@@ -420,13 +420,46 @@
   }
 
   function validateStep1() {
-    const name = document.getElementById('project_name').value.trim();
-    if (!name) { showInlineErrors({ project_name: ['Project Name is required.'] }); return false; }
-    return true;
+    clearInlineErrors();
+    let valid = true;
+
+    const fields = [
+      { id: 'project_name', label: 'Project Name' },
+      { id: 'project_type', label: 'Project Type' },
+      { id: 'priority', label: 'Priority' },
+      { id: 'primary_office_id', label: 'Primary Office' },
+    ];
+
+    fields.forEach(function (field) {
+      const input = document.getElementById(field.id);
+      if (!input) return;
+      const value = (input.value || '').trim();
+      const wrapper = input.closest('.form-field');
+      const existingError = wrapper?.querySelector('.field-error');
+
+      if (!value) {
+        valid = false;
+        input.classList.add('border-red-500');
+        if (wrapper && !existingError) {
+          const message = document.createElement('div');
+          message.className = 'field-error';
+          message.style.cssText = 'color:#dc2626; font-size:12px; margin-top:4px; font-weight:600;';
+          message.textContent = field.label + ' is required.';
+          wrapper.appendChild(message);
+        }
+      } else {
+        input.classList.remove('border-red-500');
+        existingError?.remove();
+      }
+    });
+
+    return valid;
   }
 
   function validateStep1AndNext() {
-    saveAndGoToStep(2);
+    if (validateStep1()) {
+      goToStep(2);
+    }
   }
 
   function validateStep2() {
@@ -663,6 +696,13 @@
     toggleTeamSelection(cb.value);
   });
 
+  document.getElementById('btn-step-1-next')?.addEventListener('click', function (e) {
+    e.preventDefault();
+    if (validateStep1()) {
+      goToStep(2);
+    }
+  });
+
   /*
    * Office-scoped project types: when the Primary Office changes, the
    * Project Type dropdown shows that office's types plus global types.
@@ -677,7 +717,7 @@
 
     const typeLabelFor = {
       @foreach ($projectTypes as $type)
-      {{ $type->project_type_id }}: {{ json_encode($type->name.($type->office_id ? ' · '.optional($type->office)->office_name : '')) }},
+      {{ $type->project_type_id }}: {!! json_encode($type->name.($type->office_id ? ' · '.optional($type->office)->office_name : '')) !!},
       @endforeach
     };
 
@@ -708,5 +748,23 @@
     // Apply once on load (e.g. validation errors re-rendering the form).
     filterTypes();
   })();
+
+  // Re-expose wizard functions globally so inline onclick handlers keep working.
+  Object.assign(window, {
+    goToStep,
+    validateStep1,
+    validateStep1AndNext,
+    validateStep2,
+    validateStep2AndNext,
+    validateTaskDates,
+    toggleTeamSelection,
+    addTaskRow,
+    removeTaskRow,
+    buildReviewAndNext,
+    buildReviewSummary,
+    finalizeWizard,
+    editWizardStep,
+  });
+  });
 </script>
 @endsection
