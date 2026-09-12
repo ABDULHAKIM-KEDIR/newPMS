@@ -27,7 +27,8 @@ class User extends Authenticatable
 
     public function roles()
     {
-        return $this->belongsToMany(Role::class, 'user_roles', 'user_id', 'role_id');
+        return $this->belongsToMany(Role::class, 'user_roles', 'user_id', 'role_id')
+            ->withPivot('scope_type', 'scope_id');
     }
 
     public function teams()
@@ -68,7 +69,7 @@ class User extends Authenticatable
      */
     public function hasRole(string $roleName): bool
     {
-        return $this->roles->contains('role_name', $roleName);
+        return $this->roles()->where('role_name', $roleName)->exists();
     }
 
     /**
@@ -120,13 +121,17 @@ class User extends Authenticatable
     /** True if the user heads this office. */
     public function headsOffice(Office $office): bool
     {
-        return (int) $office->head_user_id === (int) $this->user_id;
+        return (int) $office->head_user_id === (int) $this->user_id
+            || $office->heads()->where('user_id', $this->user_id)->exists();
     }
 
     /** True if the user heads any office at all. */
     public function headsAnyOffice(): bool
     {
-        return Office::where('head_user_id', $this->user_id)->exists();
+        return Office::where('head_user_id', $this->user_id)->exists()
+            || OrgUnitHead::where('headable_type', (new Office)->getMorphClass())
+                ->where('user_id', $this->user_id)
+                ->exists();
     }
 
     public function isActive(): bool

@@ -33,7 +33,7 @@ class RoleManagementService
             $role = Role::create([
                 'role_name' => $data['name'],
                 'description' => $data['description'],
-                'scope' => in_array($data['scope'] ?? 'organization', ['organization', 'project', 'team'], true)
+                'scope' => in_array($data['scope'] ?? 'organization', Role::SCOPES, true)
                     ? $data['scope'] : 'organization',
                 'parent_role_id' => $data['parent_role_id'] ?? null,
                 'rank' => $data['rank'] ?? 100,

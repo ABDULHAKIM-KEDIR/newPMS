@@ -2,10 +2,14 @@
 
 namespace App\Services;
 
+use App\Models\Department;
+use App\Models\Office;
 use App\Models\Project;
 use App\Models\Role;
+use App\Models\Team;
 use App\Models\User;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
 
 /**
  * The single access-control evaluation engine.
@@ -71,6 +75,11 @@ class RbacService
                 Role::whereIn('role_id', $directRoleIds)->get()
             ));
 
+            // Department and office heads inherit authority over every
+            // project below their node; team heads inherit it through the
+            // team's nested sub-team tree.
+            $slugs = $slugs->merge($this->hierarchyRolePermissionSlugs($user, $project));
+
             // 3. The project manager of record implicitly holds the PM
             //    baseline permissions on their own project.
             if ($project->project_manager_id && (int) $project->project_manager_id === (int) $user->user_id) {
@@ -116,7 +125,34 @@ class RbacService
             return false;
         }
 
+        if ($project && app(OrgHierarchyService::class)->canManage($user, $project)) {
+            return true;
+        }
+
         return $this->effectivePermissions($user, $project)->contains($slug);
+    }
+
+    /** Evaluate a permission against a department, office, project, or team scope. */
+    public function canForScope(User $user, string $slug, object $scope): bool
+    {
+        if (! $user->isActive()) {
+            return false;
+        }
+
+        if ($this->effectivePermissions($user)->contains($slug)) {
+            return true;
+        }
+
+        if (app(OrgHierarchyService::class)->canManage($user, $scope)) {
+            return true;
+        }
+
+        $candidates = $this->scopeCandidates($scope);
+
+        return $user->roles()->get()
+            ->filter(fn (Role $role) => isset($candidates[$this->normalizeScopeType((string) $role->pivot->scope_type)])
+                && $candidates[$this->normalizeScopeType((string) $role->pivot->scope_type)]->contains((int) $role->pivot->scope_id))
+            ->pipe(fn (Collection $roles) => $this->rolePermissionSlugs($roles)->contains($slug));
     }
 
     /**
@@ -190,12 +226,18 @@ class RbacService
      */
     public function assignRole(User $user, Role $role, ?object $scope = null): void
     {
-        $user->roles()->syncWithoutDetaching([
-            $role->role_id => [
-                'scope_type' => $scope?->getMorphClass(),
-                'scope_id' => $scope?->getKey(),
+        $scopeType = $scope ? $this->scopeType($scope) : null;
+        $scopeId = $scope?->getKey();
+
+        DB::table('user_roles')->updateOrInsert(
+            [
+                'user_id' => $user->user_id,
+                'role_id' => $role->role_id,
+                'scope_type' => $scopeType,
+                'scope_id' => $scopeId,
             ],
-        ]);
+            []
+        );
 
         $this->flushUser($user);
     }
@@ -205,7 +247,7 @@ class RbacService
         $user->roles()->newPivotStatement()
             ->where('user_id', $user->user_id)
             ->where('role_id', $role->role_id)
-            ->where('scope_type', $scope?->getMorphClass())
+            ->where('scope_type', $scope ? $this->scopeType($scope) : null)
             ->where('scope_id', $scope?->getKey())
             ->delete();
 
@@ -259,5 +301,142 @@ class RbacService
                 unset($this->cache[$key]);
             }
         }
+    }
+
+    protected function hierarchyRolePermissionSlugs(User $user, Project $project): Collection
+    {
+        $roles = $user->roles()->wherePivotNotNull('scope_type')->get();
+
+        return $roles->filter(function (Role $role) use ($project) {
+            $pivot = $role->pivot;
+            $scopeType = $this->normalizeScopeType((string) $pivot->scope_type);
+            $scopeId = (int) $pivot->scope_id;
+
+            if ($scopeType === 'team' && $role->role_name === 'Head of Team') {
+                return false;
+            }
+
+            return match ($scopeType) {
+                'project' => $scopeId === (int) $project->project_id,
+                'team' => $this->projectTeamIds($project)->contains($scopeId),
+                'office' => $this->projectOfficeIds($project)->contains($scopeId),
+                'department' => $this->projectDepartmentIds($project)->contains($scopeId),
+                default => false,
+            };
+        })->flatMap(fn (Role $role) => $this->inheritedSlugsFor($role))->unique()->values();
+    }
+
+    protected function projectTeamIds(Project $project): Collection
+    {
+        $ids = $project->allTeams()->pluck('team_id')->map(fn ($id) => (int) $id);
+        $pending = $ids->all();
+
+        while ($pending !== []) {
+            $children = Team::whereIn('parent_team_id', $pending)->pluck('team_id')
+                ->map(fn ($id) => (int) $id)->diff($ids);
+            $ids = $ids->merge($children)->unique()->values();
+            $pending = $children->all();
+        }
+
+        return $ids;
+    }
+
+    protected function projectOfficeIds(Project $project): Collection
+    {
+        $ids = $project->authorizedOfficeIds();
+        $pending = $ids->all();
+
+        while ($pending !== []) {
+            $children = Office::whereIn('parent_office_id', $pending)->pluck('office_id')
+                ->map(fn ($id) => (int) $id)->diff($ids);
+            $ids = $ids->merge($children)->unique()->values();
+            $pending = $children->all();
+        }
+
+        return $ids;
+    }
+
+    protected function projectDepartmentIds(Project $project): Collection
+    {
+        $ids = collect([$project->department_id])
+            ->merge($project->primaryOffice?->department_id)
+            ->merge($project->offices()->with('department')->get()->pluck('department_id'))
+            ->filter()->map(fn ($id) => (int) $id)->unique()->values();
+        $pending = $ids->all();
+
+        while ($pending !== []) {
+            $children = Department::whereIn('parent_department_id', $pending)->pluck('department_id')
+                ->map(fn ($id) => (int) $id)->diff($ids);
+            $ids = $ids->merge($children)->unique()->values();
+            $pending = $children->all();
+        }
+
+        return $ids;
+    }
+
+    protected function scopeType(object $scope): string
+    {
+        return match (true) {
+            $scope instanceof Department => 'department',
+            $scope instanceof Office => 'office',
+            $scope instanceof Project => 'project',
+            $scope instanceof Team => 'team',
+            default => strtolower(class_basename($scope)),
+        };
+    }
+
+    protected function normalizeScopeType(string $scopeType): string
+    {
+        return match ($scopeType) {
+            'App\\Models\\Department', 'department' => 'department',
+            'App\\Models\\Office', 'office' => 'office',
+            'App\\Models\\Project', 'project' => 'project',
+            'App\\Models\\Team', 'team' => 'team',
+            default => strtolower(class_basename($scopeType)),
+        };
+    }
+
+    protected function scopeIdsIncludingAncestors(object $scope, string $scopeType): Collection
+    {
+        $ids = collect([(int) $scope->getKey()]);
+        $current = $scope;
+
+        while ($current) {
+            $current = match ($scopeType) {
+                'department' => $current->parentDepartment,
+                'office' => $current->parentOffice,
+                'team' => $current->parentTeam,
+                default => null,
+            };
+
+            if ($current) {
+                $ids->push((int) $current->getKey());
+            }
+        }
+
+        return $ids->unique()->values();
+    }
+
+    /** @return array<string, Collection<int, int>> */
+    protected function scopeCandidates(object $scope): array
+    {
+        $type = $this->scopeType($scope);
+        $candidates = [$type => $this->scopeIdsIncludingAncestors($scope, $type)];
+
+        if ($scope instanceof Office) {
+            if ($scope->department) {
+                $candidates['department'] = $this->scopeIdsIncludingAncestors($scope->department, 'department');
+            }
+        } elseif ($scope instanceof Team) {
+            if ($scope->office) {
+                $candidates += $this->scopeCandidates($scope->office);
+            }
+        } elseif ($scope instanceof Project) {
+            $candidates['team'] = $this->projectTeamIds($scope);
+            $candidates['office'] = $this->projectOfficeIds($scope);
+            $candidates['department'] = $this->projectDepartmentIds($scope);
+        }
+
+        return $candidates;
     }
 }

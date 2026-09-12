@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class Role extends Model
 {
-    public const SCOPES = ['organization', 'project', 'team'];
+    public const SCOPES = ['organization', 'department', 'office', 'project', 'team'];
 
     protected $primaryKey = 'role_id';
 
