@@ -41,6 +41,9 @@
         @endif
         style="display:grid; grid-template-columns:1fr 2fr 1fr auto; gap:12px; align-items:end;"
     >
+        @if (request('office_id') && request('office_id') !== 'all')
+            <input type="hidden" name="office_id" value="{{ request('office_id') }}">
+        @endif
         @csrf
         @if ($editing) @method('PUT') @endif
 
@@ -97,6 +100,24 @@
     </form>
 </div>
 
+<div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+    <h2 class="text-lg font-bold text-slate-800">Project Types</h2>
+
+    <form method="GET" action="{{ route('admin.project-types.index') }}" class="flex items-center space-x-2">
+        <label for="office_filter" class="text-xs font-semibold uppercase tracking-wider text-slate-400">Filter by Office:</label>
+        <select name="office_id" id="office_filter" onchange="this.form.submit()"
+                class="bg-white border border-slate-200 text-slate-700 text-sm rounded-lg px-3 py-1.5 font-medium shadow-sm outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer">
+            <option value="all" {{ request('office_id') == 'all' || !request('office_id') ? 'selected' : '' }}>All Offices & Global</option>
+            <option value="global" {{ request('office_id') == 'global' ? 'selected' : '' }}>Global Only (All Offices)</option>
+            @foreach($offices as $office)
+                <option value="{{ $office->office_id }}" {{ request('office_id') == $office->office_id ? 'selected' : '' }}>
+                    {{ $office->office_name }}
+                </option>
+            @endforeach
+        </select>
+    </form>
+</div>
+
 <div class="card">
     <table>
         <thead>
@@ -114,7 +135,13 @@
             <tr>
                 <td class="cell-primary">{{ $type->name }}</td>
                 <td class="cell-sub">{{ $type->description ?? '—' }}</td>
-                <td class="cell-sub">{{ optional($type->office)->office_name ?? 'All offices' }}</td>
+                <td class="cell-sub">
+                    @if ($type->office)
+                        <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-blue-50 text-blue-700">{{ $type->office->office_name }}</span>
+                    @else
+                        <span class="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium bg-slate-100 text-slate-600">All Offices (Global)</span>
+                    @endif
+                </td>
                 <td style="text-align:center">{{ $type->projects_count }}</td>
                 <td style="text-align:center">
                     <span class="badge {{ $type->is_active ? 'b-active' : 'b-planning' }}">
