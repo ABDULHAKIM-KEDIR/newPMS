@@ -12,6 +12,8 @@
         <span class="badge b-active">{{ $office->office_code }}</span>
         <span class="badge {{ $office->isActive() ? 'b-active' : 'b-inactive' }}">{{ $office->status }}</span>
         @if ($office->description) — {{ $office->description }} @endif
+        @if ($office->department) · Department: {{ $office->department->department_name }} @endif
+        @if ($office->parentOffice) · Parent: {{ $office->parentOffice->office_name }} @endif
       </div>
     </div>
     @can('update', $office)
@@ -75,6 +77,15 @@
         </a>
       @empty
         <div style="color:var(--ink-muted); font-size:13px;">No teams assigned to this office yet.</div>
+      @endforelse
+    </div>
+
+    <div class="card card-pad">
+      <h3 style="margin:0 0 12px; font-size:14px; text-transform:uppercase; color:var(--ink-soft);">Child Offices</h3>
+      @forelse ($office->childOffices as $childOffice)
+        <a class="link-small" href="{{ route('admin.offices.show', $childOffice) }}" style="display:block; padding:6px 0; border-bottom:1px solid var(--line);">{{ $childOffice->office_name }}</a>
+      @empty
+        <div style="color:var(--ink-muted); font-size:13px;">No child offices assigned.</div>
       @endforelse
     </div>
 

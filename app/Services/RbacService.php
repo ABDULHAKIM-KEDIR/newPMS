@@ -38,6 +38,13 @@ class RbacService
 {
     public const TEAM_ACCESS_LEVELS = ['view', 'contribute', 'manage'];
 
+    public const LEADERSHIP_ROLE_NAMES = [
+        'Head of Department',
+        'Head of Office',
+        'Head of Project',
+        'Head of Team',
+    ];
+
     /** Permissions the PM of record holds on their own project, implicitly. */
     public const PROJECT_MANAGER_BASELINE = [
         'view_projects', 'edit_projects', 'view_tasks', 'create_tasks',
@@ -107,6 +114,7 @@ class RbacService
                     $user->roles()
                         ->wherePivot('scope_type', 'team')
                         ->whereInPivot('scope_id', $teamIds->all())
+                        ->whereNotIn('roles.role_name', self::LEADERSHIP_ROLE_NAMES)
                         ->get()
                 ));
             }
@@ -150,6 +158,7 @@ class RbacService
         $candidates = $this->scopeCandidates($scope);
 
         return $user->roles()->get()
+            ->filter(fn (Role $role) => ! in_array($role->role_name, self::LEADERSHIP_ROLE_NAMES, true))
             ->filter(fn (Role $role) => isset($candidates[$this->normalizeScopeType((string) $role->pivot->scope_type)])
                 && $candidates[$this->normalizeScopeType((string) $role->pivot->scope_type)]->contains((int) $role->pivot->scope_id))
             ->pipe(fn (Collection $roles) => $this->rolePermissionSlugs($roles)->contains($slug));

@@ -19,8 +19,17 @@
         </template>
       </div>
       <div style="display:flex; align-items:center; gap:8px; flex-shrink:0;">
+        <template x-if="task.is_locked">
+          <span class="badge b-blocked" style="font-size:10px;">Locked</span>
+        </template>
+        <template x-if="task.can_lock && !task.is_locked">
+          <button type="button" class="btn btn-ghost" style="padding:4px 10px; font-size:12px;" @click="lockTask()">Lock</button>
+        </template>
+        <template x-if="task.can_lock && task.is_locked">
+          <button type="button" class="btn btn-ghost" style="padding:4px 10px; font-size:12px;" @click="unlockTask()">Unlock</button>
+        </template>
         <template x-if="task.can_manage || task.can_update_status">
-          <button type="button" class="btn btn-ghost" style="padding:4px 10px; font-size:12px;" @click="editing = !editing" x-text="editing ? 'Cancel' : '✎ Edit'"></button>
+          <button type="button" class="btn btn-ghost" style="padding:4px 10px; font-size:12px;" @click="editing = !editing" x-show="!task.is_locked" x-text="editing ? 'Cancel' : '✎ Edit'"></button>
         </template>
         <template x-if="task.can_manage">
           <button type="button" class="btn btn-ghost" style="padding:4px 10px; font-size:12px; color:var(--danger);" @click="deleteTask()" title="Delete Task">🗑 Delete</button>
@@ -121,6 +130,15 @@
         </span>
       </div>
 
+      <template x-if="task.phase_budget">
+        <div class="field-row">
+          <span class="k">Phase funds</span>
+          <span class="v" style="font-size:12px;">
+            <span>Available for tasks: <strong style="color:var(--success);" x-text="'ETB ' + Number(task.phase_budget.remaining || 0).toLocaleString(undefined, {minimumFractionDigits: 2})"></strong></span>
+          </span>
+        </div>
+      </template>
+
       <div class="field-row">
         <span class="k">Start Date</span>
         <span class="v">
@@ -141,6 +159,36 @@
           </template>
           <template x-if="!editing">
             <span x-text="task.end_date_formatted || '—'"></span>
+          </template>
+        </span>
+      </div>
+
+      <div class="field-row">
+        <span class="k">Collaborators</span>
+        <span class="v" style="display:flex; flex-direction:column; align-items:stretch; gap:6px;">
+          <template x-for="a in (task.assignments || [])" :key="a.id">
+            <span style="display:flex; justify-content:space-between; gap:8px; align-items:center;">
+              <span x-text="a.name"></span>
+              <span style="display:flex; gap:5px; align-items:center;">
+                <span class="badge" :class="a.status === 'accepted' ? 'b-active' : (a.status === 'rejected' ? 'b-blocked' : 'b-risk')" x-text="a.status"></span>
+                <template x-if="a.can_respond && a.status === 'pending' && !task.is_locked">
+                  <span style="display:flex; gap:4px;">
+                    <button type="button" class="btn btn-ghost" style="padding:2px 6px; font-size:10px;" @click="respondAssignment(a, 'accepted')">Accept</button>
+                    <button type="button" class="btn btn-ghost" style="padding:2px 6px; font-size:10px;" @click="respondAssignment(a, 'rejected')">Reject</button>
+                  </span>
+                </template>
+              </span>
+            </span>
+          </template>
+          <template x-if="task.can_manage && !task.is_locked && task.assignable_users && task.assignable_users.length">
+            <select multiple x-model="selectedCollaboratorIds" style="border:1px solid var(--line); border-radius:6px; padding:4px 8px; font-size:12px; background:var(--surface);">
+              <template x-for="u in task.assignable_users" :key="u.id">
+                <option :value="String(u.id)" x-text="u.name"></option>
+              </template>
+            </select>
+          </template>
+          <template x-if="task.can_manage && !task.is_locked">
+            <button type="button" class="btn btn-ghost" style="padding:4px 8px; font-size:11px;" @click="saveCollaborators()">Save collaborators</button>
           </template>
         </span>
       </div>
@@ -176,28 +224,21 @@
       <div style="margin-top:20px; border-top:1px solid var(--line); padding-top:16px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
           <div class="stat-label" style="margin:0;">Subtasks</div>
-          <span style="font-size:11.5px; color:var(--ink-soft);" x-text="(task.subtasks ? task.subtasks.filter(s => s.is_completed).length : 0) + ' / ' + (task.subtasks ? task.subtasks.length : 0) + ' completed'"></span>
+          <span style="font-size:11.5px; color:var(--ink-soft);" x-text="taskTreeCount(task.subtasks) + ' nested task(s)'"></span>
         </div>
 
-        <template x-for="s in task.subtasks" :key="s.id">
-          <div style="display:flex; align-items:center; justify-content:space-between; padding:6px 10px; background:var(--bg-subtle); border:1px solid var(--line); border-radius:6px; margin-bottom:6px;">
-            <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; flex:1;">
-              <input type="checkbox" :checked="s.is_completed" @change="toggleSubtask(s)" style="accent-color:var(--accent); cursor:pointer;">
-              <span :style="s.is_completed ? 'text-decoration:line-through; color:var(--ink-muted);' : 'color:var(--ink);'" x-text="s.name"></span>
-            </label>
-            <span class="badge" :class="s.is_completed ? 'b-active' : 'b-risk'" style="font-size:10px;" x-text="s.is_completed ? 'Done' : 'Pending'"></span>
-          </div>
-        </template>
+        <div x-html="renderTaskTree(task.subtasks)"></div>
 
         <div style="display:flex; gap:8px; margin-top:8px;">
           <input
             type="text"
             x-model="newSubtaskName"
             @keydown.enter="addSubtask()"
+            :disabled="task.is_locked"
             placeholder="Add a new subtask..."
             style="flex:1; border:1px solid var(--line); border-radius:6px; padding:6px 10px; font-size:12.5px; font-family:inherit; background:var(--surface);"
           >
-          <button type="button" class="btn btn-ghost" style="padding:6px 12px; font-size:12px;" @click="addSubtask()" :disabled="addingSubtask">+ Add</button>
+          <button type="button" class="btn btn-ghost" style="padding:6px 12px; font-size:12px;" @click="addSubtask()" :disabled="addingSubtask || task.is_locked">+ Add</button>
         </div>
       </div>
 
@@ -303,6 +344,7 @@
       open: false,
       editing: false,
       task: {},
+      selectedCollaboratorIds: [],
       dirty: false,
       newComment: '',
       posting: false,
@@ -324,6 +366,7 @@
           return;
         }
         this.task = await res.json();
+        this.selectedCollaboratorIds = (this.task.assignments || []).map(a => String(a.user_id));
         this.open = true;
         this.editing = startInEditMode;
         this.dirty = false;
@@ -442,6 +485,77 @@
         } catch (e) {
           console.error('Save changes error:', e);
           alertDialog({ text: 'An error occurred while saving task changes.' });
+        }
+      },
+
+      taskTreeCount(nodes) {
+        return (nodes || []).reduce((total, node) => total + 1 + this.taskTreeCount(node.children), 0);
+      },
+
+      escapeTaskText(value) {
+        return String(value || '').replace(/[&<>'"]/g, character => ({
+          '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;'
+        }[character]));
+      },
+
+      renderTaskTree(nodes, depth = 0) {
+        return (nodes || []).map(node => `
+          <div style="margin-left:${depth * 14}px; display:flex; align-items:center; gap:8px; padding:6px 10px; background:var(--bg-subtle); border:1px solid var(--line); border-radius:6px; margin-bottom:6px;">
+            <input type="checkbox" ${node.is_completed ? 'checked' : ''} ${this.task.is_locked ? 'disabled' : ''} onchange="window.toggleTaskSubtask(${node.id})" style="accent-color:var(--accent); cursor:pointer;">
+            <span style="flex:1; font-size:13px; ${node.is_completed ? 'text-decoration:line-through; color:var(--ink-muted);' : 'color:var(--ink);'}">${this.escapeTaskText(node.name)}</span>
+            <span class="badge ${node.is_completed ? 'b-active' : 'b-risk'}" style="font-size:10px;">${node.is_completed ? 'Done' : 'Pending'}</span>
+          </div>${this.renderTaskTree(node.children, depth + 1)}
+        `).join('');
+      },
+
+      async saveCollaborators() {
+        const res = await fetch(`/tasks/${this.task.id}/assign`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': this.csrf() },
+          body: JSON.stringify({ assignees: this.selectedCollaboratorIds })
+        });
+        if (!res.ok) {
+          alertDialog({ text: 'Failed to save collaborators.' });
+          return;
+        }
+        const data = await res.json();
+        this.task.assignments = data.assignments || [];
+        this.flash('Collaborators updated');
+        this.dirty = true;
+      },
+
+      async respondAssignment(assignment, status) {
+        const res = await fetch(`/tasks/assignments/${assignment.id}/respond`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-CSRF-TOKEN': this.csrf() },
+          body: JSON.stringify({ status })
+        });
+        if (res.ok) {
+          assignment.status = status;
+          this.flash(`Assignment ${status}`);
+        }
+      },
+
+      async lockTask() {
+        const res = await fetch(`/tasks/${this.task.id}/lock`, {
+          method: 'POST', headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': this.csrf() }
+        });
+        if (res.ok) {
+          this.task.is_locked = true;
+          this.editing = false;
+          this.task.can_update_status = false;
+          this.flash('Task locked');
+        }
+      },
+
+      async unlockTask() {
+        const res = await fetch(`/tasks/${this.task.id}/unlock`, {
+          method: 'POST', headers: { 'Accept': 'application/json', 'X-CSRF-TOKEN': this.csrf() }
+        });
+        if (res.ok) {
+          this.task.is_locked = false;
+          this.task.can_update_status = true;
+          this.flash('Task unlocked');
         }
       },
 
@@ -682,5 +796,10 @@
       return;
     }
     Alpine.$data(panel).show(id, editMode);
+  };
+
+  window.toggleTaskSubtask = (id) => {
+    const panel = document.querySelector('[x-data^="taskPanel"]');
+    if (panel) Alpine.$data(panel).toggleSubtask({ id });
   };
 </script>

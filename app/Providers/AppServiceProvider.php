@@ -2,10 +2,13 @@
 
 namespace App\Providers;
 
+use App\Models\ChangeRequest;
+use App\Models\Department;
 use App\Models\Office;
 use App\Models\Phase;
 use App\Models\Project;
 use App\Models\Task;
+use App\Models\Team;
 use App\Models\User;
 use App\Policies\OfficePolicy;
 use App\Policies\ProjectPolicy;
@@ -46,9 +49,17 @@ class AppServiceProvider extends ServiceProvider
         // RBAC engine (org + project + team scopes, inheritance-aware).
         foreach (array_keys(Permissions::ALL) as $slug) {
             Gate::define($slug, function (User $user, $model = null) use ($rbac, $slug) {
+                if ($model instanceof Department || $model instanceof Office || $model instanceof Team) {
+                    return $rbac->canForScope($user, $slug, $model);
+                }
+
                 $project = $model instanceof Project
                     ? $model
                     : ($model instanceof Phase ? $model->project : null);
+
+                if ($model instanceof Task || $model instanceof ChangeRequest) {
+                    $project = $model->project ?? optional($model->phase)->project;
+                }
 
                 return $rbac->can($user, $slug, $project);
             });

@@ -27,6 +27,7 @@ class UserController extends Controller
         abort_unless($actor->can('manage_users'), 403);
 
         $query = User::with('roles')->availableTo($actor);
+        $pendingApprovalQuery = User::query()->where('status', 'Pending');
 
         if ($q = trim((string) $request->get('q', ''))) {
             $query->where(function ($w) use ($q) {
@@ -44,6 +45,12 @@ class UserController extends Controller
 
         if ($status = $request->get('status')) {
             $query->where('status', $status);
+        }
+
+        $officeFilter = $request->integer('office_id') ?: null;
+        if ($officeFilter) {
+            $query->where('office_id', $officeFilter);
+            $pendingApprovalQuery->where('office_id', $officeFilter);
         }
 
         $users = $query
@@ -66,10 +73,12 @@ class UserController extends Controller
             ->orderBy('office_name')->get();
 
         $pendingUsersCount = User::pendingFor($actor)->count();
+        $pendingApprovalCount = $pendingApprovalQuery->count();
 
         return view(
             'admin.users.index',
-            compact('users', 'roles', 'offices', 'pendingUsersCount')
+            compact('users', 'roles', 'offices', 'officeFilter', 'pendingUsersCount', 'pendingApprovalCount')
+
         );
     }
 

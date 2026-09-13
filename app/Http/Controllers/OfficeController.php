@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Department;
 use App\Models\Office;
 use App\Models\User;
 use App\Support\Activity;
@@ -27,8 +28,10 @@ class OfficeController extends Controller
         $this->authorize('create', Office::class);
 
         $users = User::where('status', 'Active')->orderBy('full_name')->get();
+        $departments = Department::where('status', 'Active')->orderBy('department_name')->get();
+        $parentOffices = Office::active()->orderBy('office_name')->get();
 
-        return view('admin.offices.create', compact('users'));
+        return view('admin.offices.create', compact('users', 'departments', 'parentOffices'));
     }
 
     public function store(Request $request)
@@ -48,7 +51,7 @@ class OfficeController extends Controller
     {
         $this->authorize('view', $office);
 
-        $office->load(['head', 'users.roles', 'teams.leader', 'primaryProjects', 'participatingProjects']);
+        $office->load(['head', 'department', 'parentOffice', 'childOffices', 'users.roles', 'teams.leader', 'primaryProjects', 'participatingProjects']);
 
         return view('admin.offices.show', [
             'office' => $office,
@@ -61,8 +64,10 @@ class OfficeController extends Controller
         $this->authorize('update', $office);
 
         $users = User::where('status', 'Active')->orderBy('full_name')->get();
+        $departments = Department::where('status', 'Active')->orderBy('department_name')->get();
+        $parentOffices = Office::active()->where('office_id', '!=', $office->office_id)->orderBy('office_name')->get();
 
-        return view('admin.offices.edit', compact('office', 'users'));
+        return view('admin.offices.edit', compact('office', 'users', 'departments', 'parentOffices'));
     }
 
     public function update(Request $request, Office $office)
@@ -122,6 +127,12 @@ class OfficeController extends Controller
             ],
             'description' => ['nullable', 'string', 'max:2000'],
             'head_user_id' => ['nullable', 'exists:users,user_id'],
+            'department_id' => ['nullable', 'exists:departments,department_id'],
+            'parent_office_id' => [
+                'nullable',
+                'exists:offices,office_id',
+                Rule::notIn($office ? [$office->office_id] : []),
+            ],
         ]);
     }
 }

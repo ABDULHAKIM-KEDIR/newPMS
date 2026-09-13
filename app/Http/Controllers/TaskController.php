@@ -10,12 +10,15 @@ use App\Models\Phase;
 use App\Models\Project;
 use App\Models\Role;
 use App\Models\Task;
+use App\Models\TaskAssignment;
 use App\Models\TaskComment;
 use App\Models\TaskProgressLog;
 use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\User;
 use App\Services\MentionService;
+use App\Services\RbacService;
+use App\Services\TaskBudgetAllocationService;
 use App\Support\Activity;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -41,15 +44,19 @@ class TaskController extends Controller
         $assigneeId = $request->get('assignee');
         $dueDate = $request->get('due_date');
 
-        $query = Task::with(['project', 'team', 'phase.project', 'assignee', 'comments', 'attachments', 'subtasks'])->orderBy('end_date');
+        $query = Task::with(['project', 'team', 'phase.project', 'assignee', 'comments', 'attachments', 'subtasks', 'assignments.user'])->orderBy('end_date');
 
         // Scoping: "mine" shows assigned tasks; "all" shows tasks of projects
         // the user participates in (plus anything assigned to them).
         if ($filter === 'mine' || ! $user->can('view_projects')) {
-            $query->where('assigned_to', $user->user_id);
+            $query->where(function ($q) use ($user) {
+                $q->where('assigned_to', $user->user_id)
+                    ->orWhereHas('assignments', fn ($aq) => $aq->where('user_id', $user->user_id));
+            });
         } elseif ($filter === 'all') {
             $query->where(function ($q) use ($user) {
                 $q->where('assigned_to', $user->user_id)
+                    ->orWhereHas('assignments', fn ($aq) => $aq->where('user_id', $user->user_id))
                     ->orWhereHas('project', fn ($pq) => $pq->visibleTo($user))
                     ->orWhereHas('phase.project', fn ($pq) => $pq->visibleTo($user));
             });
@@ -98,10 +105,14 @@ class TaskController extends Controller
         // the loaded collection in PHP — keeps memory flat for large tables.
         $countQuery = Task::query();
         if ($filter === 'mine' || ! $user->can('view_projects')) {
-            $countQuery->where('assigned_to', $user->user_id);
+            $countQuery->where(function ($q) use ($user) {
+                $q->where('assigned_to', $user->user_id)
+                    ->orWhereHas('assignments', fn ($aq) => $aq->where('user_id', $user->user_id));
+            });
         } elseif ($filter === 'all') {
             $countQuery->where(function ($q) use ($user) {
                 $q->where('assigned_to', $user->user_id)
+                    ->orWhereHas('assignments', fn ($aq) => $aq->where('user_id', $user->user_id))
                     ->orWhereHas('project', fn ($pq) => $pq->visibleTo($user))
                     ->orWhereHas('phase.project', fn ($pq) => $pq->visibleTo($user));
             });
@@ -119,7 +130,10 @@ class TaskController extends Controller
             'blocked' => $statusCounts['Blocked'] ?? 0,
         ];
 
-        $myCount = Task::where('assigned_to', $user->user_id)->count();
+        $myCount = Task::where(function ($q) use ($user) {
+            $q->where('assigned_to', $user->user_id)
+                ->orWhereHas('assignments', fn ($aq) => $aq->where('user_id', $user->user_id));
+        })->count();
         $allCount = (clone $countQuery)->count();
 
         $projects = Project::orderBy('project_name')->get();
@@ -137,7 +151,7 @@ class TaskController extends Controller
     {
         $task->load([
             'project.teams', 'team.members.user', 'subtasks', 'comments.user',
-            'attachments.uploader', 'dependencies', 'assignee', 'phase.project.team', 'progressLogs.user',
+            'attachments.uploader', 'dependencies', 'assignee', 'assignments.user', 'phase.project.team', 'progressLogs.user',
         ]);
 
         $this->authorize('view', $task);
@@ -145,11 +159,14 @@ class TaskController extends Controller
         /** @var User $user */
         $user = Auth::user();
         $project = $task->project ?? optional($task->phase)->project;
+        $this->loadTaskTree($task);
 
         $canManage = ($project && $project->isManagedBy($user)) || $user->can('create_tasks');
-        $canUpdateStatus = $canManage || $task->assigned_to === $user->user_id;
+        $hasAcceptedAssignment = $task->assignments->contains(fn (TaskAssignment $assignment) => (int) $assignment->user_id === (int) $user->user_id && $assignment->status === 'accepted'
+        );
+        $canUpdateStatus = ! $task->is_locked && ($canManage || $task->assigned_to === $user->user_id || $hasAcceptedAssignment);
 
-        $assignableUsers = $project ? $project->getAssignableUsersWithRoles() : collect();
+        $assignableUsers = $project ? $project->getAssignableUsersWithRoles($user) : collect();
 
         $phases = [];
         if ($project) {
@@ -172,6 +189,12 @@ class TaskController extends Controller
             'team_name' => optional($task->team)->team_name,
             'phase_id' => $task->phase_id,
             'phase' => optional($task->phase)->phase_name,
+            'phase_budget' => $task->phase ? [
+                'allocated' => (float) ($task->phase->budget?->allocated_amount ?? 0),
+                'spent' => (float) ($task->phase->budget?->spent_amount ?? 0),
+                'task_allocated' => $task->phase->allocatedTaskAmount(),
+                'remaining' => $task->phase->remainingTaskBudget(),
+            ] : null,
             'phases' => $phases,
             'project_id' => $project ? $project->project_id : null,
             'project' => $project ? $project->project_name : null,
@@ -186,13 +209,18 @@ class TaskController extends Controller
             'description' => $task->description,
             'can_update_status' => $canUpdateStatus,
             'can_manage' => $canManage,
+            'is_locked' => (bool) $task->is_locked,
+            'locked_at' => optional($task->locked_at)?->toIso8601String(),
+            'can_lock' => (bool) ($project && $project->isManagedBy($user)),
             'assignable_users' => $assignableUsers,
-            'subtasks' => $task->subtasks->map(fn ($t) => [
-                'id' => $t->task_id,
-                'name' => $t->task_name,
-                'status' => $t->status,
-                'is_completed' => in_array($t->status, ['Done', 'Completed']),
-            ]),
+            'assignments' => $task->assignments->map(fn (TaskAssignment $assignment) => [
+                'id' => $assignment->task_assignment_id,
+                'user_id' => $assignment->user_id,
+                'name' => optional($assignment->user)->full_name,
+                'status' => $assignment->status,
+                'can_respond' => (int) $assignment->user_id === (int) $user->user_id,
+            ])->values(),
+            'subtasks' => $this->serializeTaskTree($task->subtasks),
             'attachments' => $task->attachments->map(fn ($a) => [
                 'id' => $a->attachment_id,
                 'file_name' => $a->file_name,
@@ -246,6 +274,13 @@ class TaskController extends Controller
 
         $data = $request->validated();
 
+        if ($phase) {
+            app(TaskBudgetAllocationService::class)->assertAllocationAllowed(
+                $phase,
+                $data['budget'] ?? 0
+            );
+        }
+
         $status = $data['status'] ?? 'To Do';
         $taskProjectId = $project ? $project->project_id : ($data['project_id'] ?? null);
         $taskTeamId = $data['team_id'] ?? ($project ? $project->team_id : null);
@@ -264,6 +299,10 @@ class TaskController extends Controller
             'start_date' => $data['start_date'] ?? null,
             'end_date' => $data['end_date'] ?? null,
         ]);
+
+        if ($resolvedAssigneeId) {
+            $this->syncAssignments($task, [$resolvedAssigneeId]);
+        }
 
         if ($project) {
             $project->recalculateProgress();
@@ -292,9 +331,16 @@ class TaskController extends Controller
         $project = $task->project ?? optional($task->phase)->project;
         $user = Auth::user();
 
-        $isAssignee = (int) $task->assigned_to === (int) $user->user_id;
+        $this->abortIfLocked($task);
+
+        $primaryAssignment = $task->assignments->firstWhere('user_id', $user->user_id);
+        $isAssignee = (int) $task->assigned_to === (int) $user->user_id
+            && (! $primaryAssignment || $primaryAssignment->status === 'accepted');
         $this->authorize('updateStatus', $task);
-        abort_unless($user->can('update_task_status') && ($isAssignee || ($project && $project->isManagedBy($user)) || $user->isDirectorOrAdmin()), 403);
+        $canUpdateTaskStatus = $project
+            ? app(RbacService::class)->can($user, 'update_task_status', $project)
+            : $user->hasPermission('update_task_status');
+        abort_unless($canUpdateTaskStatus && ($isAssignee || ($project && $project->isManagedBy($user)) || $user->isDirectorOrAdmin()), 403);
 
         $data = $request->validate([
             'status' => ['required', 'in:'.implode(',', self::STATUSES)],
@@ -359,15 +405,29 @@ class TaskController extends Controller
         $project = $task->project ?? optional($task->phase)->project;
         $user = Auth::user();
 
-        abort_unless($user->can('assign_tasks') && (($project && $project->isManagedBy($user)) || $user->isDirectorOrAdmin()), 403);
+        $this->abortIfLocked($task);
 
-        $assigneeInput = $request->input('assigned_to') ?? $request->input('assignee_name');
+        $canAssignTask = $project
+            ? app(RbacService::class)->can($user, 'assign_tasks', $project)
+            : $user->hasPermission('assign_tasks');
+        abort_unless($canAssignTask && (($project && $project->isManagedBy($user)) || $user->isDirectorOrAdmin()), 403);
+
+        $assigneeInputs = $request->input('assignees', $request->input('assigned_to') ?? $request->input('assignee_name'));
+        $assigneeInputs = is_array($assigneeInputs) ? $assigneeInputs : [$assigneeInputs];
         $reason = $request->input('reason');
-        $resolvedAssigneeId = $this->resolveAssigneeId($assigneeInput, $project);
-        $this->assertAssigneeAllowed($project, $resolvedAssigneeId);
+        $resolvedAssigneeIds = collect($assigneeInputs)
+            ->map(fn ($input) => $this->resolveAssigneeId($input, $project))
+            ->filter()
+            ->unique()
+            ->values();
+        foreach ($resolvedAssigneeIds as $resolvedAssigneeId) {
+            $this->assertAssigneeAllowed($project, $resolvedAssigneeId);
+        }
 
         $previousAssignee = optional($task->assignee)->full_name ?? 'Unassigned';
-        $task->update(['assigned_to' => $resolvedAssigneeId]);
+        $primaryAssigneeId = $resolvedAssigneeIds->first();
+        $task->update(['assigned_to' => $primaryAssigneeId]);
+        $this->syncAssignments($task, $resolvedAssigneeIds->all());
 
         $assigneeName = optional($task->fresh()->assignee)->full_name ?? 'Unassigned';
         $remarks = "Reassigned from {$previousAssignee} to {$assigneeName}".($reason ? " (Reason: {$reason})" : '');
@@ -382,14 +442,71 @@ class TaskController extends Controller
 
         Activity::log('Reassigned task', 'Task', $task->task_id, "{$task->task_name} → {$assigneeName}".($reason ? " (Reason: {$reason})" : ''));
 
-        if ($resolvedAssigneeId && (int) $resolvedAssigneeId !== (int) $user->user_id) {
-            Activity::notify((int) $resolvedAssigneeId, $user->full_name." assigned you \"{$task->task_name}\"".($reason ? " (Reason: {$reason})" : ''), 'task');
+        foreach ($resolvedAssigneeIds as $resolvedAssigneeId) {
+            if ((int) $resolvedAssigneeId !== (int) $user->user_id) {
+                Activity::notify((int) $resolvedAssigneeId, $user->full_name." assigned you \"{$task->task_name}\"".($reason ? " (Reason: {$reason})" : ''), 'task');
+            }
         }
 
         return response()->json([
             'assignee_id' => $task->assigned_to,
             'assignee' => $assigneeName,
+            'assignments' => $task->fresh('assignments.user')->assignments->map(fn (TaskAssignment $assignment) => [
+                'id' => $assignment->task_assignment_id,
+                'user_id' => $assignment->user_id,
+                'name' => optional($assignment->user)->full_name,
+                'status' => $assignment->status,
+            ]),
         ]);
+    }
+
+    public function respondToAssignment(Request $request, TaskAssignment $assignment)
+    {
+        abort_unless((int) $assignment->user_id === (int) Auth::id(), 403);
+        abort_if($assignment->task->is_locked, 422, 'This task is locked.');
+
+        $data = $request->validate([
+            'status' => ['required', 'in:accepted,rejected'],
+            'response_reason' => ['nullable', 'string', 'max:1000'],
+        ]);
+
+        $assignment->update([
+            'status' => $data['status'],
+            'responded_at' => now(),
+            'response_reason' => $data['response_reason'] ?? null,
+        ]);
+
+        Activity::log(
+            ucfirst($data['status']).' task assignment',
+            'Task',
+            $assignment->task_id,
+            $assignment->task->task_name
+        );
+
+        return response()->json(['status' => $assignment->status]);
+    }
+
+    public function lock(Task $task)
+    {
+        $task->load('project', 'phase.project');
+        $project = $task->project ?? optional($task->phase)->project;
+        abort_unless($project && $project->isManagedBy(Auth::user()), 403);
+        abort_if($task->is_locked, 422, 'This task is already locked.');
+
+        $task->update(['is_locked' => true, 'locked_at' => now(), 'locked_by' => Auth::id()]);
+
+        return response()->json(['locked' => true]);
+    }
+
+    public function unlock(Task $task)
+    {
+        $task->load('project', 'phase.project');
+        $project = $task->project ?? optional($task->phase)->project;
+        abort_unless($project && $project->isManagedBy(Auth::user()), 403);
+
+        $task->update(['is_locked' => false, 'locked_at' => null, 'locked_by' => null]);
+
+        return response()->json(['locked' => false]);
     }
 
     public function update(UpdateTaskRequest $request, Task $task)
@@ -397,6 +514,8 @@ class TaskController extends Controller
         $task->load('phase.project', 'project');
         $project = $task->project ?? optional($task->phase)->project;
         $user = Auth::user();
+
+        $this->abortIfLocked($task);
 
         $canManage = $project ? $project->isManagedBy($user) : false;
         $isAssignee = (int) $task->assigned_to === (int) $user->user_id;
@@ -409,6 +528,31 @@ class TaskController extends Controller
             $assigneeInput = $request->input('assigned_to') ?? $request->input('assignee_name');
             $data['assigned_to'] = $this->resolveAssigneeId($assigneeInput, $project);
             $this->assertAssigneeAllowed($project, $data['assigned_to']);
+            $this->syncAssignments($task, $data['assigned_to'] ? [$data['assigned_to']] : []);
+        }
+
+        $targetPhase = array_key_exists('phase_id', $data)
+            ? Phase::with('budget')->find($data['phase_id'])
+            : $task->phase;
+        if ($targetPhase) {
+            app(TaskBudgetAllocationService::class)->assertAllocationAllowed(
+                $targetPhase,
+                $data['budget'] ?? $task->budget,
+                (int) $targetPhase->phase_id === (int) $task->phase_id ? $task->task_id : null
+            );
+        } elseif (array_key_exists('budget', $data) && (float) $data['budget'] > 0) {
+            abort(422, 'A task allocation requires a phase.');
+        }
+
+        if ($request->has('assignees')) {
+            $assigneeIds = collect((array) $request->input('assignees'))
+                ->map(fn ($input) => $this->resolveAssigneeId($input, $project))
+                ->filter()->unique()->values()->all();
+            foreach ($assigneeIds as $assigneeId) {
+                $this->assertAssigneeAllowed($project, $assigneeId);
+            }
+            $data['assigned_to'] = $assigneeIds[0] ?? null;
+            $this->syncAssignments($task, $assigneeIds);
         }
 
         if (isset($data['status'])) {
@@ -537,6 +681,7 @@ class TaskController extends Controller
 
     public function storeSubtask(Request $request, Task $task)
     {
+        $this->abortIfLocked($task);
         $data = $request->validate([
             'task_name' => ['required', 'string', 'max:150'],
         ]);
@@ -563,6 +708,7 @@ class TaskController extends Controller
 
     public function toggleSubtask(Task $subtask)
     {
+        $this->abortIfLocked($subtask);
         $newStatus = in_array($subtask->status, ['Done', 'Completed']) ? 'To Do' : 'Completed';
         $subtask->update(['status' => $newStatus, 'progress' => $newStatus === 'Completed' ? 100 : 0]);
 
@@ -668,6 +814,8 @@ class TaskController extends Controller
         $project = $task->project ?? optional($task->phase)->project;
         $user = Auth::user();
 
+        $this->abortIfLocked($task);
+
         $canManage = ($project && $project->isManagedBy($user)) || $user->can('create_tasks') || $user->isDirectorOrAdmin();
         abort_unless($canManage, 403);
 
@@ -690,5 +838,45 @@ class TaskController extends Controller
         }
 
         return back()->with('status', "\"{$taskName}\" was deleted.");
+    }
+
+    private function abortIfLocked(Task $task): void
+    {
+        abort_if($task->is_locked, 422, 'This task is locked and cannot be edited.');
+    }
+
+    private function syncAssignments(Task $task, array $userIds): void
+    {
+        $userIds = collect($userIds)->map(fn ($id) => (int) $id)->filter()->unique();
+        $task->assignments()->whereNotIn('user_id', $userIds->all())->delete();
+
+        foreach ($userIds as $userId) {
+            $task->assignments()->firstOrCreate(
+                ['user_id' => $userId],
+                ['status' => 'pending', 'assigned_at' => now()]
+            );
+        }
+    }
+
+    private function serializeTaskTree($tasks): array
+    {
+        return collect($tasks)->map(function (Task $task): array {
+            return [
+                'id' => $task->task_id,
+                'name' => $task->task_name,
+                'status' => $task->status,
+                'is_completed' => in_array($task->status, ['Done', 'Completed']),
+                'children' => $this->serializeTaskTree($task->relationLoaded('subtasks') ? $task->subtasks : collect()),
+            ];
+        })->values()->all();
+    }
+
+    private function loadTaskTree(Task $task): void
+    {
+        $task->loadMissing('subtasks');
+
+        foreach ($task->subtasks as $subtask) {
+            $this->loadTaskTree($subtask);
+        }
     }
 }

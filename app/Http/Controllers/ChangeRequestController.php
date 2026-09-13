@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ChangeRequest;
+use App\Services\RbacService;
 use App\Support\Activity;
 use Illuminate\Support\Facades\Auth;
 
@@ -25,7 +26,8 @@ class ChangeRequestController extends Controller
     private function decide(ChangeRequest $changeRequest, string $decision): void
     {
         $user = Auth::user();
-        abort_unless($user->can('approve_change_requests'), 403);
+        $changeRequest->loadMissing('project');
+        abort_unless($changeRequest->project && app(RbacService::class)->can($user, 'approve_change_requests', $changeRequest->project), 403);
 
         $changeRequest->update([
             'status' => $decision,

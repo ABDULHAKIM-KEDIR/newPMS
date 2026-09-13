@@ -16,7 +16,8 @@ class TaskPolicy
     public function view(User $user, Task $task): bool
     {
         // Assigned user always has access.
-        if ((int) $task->assigned_to === (int) $user->user_id) {
+        if ((int) $task->assigned_to === (int) $user->user_id
+            || $task->assignments()->where('user_id', $user->user_id)->exists()) {
             return true;
         }
 
@@ -33,6 +34,10 @@ class TaskPolicy
     /** The task's project manager, org edit-project holders, or the assignee. */
     public function update(User $user, Task $task): bool
     {
+        if ($task->is_locked) {
+            return false;
+        }
+
         $project = $task->project ?? optional($task->phase)->project;
 
         if ((int) $task->assigned_to === (int) $user->user_id) {
@@ -65,6 +70,10 @@ class TaskPolicy
 
     public function assign(User $user, Task $task): bool
     {
+        if ($task->is_locked) {
+            return false;
+        }
+
         $project = $task->project ?? optional($task->phase)->project;
 
         if ($project) {
@@ -78,6 +87,10 @@ class TaskPolicy
     /** Status transitions: the assignee, or anyone who manages the project. */
     public function updateStatus(User $user, Task $task): bool
     {
+        if ($task->is_locked) {
+            return false;
+        }
+
         return $this->update($user, $task);
     }
 }

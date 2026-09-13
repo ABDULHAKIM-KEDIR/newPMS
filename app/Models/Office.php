@@ -23,6 +23,11 @@ class Office extends Model
         return $this->belongsTo(Department::class, 'department_id', 'department_id');
     }
 
+    public function projects()
+    {
+        return $this->hasMany(Project::class, 'primary_office_id', 'office_id');
+    }
+
     public function parentOffice()
     {
         return $this->belongsTo(self::class, 'parent_office_id', 'office_id');

@@ -1,5 +1,7 @@
 <div class="topbar">
 
+    @include('partials.context-header')
+
     <div class="crumb">
         @php
             $crumb = trim(strip_tags($__env->yieldContent('crumb', 'Dashboard')));

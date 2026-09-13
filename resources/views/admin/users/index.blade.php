@@ -16,6 +16,10 @@
         </div>
     </div>
 
+    <div class="badge b-planning">
+        Pending approvals: {{ $pendingApprovalCount }}
+    </div>
+
     <a
         href="{{ route('admin.users.create') }}"
         class="btn btn-accent"
@@ -223,6 +227,13 @@
     >
         Search
     </button>
+
+    <select name="office_id" style="border:1px solid var(--line); border-radius:8px; padding:8px 12px; font-size:13px; font-family:inherit; background:var(--surface);">
+        <option value="">All offices</option>
+        @foreach ($offices as $office)
+            <option value="{{ $office->office_id }}" {{ (string) $officeFilter === (string) $office->office_id ? 'selected' : '' }}>{{ $office->office_name }}</option>
+        @endforeach
+    </select>
 
 </form>
 

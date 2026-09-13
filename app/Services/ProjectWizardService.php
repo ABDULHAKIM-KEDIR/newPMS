@@ -65,7 +65,6 @@ class ProjectWizardService
             ->merge($request->input('teams', []))
             ->push($request->input('team_id'))
             ->filter()
-            ->unique()
             ->values();
 
         $primaryTeamId = $selectedTeamIds->first() ?? $request->input('team_id');
@@ -165,6 +164,11 @@ class ProjectWizardService
                         $status = 'To Do';
                     }
 
+                    $taskBudget = isset($taskData['budget']) ? (float) $taskData['budget'] : 0;
+                    if ($firstPhase) {
+                        app(TaskBudgetAllocationService::class)->assertAllocationAllowed($firstPhase, $taskBudget);
+                    }
+
                     $task = Task::create([
                         'project_id' => $project->project_id,
                         'phase_id' => $firstPhase ? $firstPhase->phase_id : null,
@@ -174,7 +178,7 @@ class ProjectWizardService
                         'assigned_to' => $assigneeId,
                         'priority' => $taskData['priority'] ?? 'Medium',
                         'status' => $status,
-                        'budget' => isset($taskData['budget']) ? (float) $taskData['budget'] : 0,
+                        'budget' => $taskBudget,
                         'start_date' => $data['start_date'] ?? now()->toDateString(),
                         'end_date' => $taskData['end_date'] ?? $data['end_date'] ?? null,
                         'progress' => in_array($status, ['Done', 'Completed']) ? 100 : 0,
