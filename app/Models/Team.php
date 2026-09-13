@@ -27,10 +27,12 @@ class Team extends Model
     /**
      * dev's self-referencing subteams adapted to the standardized
      * 5-tier schema: sub-grouping lives in the sub_teams table.
+     * (Single canonical relation; ->subteams and ->subTeams resolve
+     * to this same method case-insensitively.)
      */
-    public function subteams()
+    public function subTeams()
     {
-        return $this->subTeams();
+        return $this->hasMany(SubTeam::class, 'team_id', 'team_id');
     }
 
     public function childTeams()
