@@ -23,12 +23,10 @@ class UserController extends Controller
 
     public function index(Request $request)
     {
-        abort_unless(
-            Auth::user()->can('manage_users'),
-            403
-        );
+        $actor = Auth::user();
+        abort_unless($actor->can('manage_users'), 403);
 
-        $query = User::with('roles');
+        $query = User::with('roles')->availableTo($actor);
 
         if ($q = trim((string) $request->get('q', ''))) {
             $query->where(function ($w) use ($q) {
@@ -63,11 +61,15 @@ class UserController extends Controller
             ->withQueryString();
 
         $roles = Role::orderBy('role_name')->get();
-        $offices = Office::orderBy('office_name')->get();
+        $offices = Office::query()
+            ->when(! $actor->canAccessGlobalScope(), fn ($q) => $q->where('office_id', $actor->office_id))
+            ->orderBy('office_name')->get();
+
+        $pendingUsersCount = User::pendingFor($actor)->count();
 
         return view(
             'admin.users.index',
-            compact('users', 'roles', 'offices')
+            compact('users', 'roles', 'offices', 'pendingUsersCount')
         );
     }
 
@@ -85,7 +87,9 @@ class UserController extends Controller
         );
 
         $roles = Role::orderBy('role_name')->get();
-        $offices = Office::orderBy('office_name')->get();
+        $offices = Office::query()
+            ->when(! Auth::user()->canAccessGlobalScope(), fn ($q) => $q->where('office_id', Auth::user()->office_id))
+            ->orderBy('office_name')->get();
 
         return view(
             'admin.users.create',
@@ -95,10 +99,8 @@ class UserController extends Controller
 
     public function store(Request $request)
     {
-        abort_unless(
-            Auth::user()->can('manage_users'),
-            403
-        );
+        $actor = Auth::user();
+        abort_unless($actor->can('manage_users'), 403);
 
         $data = $request->validate([
             'full_name' => [
@@ -136,6 +138,10 @@ class UserController extends Controller
                 'exists:offices,office_id',
             ],
         ]);
+
+        if (! $actor->canAccessGlobalScope() && $data['office_id'] && (int) $data['office_id'] !== (int) $actor->office_id) {
+            return back()->withErrors(['office_id' => 'Users must remain within your office.'])->withInput();
+        }
 
         /*
          * Users created directly by the administrator are
@@ -177,13 +183,14 @@ class UserController extends Controller
 
     public function edit(User $user)
     {
-        abort_unless(
-            Auth::user()->can('manage_users'),
-            403
-        );
+        $actor = Auth::user();
+        abort_unless($actor->can('manage_users'), 403);
+        abort_unless($this->canManageUser($actor, $user), 403);
 
         $roles = Role::orderBy('role_name')->get();
-        $offices = Office::orderBy('office_name')->get();
+        $offices = Office::query()
+            ->when(! $actor->canAccessGlobalScope(), fn ($q) => $q->where('office_id', $actor->office_id))
+            ->orderBy('office_name')->get();
 
         return view(
             'admin.users.edit',
@@ -193,10 +200,9 @@ class UserController extends Controller
 
     public function update(Request $request, User $user)
     {
-        abort_unless(
-            Auth::user()->can('manage_users'),
-            403
-        );
+        $actor = Auth::user();
+        abort_unless($actor->can('manage_users'), 403);
+        abort_unless($this->canManageUser($actor, $user), 403);
 
         $data = $request->validate([
             'full_name' => [
@@ -229,6 +235,10 @@ class UserController extends Controller
                 'exists:offices,office_id',
             ],
         ]);
+
+        if (! $actor->canAccessGlobalScope() && $data['office_id'] && (int) $data['office_id'] !== (int) $actor->office_id) {
+            return back()->withErrors(['office_id' => 'Users must remain within your office.'])->withInput();
+        }
 
         $user->update([
             'full_name' => $data['full_name'],
@@ -319,6 +329,8 @@ class UserController extends Controller
             403
         );
 
+        abort_unless($this->canManageUser($actor, $user), 403);
+
         abort_unless(
             $user->status === 'Pending',
             422,
@@ -395,6 +407,8 @@ class UserController extends Controller
             403
         );
 
+        abort_unless($this->canManageUser($actor, $user), 403);
+
         abort_unless(
             $user->status === 'Pending',
             422,
@@ -439,6 +453,8 @@ class UserController extends Controller
             $actor->can('manage_users'),
             403
         );
+
+        abort_unless($this->canManageUser($actor, $user), 403);
 
         abort_if(
             $user->user_id === $actor->user_id,
@@ -488,6 +504,8 @@ class UserController extends Controller
     {
         Gate::authorize('users.reset-password');
 
+        abort_unless($this->canManageUser(Auth::user(), $user), 403);
+
         $validated = $request->validate([
             'password' => ['nullable', 'string', 'min:8', 'max:64'],
         ]);
@@ -518,5 +536,20 @@ class UserController extends Controller
             ->route('admin.users.index')
             ->with('temp_password', $newPassword)
             ->with('reset_user', $user->full_name);
+    }
+
+    private function canManageUser(User $actor, User $target): bool
+    {
+        if ($actor->canAccessGlobalScope()) {
+            return true;
+        }
+
+        if ($target->isPending()) {
+            return $actor->office_id
+                && (int) $target->office_id === (int) $actor->office_id;
+        }
+
+        return ! $target->office_id
+            || (int) $target->office_id === (int) $actor->office_id;
     }
 }

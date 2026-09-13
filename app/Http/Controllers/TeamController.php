@@ -36,8 +36,11 @@ class TeamController extends Controller
         // already lead, not to create new ones.
         abort_unless($this->canCreateTeams(), 403);
 
-        $users = User::orderBy('full_name')->get();
-        $offices = Office::active()->orderBy('office_name')->get();
+        $actor = Auth::user();
+        $users = User::availableTo($actor)->orderBy('full_name')->get();
+        $offices = Office::active()
+            ->when(! $actor->canAccessGlobalScope(), fn ($q) => $q->where('office_id', $actor->office_id))
+            ->orderBy('office_name')->get();
 
         return view('teams.create', compact('users', 'offices'));
     }
@@ -46,12 +49,18 @@ class TeamController extends Controller
     {
         abort_unless($this->canCreateTeams(), 403);
 
+        $actor = Auth::user();
+
         $data = $request->validate([
             'team_name' => ['required', 'string', 'max:100'],
             'team_leader_id' => ['nullable', 'exists:users,user_id'],
             'description' => ['nullable', 'string', 'max:1000'],
             'office_id' => ['nullable', 'exists:offices,office_id'],
         ]);
+
+        if (! $actor->canAccessGlobalScope() && $data['office_id'] && (int) $data['office_id'] !== (int) $actor->office_id) {
+            return back()->withErrors(['office_id' => 'Teams must belong to your office.'])->withInput();
+        }
 
         $team = Team::create($data);
 
@@ -101,19 +110,13 @@ class TeamController extends Controller
         $memberIds = $team->members->pluck('user_id');
         $teamOfficeId = $team->office_id ? (int) $team->office_id : null;
 
-        $officeScope = fn ($q) => $q->where(function ($q2) use ($teamOfficeId) {
-            // Users without an office keep the legacy behaviour; users with an
-            // office must belong to the team's office.
-            $q2->when($teamOfficeId, fn ($q3) => $q3->whereNull('office_id')->orWhere('office_id', $teamOfficeId));
-        });
-
         $availableUsers = $canManage
             ? User::whereNotIn('user_id', $memberIds)->where('status', 'Active')
-                ->when($teamOfficeId, $officeScope)->orderBy('full_name')->get()
+                ->forOffice($teamOfficeId)->orderBy('full_name')->get()
             : collect();
 
         $leaderCandidates = $canManage
-            ? User::where('status', 'Active')->when($teamOfficeId, $officeScope)->orderBy('full_name')->get()
+            ? User::where('status', 'Active')->forOffice($teamOfficeId)->orderBy('full_name')->get()
             : collect();
 
         return view('teams.show', compact('team', 'canManage', 'availableUsers', 'leaderCandidates', 'allProjects', 'taskStats', 'teamTasks'));
@@ -204,8 +207,9 @@ class TeamController extends Controller
      */
     private function canAssignUserToTeam(Team $team, User $candidate): bool
     {
-        return empty($team->office_id) || empty($candidate->office_id)
-            || (int) $team->office_id === (int) $candidate->office_id;
+        return $candidate->isActive()
+            && (empty($team->office_id) || empty($candidate->office_id)
+                || (int) $team->office_id === (int) $candidate->office_id);
     }
 
     private function resolveUserId($input, ?int $teamId = null): ?int

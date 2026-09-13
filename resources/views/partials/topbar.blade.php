@@ -3,9 +3,52 @@
     <div class="crumb">
         @php
             $crumb = trim(strip_tags($__env->yieldContent('crumb', 'Dashboard')));
+            $routeProject = request()->route('project');
+            $routeTeam = request()->route('team');
+            $routeTask = request()->route('task');
+            $breadcrumbProject = $routeProject instanceof \App\Models\Project ? $routeProject : null;
+            $breadcrumbTeam = $routeTeam instanceof \App\Models\Team ? $routeTeam : null;
+
+            if ($routeTask instanceof \App\Models\Task) {
+                $routeTask->loadMissing(['project', 'team']);
+                $breadcrumbProject = $routeTask->project;
+                $breadcrumbTeam = $routeTask->team;
+            } elseif ($breadcrumbTeam && ! $breadcrumbProject) {
+                $requestedProject = request('project')
+                    ? \App\Models\Project::find(request('project'))
+                    : null;
+                $breadcrumbProject = $requestedProject
+                    && $breadcrumbTeam->allProjects()->contains('project_id', $requestedProject->project_id)
+                    && auth()->user()->can('view', $requestedProject)
+                    ? $requestedProject
+                    : $breadcrumbTeam->allProjects()->first();
+            }
+
+            $breadcrumbOffice = $breadcrumbProject?->primaryOffice
+                ?? $breadcrumbTeam?->office;
         @endphp
 
-        <strong class="font-bold">{{ $crumb ?: 'Dashboard' }}</strong>
+        @if ($breadcrumbProject || $breadcrumbTeam)
+            @if ($breadcrumbOffice)
+                <span>{{ $breadcrumbOffice->office_name }}</span>
+                <span aria-hidden="true">/</span>
+            @endif
+            @if ($breadcrumbProject)
+                <a class="link-small" href="{{ route('projects.show', $breadcrumbProject) }}">{{ $breadcrumbProject->project_name }}</a>
+                <span aria-hidden="true">/</span>
+            @endif
+            @if ($breadcrumbTeam)
+                <a class="link-small" href="{{ route('teams.show', $breadcrumbTeam) }}">{{ $breadcrumbTeam->team_name }}</a>
+                @if ($routeTask instanceof \App\Models\Task)
+                    <span aria-hidden="true">/</span>
+                    <strong class="font-bold">{{ $routeTask->task_name }}</strong>
+                @endif
+            @elseif (request()->routeIs('projects.edit'))
+                <strong class="font-bold">Edit</strong>
+            @endif
+        @else
+            <strong class="font-bold">{{ $crumb ?: 'Dashboard' }}</strong>
+        @endif
     </div>
 
     <form

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Services\RbacService;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Support\Collection;
 
@@ -96,6 +97,54 @@ class User extends Authenticatable
     public function office()
     {
         return $this->belongsTo(Office::class, 'office_id', 'office_id');
+    }
+
+    /** Restrict candidates to an office and explicitly shared users. */
+    public function scopeForOffice(Builder $query, ?int $officeId): Builder
+    {
+        return $query->where(function (Builder $officeQuery) use ($officeId) {
+            $officeQuery->whereNull('office_id');
+
+            if ($officeId) {
+                $officeQuery->orWhere('office_id', $officeId);
+            }
+        });
+    }
+
+    /** Users visible to an office-scoped manager. */
+    public function scopeAvailableTo(Builder $query, User $viewer): Builder
+    {
+        if ($viewer->canAccessGlobalScope()) {
+            return $query;
+        }
+
+        return $query->forOffice($viewer->office_id ? (int) $viewer->office_id : null)
+            ->where(function (Builder $statusQuery) {
+                $statusQuery->where('status', '!=', 'Pending')
+                    ->orWhereNotNull('office_id');
+            });
+    }
+
+    /** Pending registrations visible to the current approver's scope. */
+    public function scopePendingFor(Builder $query, User $viewer): Builder
+    {
+        $query->where('status', 'Pending');
+
+        if ($viewer->canAccessGlobalScope()) {
+            return $query;
+        }
+
+        return $viewer->office_id
+            ? $query->where('office_id', $viewer->office_id)
+            : $query->whereNull('office_id');
+    }
+
+    public function canAccessGlobalScope(): bool
+    {
+        return $this->hasPermission('manage_system_settings')
+            || $this->hasRole('System Administrator')
+            || $this->hasRole('Administrator')
+            || $this->hasRole('Super Admin');
     }
 
     /**

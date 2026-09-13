@@ -152,11 +152,11 @@ class ProjectController extends Controller
         $taskStats = $project->taskStats();
         // Only teams from the project's primary or participating offices may be assigned.
         $allowedOfficeIds = $this->authorizedOfficeIds($project);
-        $allTeams = Team::where('status', 'Active')->with('leader')
+        $assignableTeams = Team::where('status', 'Active')->with('leader')
             ->when($allowedOfficeIds->isNotEmpty(), fn ($q) => $q->whereIn('office_id', $allowedOfficeIds))
             ->orderBy('team_name')->get();
 
-        return view('projects.show', compact('project', 'tasks', 'assignableUsers', 'projectRoster', 'taskStats', 'allTeams'));
+        return view('projects.show', compact('project', 'tasks', 'assignableUsers', 'projectRoster', 'taskStats', 'assignableTeams'));
     }
 
     public function create()

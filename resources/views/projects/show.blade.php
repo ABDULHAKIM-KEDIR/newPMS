@@ -78,7 +78,7 @@
             <label for="modal_team_id">Select Team to Assign</label>
             <select id="modal_team_id" name="team_id" required>
               <option value="">— Select Team —</option>
-              @foreach (\App\Models\Team::where('status', 'Active')->orderBy('team_name')->get() as $tm)
+              @foreach ($assignableTeams as $tm)
                 <option value="{{ $tm->team_id }}">{{ $tm->team_name }} (Lead: {{ optional($tm->leader)->full_name ?? 'Unassigned' }})</option>
               @endforeach
             </select>
@@ -443,7 +443,7 @@
         <div class="card card-pad" style="border-top:3px solid var(--accent);">
           <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
             <div>
-              <a href="{{ route('teams.show', $assignedTeam) }}" style="font-size:16px; font-weight:700; color:var(--ink); text-decoration:none;">
+              <a href="{{ route('teams.show', ['team' => $assignedTeam, 'project' => $project->project_id]) }}" style="font-size:16px; font-weight:700; color:var(--ink); text-decoration:none;">
                 {{ $assignedTeam->team_name }}
               </a>
               <div style="font-size:12px; color:var(--ink-soft); margin-top:2px;">

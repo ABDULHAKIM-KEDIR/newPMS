@@ -12,7 +12,7 @@
         <h1>Users</h1>
 
         <div class="page-sub">
-            Manage accounts, registrations, roles, and access
+            Manage accounts, registrations, roles, and access · {{ $pendingUsersCount }} pending
         </div>
     </div>
 

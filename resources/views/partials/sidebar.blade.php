@@ -36,6 +36,8 @@
             )
             ->where('is_read', false)
             ->count();
+
+            $pendingUsersCount = \App\Models\User::pendingFor($currentUser)->count();
         @endphp
 
         <div class="nav-section">Main</div>
@@ -237,7 +239,7 @@
                     <span>Users</span>
 
                     <span class="nav-badge">
-                        {{ \App\Models\User::count() }}
+                        {{ $pendingUsersCount }} pending
                     </span>
                 </a>
 
