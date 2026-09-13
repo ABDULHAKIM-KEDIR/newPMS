@@ -39,6 +39,24 @@
         <textarea id="description" name="description" rows="3">{{ old('description', $office->description) }}</textarea>
       </div>
       <div class="form-field">
+        <label for="department_id">Department</label>
+        <select id="department_id" name="department_id">
+          <option value="">— No department —</option>
+          @foreach ($departments as $department)
+            <option value="{{ $department->department_id }}" {{ (string) old('department_id', $office->department_id) === (string) $department->department_id ? 'selected' : '' }}>{{ $department->department_name }}</option>
+          @endforeach
+        </select>
+      </div>
+      <div class="form-field">
+        <label for="parent_office_id">Parent office</label>
+        <select id="parent_office_id" name="parent_office_id">
+          <option value="">— No parent office —</option>
+          @foreach ($parentOffices as $parentOffice)
+            <option value="{{ $parentOffice->office_id }}" {{ (string) old('parent_office_id', $office->parent_office_id) === (string) $parentOffice->office_id ? 'selected' : '' }}>{{ $parentOffice->office_name }}</option>
+          @endforeach
+        </select>
+      </div>
+      <div class="form-field">
         <label for="head_user_id">Office head <span
             style="font-weight:400; color:var(--ink-faint);">(optional)</span></label>
         <select id="head_user_id" name="head_user_id">

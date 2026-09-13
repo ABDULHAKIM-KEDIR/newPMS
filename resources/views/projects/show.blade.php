@@ -31,6 +31,9 @@
 
       <h1 style="margin:0 0 4px; font-size:24px; font-weight:800;">{{ $project->project_name }}</h1>
       <div class="page-sub" style="font-size:13px; color:var(--ink-soft);">
+        @if ($project->office)
+          Office: <strong>{{ $project->office->office_name }}</strong> ·
+        @endif
         @if ($project->projectManager)
           Manager: <strong>{{ $project->projectManager->full_name }}</strong> ·
         @endif
@@ -78,7 +81,7 @@
             <label for="modal_team_id">Select Team to Assign</label>
             <select id="modal_team_id" name="team_id" required>
               <option value="">— Select Team —</option>
-              @foreach (\App\Models\Team::where('status', 'Active')->orderBy('team_name')->get() as $tm)
+              @foreach ($allTeams as $tm)
                 <option value="{{ $tm->team_id }}">{{ $tm->team_name }} (Lead: {{ optional($tm->leader)->full_name ?? 'Unassigned' }})</option>
               @endforeach
             </select>
@@ -440,10 +443,10 @@
           $teamTotal = $teamProjectTasks->count();
           $teamPct = $teamTotal > 0 ? round(($teamDone / $teamTotal) * 100) : 0;
         @endphp
-        <div class="card card-pad" style="border-top:3px solid var(--accent);">
+        <div class="card card-pad" style="border-top:3px solid var(--accent); cursor:pointer;" onclick="window.location='{{ route('teams.show', $assignedTeam) }}'" role="link" tabindex="0" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); window.location='{{ route('teams.show', $assignedTeam) }}'; }">
           <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:10px;">
             <div>
-              <a href="{{ route('teams.show', $assignedTeam) }}" style="font-size:16px; font-weight:700; color:var(--ink); text-decoration:none;">
+              <a href="{{ route('teams.show', $assignedTeam) }}" onclick="event.stopPropagation();" style="font-size:16px; font-weight:700; color:var(--ink); text-decoration:none;">
                 {{ $assignedTeam->team_name }}
               </a>
               <div style="font-size:12px; color:var(--ink-soft); margin-top:2px;">
@@ -477,7 +480,7 @@
             </div>
 
             @if (auth()->user()->can('edit_projects') && $project->isManagedBy(auth()->user()) && $allTeams->count() > 1)
-              <form method="POST" action="{{ route('projects.teams.remove', [$project, $assignedTeam]) }}" data-confirm data-confirm-title="Remove team '{{ $assignedTeam->team_name }}' from this project?">
+              <form method="POST" action="{{ route('projects.teams.remove', [$project, $assignedTeam]) }}" data-confirm data-confirm-title="Remove team '{{ $assignedTeam->team_name }}' from this project?" onclick="event.stopPropagation();">
                 @csrf
                 @method('DELETE')
                 <button type="submit" class="btn btn-ghost" style="padding:3px 8px; font-size:11px; color:var(--danger);">Unassign</button>
@@ -773,6 +776,8 @@
             $pb = $ph->budget;
             $alloc = $pb ? (float)$pb->allocated_amount : 0;
             $sp = $pb ? (float)$pb->spent_amount : 0;
+            $taskAlloc = $ph->allocatedTaskAmount();
+            $taskRemaining = max(0, $alloc - $sp - $taskAlloc);
             $pct = $alloc > 0 ? round(($sp / $alloc) * 100) : 0;
           @endphp
           <div style="margin-bottom:16px; background:var(--surface-alt); border:1px solid var(--line); border-radius:8px; padding:12px;">
@@ -793,6 +798,10 @@
                   </button>
                 @endif
               </div>
+            </div>
+            <div style="display:flex; justify-content:space-between; gap:8px; margin-top:7px; font-size:11.5px; color:var(--ink-soft);">
+              <span>Task allocations: <strong>ETB {{ number_format($taskAlloc, 2) }}</strong></span>
+              <span>Available for tasks: <strong style="color:var(--success);">ETB {{ number_format($taskRemaining, 2) }}</strong></span>
             </div>
             <div class="progressbar {{ $pct > 85 ? 'danger' : ($pct > 65 ? 'warn' : '') }}">
               <div style="width:{{ $pct }}%"></div>

@@ -43,6 +43,11 @@ class Project extends Model
         return $this->belongsTo(Office::class, 'primary_office_id', 'office_id');
     }
 
+    public function office()
+    {
+        return $this->primaryOffice();
+    }
+
     public function department()
     {
         return $this->belongsTo(Department::class, 'department_id', 'department_id');
@@ -229,9 +234,19 @@ class Project extends Model
     /**
      * Users assignable for tasks with informative labels.
      */
-    public function getAssignableUsersWithRoles()
+    public function getAssignableUsersWithRoles(?User $viewer = null)
     {
         $roster = $this->getProjectRoster();
+        $officeScopedManager = $viewer
+            && ! $viewer->isAdmin()
+            && (int) $this->project_manager_id === (int) $viewer->user_id;
+        $primaryOfficeId = (int) ($this->primary_office_id ?? 0);
+
+        if ($officeScopedManager && $primaryOfficeId) {
+            $roster = $roster->filter(fn ($item) => ! $item->user?->office_id
+                || (int) $item->user->office_id === $primaryOfficeId)->values();
+        }
+
         $rosterUserIds = $roster->pluck('user_id')->toArray();
 
         $list = $roster->map(function ($item) {
@@ -252,7 +267,9 @@ class Project extends Model
 
         // Also allow assigning other active users, restricted to the
         // project's primary and participating offices.
-        $allowedOfficeIds = $this->authorizedOfficeIds();
+        $allowedOfficeIds = $officeScopedManager && $primaryOfficeId
+            ? collect([$primaryOfficeId])
+            : $this->authorizedOfficeIds();
 
         $otherUsers = User::where('status', 'Active')
             ->whereNotIn('user_id', $rosterUserIds)

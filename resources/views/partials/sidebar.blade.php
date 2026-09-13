@@ -21,12 +21,12 @@
 
             $projectsCount = \App\Models\Project::count();
 
-            $myTasksCount = \App\Models\Task::where(
-                'assigned_to',
-                $currentUser->user_id
-            )
-            ->whereNotIn('status', ['Done', 'Completed'])
-            ->count();
+            $myTasksCount = \App\Models\Task::where(function ($query) use ($currentUser) {
+                $query->where('assigned_to', $currentUser->user_id)
+                    ->orWhereHas('assignments', fn ($assignmentQuery) => $assignmentQuery->where('user_id', $currentUser->user_id));
+            })
+                ->whereNotIn('status', ['Done', 'Completed'])
+                ->count();
 
             $teamsCount = \App\Models\Team::count();
 

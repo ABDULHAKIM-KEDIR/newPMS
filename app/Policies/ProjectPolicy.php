@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\Models\Project;
 use App\Models\User;
+use App\Services\RbacService;
 
 /**
  * Object-level authorization for projects.
@@ -35,7 +36,8 @@ class ProjectPolicy
             return true;
         }
 
-        return $project->participatesIn($user);
+        return $project->participatesIn($user)
+            || app(RbacService::class)->can($user, 'view_projects', $project);
     }
 
     /**
@@ -51,7 +53,7 @@ class ProjectPolicy
     /** Only organization-level delete_projects holders may remove a project. */
     public function delete(User $user, Project $project): bool
     {
-        return $user->hasPermission('delete_projects')
+        return app(RbacService::class)->can($user, 'delete_projects', $project)
             && $project->isManagedBy($user);
     }
 }

@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Phase;
 use App\Models\PhaseBudget;
 use App\Models\Project;
+use App\Services\RbacService;
+use App\Services\TaskBudgetAllocationService;
 use App\Support\Activity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -29,7 +31,7 @@ class BudgetController extends Controller
     public function updateProjectBudget(Request $request, Project $project)
     {
         $user = Auth::user();
-        abort_unless($user->can('manage_budgets') || $user->isDirectorOrAdmin(), 403);
+        abort_unless(app(RbacService::class)->can($user, 'manage_budgets', $project), 403);
 
         $data = $request->validate([
             'allocated_amount' => ['required', 'numeric', 'min:0'],
@@ -54,12 +56,19 @@ class BudgetController extends Controller
     public function updatePhaseBudget(Request $request, Phase $phase)
     {
         $user = Auth::user();
-        abort_unless($user->can('manage_budgets') || $user->isDirectorOrAdmin(), 403);
+        $project = $phase->project;
+        abort_unless($project && app(RbacService::class)->can($user, 'manage_budgets', $project), 403);
 
         $data = $request->validate([
             'allocated_amount' => ['required', 'numeric', 'min:0'],
             'spent_amount' => ['required', 'numeric', 'min:0'],
         ]);
+
+        app(TaskBudgetAllocationService::class)->assertPhaseBudgetAllowed(
+            $phase,
+            $data['allocated_amount'],
+            $data['spent_amount']
+        );
 
         $budget = $phase->budget()->firstOrCreate(
             ['phase_id' => $phase->phase_id],
@@ -72,7 +81,6 @@ class BudgetController extends Controller
         ]);
 
         // Auto-recalculate project spent amount from sum of phase spent amounts if applicable
-        $project = $phase->project;
         if ($project && $project->budget) {
             $totalPhaseSpent = PhaseBudget::whereIn('phase_id', $project->phases->pluck('phase_id'))->sum('spent_amount');
             if ($totalPhaseSpent > $project->budget->spent_amount) {

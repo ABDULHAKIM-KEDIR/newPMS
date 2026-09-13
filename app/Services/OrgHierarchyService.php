@@ -65,23 +65,32 @@ class OrgHierarchyService
             return true;
         }
 
-        $scopes = $this->scopeKeys($entity);
-        $roles = DB::table('user_roles')
+        $scopeKeys = $this->scopeKeys($entity);
+        $assignments = DB::table('user_roles')
             ->join('roles', 'roles.role_id', '=', 'user_roles.role_id')
             ->where('user_roles.user_id', $user->user_id)
             ->whereIn('roles.role_name', self::HEAD_ROLE_NAMES)
-            ->where(function ($query) use ($scopes): void {
-                foreach ($scopes as $index => [$type, $id]) {
-                    $method = $index === 0 ? 'where' : 'orWhere';
-                    $query->{$method}(function ($scopeQuery) use ($type, $id): void {
-                        $scopeQuery->where('user_roles.scope_type', $type)
-                            ->where('user_roles.scope_id', $id);
-                    });
-                }
-            })
-            ->exists();
+            ->whereNotNull('user_roles.scope_type')
+            ->get(['roles.role_name', 'user_roles.scope_type', 'user_roles.scope_id']);
 
-        return $roles;
+        return $assignments->contains(function (object $assignment) use ($scopeKeys): bool {
+            $expectedScopeType = match ($assignment->role_name) {
+                'Head of Department' => 'department',
+                'Head of Office' => 'office',
+                'Head of Project' => 'project',
+                'Head of Team' => 'team',
+                default => null,
+            };
+
+            if ($expectedScopeType !== $this->normalizeNodeType((string) $assignment->scope_type)) {
+                return false;
+            }
+
+            return collect($scopeKeys)->contains(
+                fn (array $scope) => $scope[0] === $expectedScopeType
+                    && (int) $scope[1] === (int) $assignment->scope_id
+            );
+        });
     }
 
     public function getEffectiveScope(User $user): Collection

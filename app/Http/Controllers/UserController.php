@@ -29,6 +29,7 @@ class UserController extends Controller
         );
 
         $query = User::with('roles');
+        $pendingApprovalQuery = User::query()->where('status', 'Pending');
 
         if ($q = trim((string) $request->get('q', ''))) {
             $query->where(function ($w) use ($q) {
@@ -48,6 +49,12 @@ class UserController extends Controller
             $query->where('status', $status);
         }
 
+        $officeFilter = $request->integer('office_id') ?: null;
+        if ($officeFilter) {
+            $query->where('office_id', $officeFilter);
+            $pendingApprovalQuery->where('office_id', $officeFilter);
+        }
+
         $users = $query
             ->orderByRaw(
                 "CASE
@@ -64,10 +71,11 @@ class UserController extends Controller
 
         $roles = Role::orderBy('role_name')->get();
         $offices = Office::orderBy('office_name')->get();
+        $pendingApprovalCount = $pendingApprovalQuery->count();
 
         return view(
             'admin.users.index',
-            compact('users', 'roles', 'offices')
+            compact('users', 'roles', 'offices', 'officeFilter', 'pendingApprovalCount')
         );
     }
 

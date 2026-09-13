@@ -12,12 +12,15 @@ class Task extends Model
 
     protected $fillable = [
         'project_id', 'phase_id', 'team_id', 'parent_task_id', 'task_name', 'description', 'assigned_to',
-        'status', 'priority', 'progress', 'budget', 'blocker_reason', 'start_date', 'end_date', 'duration',
+        'status', 'priority', 'progress', 'budget', 'blocker_reason', 'is_locked', 'locked_at', 'locked_by',
+        'start_date', 'end_date', 'duration',
     ];
 
     protected $casts = [
         'start_date' => 'date',
         'end_date' => 'date',
+        'is_locked' => 'boolean',
+        'locked_at' => 'datetime',
     ];
 
     public function project()
@@ -48,6 +51,27 @@ class Task extends Model
     public function assignee()
     {
         return $this->belongsTo(User::class, 'assigned_to', 'user_id');
+    }
+
+    public function assignments()
+    {
+        return $this->hasMany(TaskAssignment::class, 'task_id', 'task_id');
+    }
+
+    public function collaborators()
+    {
+        return $this->belongsToMany(User::class, 'task_assignments', 'task_id', 'user_id')
+            ->withPivot('task_assignment_id', 'status', 'assigned_at', 'responded_at', 'response_reason');
+    }
+
+    public function locker()
+    {
+        return $this->belongsTo(User::class, 'locked_by', 'user_id');
+    }
+
+    public function isEditable(): bool
+    {
+        return ! $this->is_locked;
     }
 
     public function attachments()

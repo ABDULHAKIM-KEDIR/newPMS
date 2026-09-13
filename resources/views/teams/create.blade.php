@@ -39,6 +39,15 @@
       </select>
     </div>
     <div class="form-field">
+      <label for="parent_team_id">Parent team</label>
+      <select id="parent_team_id" name="parent_team_id">
+        <option value="">— No parent team —</option>
+        @foreach ($parentTeams as $parentTeam)
+          <option value="{{ $parentTeam->team_id }}" {{ (string) old('parent_team_id') === (string) $parentTeam->team_id ? 'selected' : '' }}>{{ $parentTeam->team_name }}</option>
+        @endforeach
+      </select>
+    </div>
+    <div class="form-field">
       <label for="description">Description</label>
       <textarea id="description" name="description">{{ old('description') }}</textarea>
     </div>

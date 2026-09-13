@@ -397,6 +397,27 @@ Route::middleware(['auth', 'active', 'approved'])->group(function () {
         ->middleware('can:assign_tasks');
 
     Route::post(
+        '/tasks/assignments/{assignment}/respond',
+        [TaskController::class, 'respondToAssignment']
+    )
+        ->name('tasks.assignments.respond')
+        ->middleware('auth');
+
+    Route::post(
+        '/tasks/{task}/lock',
+        [TaskController::class, 'lock']
+    )
+        ->name('tasks.lock')
+        ->middleware('auth');
+
+    Route::post(
+        '/tasks/{task}/unlock',
+        [TaskController::class, 'unlock']
+    )
+        ->name('tasks.unlock')
+        ->middleware('auth');
+
+    Route::post(
         '/tasks/{task}/attachments',
         [TaskController::class, 'uploadAttachment']
     )

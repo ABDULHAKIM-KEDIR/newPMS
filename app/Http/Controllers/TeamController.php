@@ -7,6 +7,7 @@ use App\Models\Role;
 use App\Models\Team;
 use App\Models\TeamMember;
 use App\Models\User;
+use App\Services\OrgHierarchyService;
 use App\Support\Activity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -38,8 +39,9 @@ class TeamController extends Controller
 
         $users = User::orderBy('full_name')->get();
         $offices = Office::active()->orderBy('office_name')->get();
+        $parentTeams = Team::orderBy('team_name')->get();
 
-        return view('teams.create', compact('users', 'offices'));
+        return view('teams.create', compact('users', 'offices', 'parentTeams'));
     }
 
     public function store(Request $request)
@@ -51,6 +53,7 @@ class TeamController extends Controller
             'team_leader_id' => ['nullable', 'exists:users,user_id'],
             'description' => ['nullable', 'string', 'max:1000'],
             'office_id' => ['nullable', 'exists:offices,office_id'],
+            'parent_team_id' => ['nullable', 'exists:teams,team_id'],
         ]);
 
         $team = Team::create($data);
@@ -81,7 +84,7 @@ class TeamController extends Controller
         abort_unless(Auth::user()->can('view_projects'), 403);
 
         $team->load([
-            'leader', 'members.user.assignedTasks',
+            'leader', 'parentTeam', 'childTeams', 'members.user.assignedTasks',
             'projects.budget', 'projects.phases.tasks',
             'assignedProjects.budget', 'assignedProjects.phases.tasks',
             'tasks.project', 'tasks.assignee', 'tasks.comments', 'tasks.attachments',
@@ -290,6 +293,10 @@ class TeamController extends Controller
     private function canManageTeam(User $user, Team $team): bool
     {
         if ($user->isAdmin() || $user->isDirectorOrAdmin()) {
+            return true;
+        }
+
+        if (app(OrgHierarchyService::class)->canManage($user, $team)) {
             return true;
         }
 

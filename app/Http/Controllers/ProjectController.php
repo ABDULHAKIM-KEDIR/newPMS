@@ -18,6 +18,7 @@ use App\Models\Team;
 use App\Models\User;
 use App\Services\ProjectWizardService;
 use App\Services\RosterService;
+use App\Services\TaskBudgetAllocationService;
 use App\Support\Activity;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -135,6 +136,7 @@ class ProjectController extends Controller
             'teams.leader',
             'teams.members.user',
             'projectManager',
+            'office',
             'budget',
             'phases.budget',
             'phases.tasks.assignee',
@@ -147,7 +149,7 @@ class ProjectController extends Controller
         ]);
 
         $tasks = $project->allTasks();
-        $assignableUsers = $project->getAssignableUsersWithRoles();
+        $assignableUsers = $project->getAssignableUsersWithRoles(Auth::user());
         $projectRoster = $this->rosterService->getFormattedRoster($project);
         $taskStats = $project->taskStats();
         // Only teams from the project's primary or participating offices may be assigned.
@@ -175,11 +177,16 @@ class ProjectController extends Controller
                 'office_id' => $t->office_id,
                 'leader_name' => optional($t->leader)->full_name ?? 'Unassigned',
                 'members' => $t->members->map(function ($m) {
+                    if ($m->user && $t->office_id && $m->user->office_id
+                        && (int) $m->user->office_id !== (int) $t->office_id) {
+                        return null;
+                    }
+
                     return [
                         'id' => $m->user ? $m->user->user_id : null,
                         'name' => $m->user ? $m->user->full_name : 'Member',
                     ];
-                })->filter(fn ($m) => ! is_null($m['id']))->values()->all(),
+                })->filter(fn ($m) => is_array($m) && ! is_null($m['id']))->values()->all(),
             ];
         })->values()->all();
 
@@ -329,6 +336,12 @@ class ProjectController extends Controller
                 'tasks.*.end_date' => ['nullable', 'date', 'after_or_equal:tasks.*.start_date'],
             ]);
             $firstPhase = $project->phases()->orderBy('sequence_order')->first();
+
+            $requestedTaskAllocation = collect($data['tasks'] ?? [])
+                ->sum(fn ($taskData) => blank($taskData['task_name'] ?? null) ? 0 : (float) ($taskData['budget'] ?? 0));
+            if ($firstPhase) {
+                app(TaskBudgetAllocationService::class)->assertBatchAllocationAllowed($firstPhase, $requestedTaskAllocation);
+            }
 
             // Server-side office restriction for task teams.
             $allowedOfficeIds = $this->authorizedOfficeIds($project);

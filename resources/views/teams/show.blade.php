@@ -13,6 +13,9 @@
     </div>
     <div class="page-sub">
       {{ $team->description ?: 'Dedicated project delivery team for university initiatives' }} ·
+      @if ($team->parentTeam)
+        Parent team: <a href="{{ route('teams.show', $team->parentTeam) }}" class="link-small">{{ $team->parentTeam->team_name }}</a> ·
+      @endif
       Lead: <strong>{{ optional($team->leader)->full_name ?? 'Unassigned' }}</strong> ·
       {{ $team->members->count() }} Team Members ·
       {{ $allProjects->count() }} Assigned Project(s)
@@ -22,6 +25,19 @@
     <a href="{{ route('projects.create') }}" class="btn btn-accent">+ New Project</a>
   @endif
 </div>
+
+@if ($team->childTeams->isNotEmpty())
+  <div class="card card-pad" style="margin-bottom:20px;">
+    <div class="card-title-row">
+      <h3>Sub-Teams</h3>
+    </div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+      @foreach ($team->childTeams as $childTeam)
+        <a href="{{ route('teams.show', $childTeam) }}" class="badge b-planning">{{ $childTeam->team_name }}</a>
+      @endforeach
+    </div>
+  </div>
+@endif
 
 <!-- Team Progress Overview Metric Card -->
 <div class="card card-pad" style="margin-bottom:20px; background:var(--bg-card); border:1px solid var(--line);">
