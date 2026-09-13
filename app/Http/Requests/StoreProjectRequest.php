@@ -32,8 +32,15 @@ class StoreProjectRequest extends FormRequest
             'bail',
             'exists:teams,team_id',
             function (string $attribute, mixed $value, Closure $fail) use ($allowedOfficeIds): void {
-                if ($allowedOfficeIds->isNotEmpty() && ! Team::where('team_id', $value)
-                    ->whereIn('office_id', $allowedOfficeIds->all())->exists()) {
+                if ($allowedOfficeIds->isEmpty()) {
+                    return;
+                }
+
+                $team = Team::find($value);
+
+                // Teams with no office assignment are allowed anywhere
+                // (matches the client-side filter in the wizard).
+                if ($team && $team->office_id && ! $allowedOfficeIds->contains((int) $team->office_id)) {
                     $fail("The selected team's office is not one of this project's offices.");
                 }
             },
@@ -41,7 +48,7 @@ class StoreProjectRequest extends FormRequest
 
         $userOfficeRule = function (string $attribute, mixed $value, Closure $fail) use ($allowedOfficeIds): void {
             $user = User::find((int) $value);
-            if ($user && $allowedOfficeIds->isNotEmpty() && $user->office_id
+            if ($user && ! $user->isGlobal() && $allowedOfficeIds->isNotEmpty() && $user->office_id
                 && ! $allowedOfficeIds->contains((int) $user->office_id)) {
                 $fail("The selected user's office is not one of this project's offices.");
             }

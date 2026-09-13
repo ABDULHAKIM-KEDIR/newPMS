@@ -298,6 +298,10 @@ class Project extends Model
      */
     public function canAssignUser(User $user): bool
     {
+        if ($user->isGlobal()) {
+            return true;
+        }
+
         $allowedOfficeIds = $this->authorizedOfficeIds();
 
         if ($allowedOfficeIds->isEmpty() || ! $user->office_id) {
@@ -320,6 +324,26 @@ class Project extends Model
     public function budget()
     {
         return $this->hasOne(ProjectBudget::class, 'project_id', 'project_id');
+    }
+
+    public function payments()
+    {
+        return $this->hasMany(Payment::class, 'project_id', 'project_id');
+    }
+
+    public function totalPayments(): float
+    {
+        return (float) $this->payments()->where('payment_status', 'Completed')->sum('amount');
+    }
+
+    public function calculateTotalCost(): float
+    {
+        $paymentsSum = $this->totalPayments();
+        if ($paymentsSum > 0) {
+            return $paymentsSum;
+        }
+
+        return (float) (optional($this->budget)->spent_amount ?? 0);
     }
 
     public function tasks()

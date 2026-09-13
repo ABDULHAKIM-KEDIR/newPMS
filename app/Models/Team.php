@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class Team extends Model
@@ -23,9 +24,44 @@ class Team extends Model
         return $this->belongsTo(self::class, 'parent_team_id', 'team_id');
     }
 
+    /**
+     * dev's self-referencing subteams adapted to the standardized
+     * 5-tier schema: sub-grouping lives in the sub_teams table.
+     */
+    public function subteams()
+    {
+        return $this->subTeams();
+    }
+
     public function childTeams()
     {
         return $this->hasMany(self::class, 'parent_team_id', 'team_id');
+    }
+
+    /**
+     * All recursive child-team (parent_team_id) ids, used to prevent
+     * circular parent-team assignment.
+     *
+     * @return Collection<int, int>
+     */
+    public function allDescendantIds(): Collection
+    {
+        $ids = collect();
+        foreach ($this->childTeams as $sub) {
+            $ids->push((int) $sub->team_id);
+            $ids = $ids->merge($sub->allDescendantIds());
+        }
+
+        return $ids->unique();
+    }
+
+    public function wouldCauseCycle(int $newParentId): bool
+    {
+        if ($this->team_id && (int) $this->team_id === (int) $newParentId) {
+            return true;
+        }
+
+        return $this->allDescendantIds()->contains((int) $newParentId);
     }
 
     public function heads()

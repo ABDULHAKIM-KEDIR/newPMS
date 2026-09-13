@@ -28,4 +28,14 @@ class Phase extends Model
     {
         return $this->hasOne(PhaseBudget::class, 'phase_id', 'phase_id');
     }
+
+    public function payments()
+    {
+        return $this->hasMany(Payment::class, 'phase_id', 'phase_id');
+    }
+
+    public function totalPayments(): float
+    {
+        return (float) $this->payments()->where('payment_status', 'Completed')->sum('amount');
+    }
 }

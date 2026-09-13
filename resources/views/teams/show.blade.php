@@ -1,26 +1,50 @@
 @extends('layouts.app')
 @section('title', $team->team_name)
 @section('crumb')
-  <a class="link-small" style="cursor:pointer;" href="{{ route('teams.index') }}">Teams</a> <b>/ {{ $team->team_name }}</b>
+  <a class="link-small" style="cursor:pointer;" href="{{ route('teams.index') }}">Teams</a> / {{ $team->team_name }}
 @endsection
 
 @section('content')
 <div class="page-head">
   <div>
     <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+      <a href="{{ route('teams.index') }}" class="btn btn-ghost" style="padding:2px 8px; font-size:12px;">← Teams</a>
       <h1 style="margin:0;">{{ $team->team_name }}</h1>
       <span class="badge b-active">{{ $team->status ?: 'Active' }}</span>
+      @if ($team->office)
+        <a href="{{ route('admin.offices.show', $team->office) }}" class="badge" style="background:var(--primary-soft); color:var(--primary); font-weight:600; text-decoration:none;">
+          🏢 Office: {{ $team->office->office_name }}
+        </a>
+      @endif
+      @if ($team->parentTeam)
+        <a href="{{ route('teams.show', $team->parentTeam) }}" class="badge" style="background:var(--bg-subtle); color:var(--ink); font-weight:600; text-decoration:none;">
+          ↳ Parent Team: {{ $team->parentTeam->team_name }}
+        </a>
+      @endif
     </div>
     <div class="page-sub">
       {{ $team->description ?: 'Dedicated project delivery team for university initiatives' }} ·
       Lead: <strong>{{ optional($team->leader)->full_name ?? 'Unassigned' }}</strong> ·
       {{ $team->members->count() }} Team Members ·
       {{ $allProjects->count() }} Assigned Project(s)
+      @if ($team->subteams->isNotEmpty())
+        · {{ $team->subteams->count() }} Sub-team(s)
+      @endif
     </div>
   </div>
-  @if (auth()->user()->canCreateProjects())
-    <a href="{{ route('projects.create') }}" class="btn btn-accent">+ New Project</a>
-  @endif
+ <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+    @if (auth()->user()->canCreateProjects())
+      <a href="{{ route('projects.create') }}" class="btn btn-accent">+ New Project</a>
+    @endif
+    @if ($canManage)
+      <a href="{{ route('teams.edit', $team) }}" class="btn btn-primary">Edit Team</a>
+      <form method="POST" action="{{ route('teams.destroy', $team) }}" onsubmit="return confirm('Delete \'{{ $team->team_name }}\' permanently? Its projects will be detached and its members removed.');" style="display:inline;">
+        @csrf
+        @method('DELETE')
+        <button type="submit" class="btn btn-ghost" style="color:var(--danger); border-color:var(--danger-soft);">Delete Team</button>
+      </form>
+    @endif
+ </div>
 </div>
 
 <!-- Team Progress Overview Metric Card -->

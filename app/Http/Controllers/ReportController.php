@@ -2,7 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Office;
+use App\Models\Payment;
 use App\Models\Project;
+use App\Models\ProjectBudget;
 use App\Models\Task;
 use App\Models\Team;
 use App\Models\User;
@@ -37,14 +40,52 @@ class ReportController extends Controller
 
         // High level metrics
         $totalProjects = $projects->count();
-        $activeProjects = $projects->where('status', 'active')->count();
+        $completedProjects = $projects->filter(fn ($p) => in_array(strtolower((string) $p->status), ['completed', 'closed']))->count();
+        $inProgressProjects = $projects->filter(fn ($p) => in_array(strtolower((string) $p->status), ['active', 'in progress']))->count();
+        $pendingProjects = $projects->filter(fn ($p) => in_array(strtolower((string) $p->status), ['planning', 'pending', 'draft']))->count();
+        $activeProjects = $inProgressProjects;
+
         $totalTasks = $tasks->count();
         $completedTasks = $tasks->filter(fn ($t) => in_array($t->status, ['Done', 'Completed']))->count();
         $inProgressTasks = $tasks->filter(fn ($t) => $t->status === 'In Progress')->count();
         $inReviewTasks = $tasks->filter(fn ($t) => $t->status === 'In Review')->count();
         $toDoTasks = $tasks->filter(fn ($t) => in_array($t->status, ['Pending', 'To Do', 'Not started']))->count();
         $blockedTasks = $tasks->filter(fn ($t) => $t->status === 'Blocked')->count();
+        $rejectedTasks = $tasks->filter(fn ($t) => $t->assignments()->where('acceptance_status', 'Rejected')->exists())->count();
         $overdueTasks = $tasks->filter(fn ($t) => ! in_array($t->status, ['Done', 'Completed']) && $t->end_date && $t->end_date->isPast())->count();
+
+        // Payments & Costs reporting (Requirement 13)
+        $totalCost = (float) Payment::where('payment_status', 'Completed')->sum('amount');
+        if ($totalCost === 0.0) {
+            $totalCost = (float) ProjectBudget::sum('spent_amount');
+        }
+
+        $paymentsByProject = $projects->map(function ($p) {
+            $spent = $p->calculateTotalCost();
+            $allocated = (float) (optional($p->budget)->allocated_amount ?? 0);
+
+            return [
+                'project_id' => $p->project_id,
+                'name' => $p->project_name,
+                'allocated' => $allocated,
+                'spent' => $spent,
+                'utilization' => $allocated > 0 ? round(($spent / $allocated) * 100) : 0,
+            ];
+        });
+
+        // Users by Office (Requirement 13)
+        $usersByOffice = Office::withCount('users')->get()->map(fn ($o) => [
+            'office_id' => $o->office_id,
+            'name' => $o->office_name,
+            'code' => $o->office_code,
+            'count' => $o->users_count,
+        ]);
+
+        // Projects by Department / Office (Requirement 13)
+        $projectsByDepartment = Office::withCount('primaryProjects')->get()->map(fn ($o) => [
+            'department' => $o->office_name,
+            'count' => $o->primary_projects_count,
+        ]);
 
         $overallProgress = $totalTasks > 0 ? (int) round(($completedTasks / $totalTasks) * 100) : 0;
 
@@ -113,12 +154,16 @@ class ReportController extends Controller
             'teams',
             'totalProjects',
             'activeProjects',
+            'completedProjects',
+            'inProgressProjects',
+            'pendingProjects',
             'totalTasks',
             'completedTasks',
             'inProgressTasks',
             'inReviewTasks',
             'toDoTasks',
             'blockedTasks',
+            'rejectedTasks',
             'overdueTasks',
             'overallProgress',
             'priorityStats',
@@ -126,6 +171,10 @@ class ReportController extends Controller
             'teamWorkload',
             'memberWorkload',
             'upcomingDeadlines',
+            'totalCost',
+            'paymentsByProject',
+            'usersByOffice',
+            'projectsByDepartment',
             'projectId',
             'teamId'
         ));

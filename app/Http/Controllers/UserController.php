@@ -137,6 +137,10 @@ class UserController extends Controller
                 'nullable',
                 'exists:offices,office_id',
             ],
+            'is_global' => [
+                'nullable',
+                'boolean',
+            ],
         ]);
 
         if (! $actor->canAccessGlobalScope() && $data['office_id'] && (int) $data['office_id'] !== (int) $actor->office_id) {
@@ -244,6 +248,7 @@ class UserController extends Controller
             'full_name' => $data['full_name'],
             'email' => $data['email'],
             'phone' => $data['phone'] ?? null,
+            'is_global' => $request->boolean('is_global'),
         ]);
 
         // Office assignment / transfer (audited + user notified).

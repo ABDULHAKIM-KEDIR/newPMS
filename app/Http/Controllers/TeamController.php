@@ -41,8 +41,12 @@ class TeamController extends Controller
         $offices = Office::active()
             ->when(! $actor->canAccessGlobalScope(), fn ($q) => $q->where('office_id', $actor->office_id))
             ->orderBy('office_name')->get();
+        // dev's parent-team picker, with the office scope and cycle guard applied.
+        $parentTeams = Team::orderBy('team_name')
+            ->when($actor->office_id && ! $actor->isGlobal(), fn ($q) => $q->where('office_id', $actor->office_id))
+            ->get();
 
-        return view('teams.create', compact('users', 'offices'));
+        return view('teams.create', compact('users', 'offices', 'parentTeams'));
     }
 
     public function store(Request $request)
@@ -53,6 +57,7 @@ class TeamController extends Controller
 
         $data = $request->validate([
             'team_name' => ['required', 'string', 'max:100'],
+            'parent_team_id' => ['nullable', 'exists:teams,team_id'],
             'team_leader_id' => ['nullable', 'exists:users,user_id'],
             'description' => ['nullable', 'string', 'max:1000'],
             'office_id' => ['nullable', 'exists:offices,office_id'],
@@ -67,7 +72,7 @@ class TeamController extends Controller
         // Server-side office restriction for the team leader.
         if ($team->team_leader_id && $team->office_id) {
             $leader = User::find($team->team_leader_id);
-            if ($leader && $leader->office_id && (int) $leader->office_id !== (int) $team->office_id) {
+            if ($leader && $leader->office_id && ! $leader->isGlobal() && (int) $leader->office_id !== (int) $team->office_id) {
                 $team->delete();
 
                 return back()->withErrors([
@@ -90,10 +95,16 @@ class TeamController extends Controller
         abort_unless(Auth::user()->can('view_projects'), 403);
 
         $team->load([
-            'leader', 'members.user.assignedTasks',
-            'projects.budget', 'projects.phases.tasks',
-            'assignedProjects.budget', 'assignedProjects.phases.tasks',
-            'tasks.project', 'tasks.assignee', 'tasks.comments', 'tasks.attachments',
+            'leader',
+            'members.user.assignedTasks',
+            'projects.budget',
+            'projects.phases.tasks',
+            'assignedProjects.budget',
+            'assignedProjects.phases.tasks',
+            'tasks.project',
+            'tasks.assignee',
+            'tasks.comments',
+            'tasks.attachments',
         ]);
         $user = Auth::user();
         $canManage = $this->canManageTeam($user, $team);
@@ -120,6 +131,55 @@ class TeamController extends Controller
             : collect();
 
         return view('teams.show', compact('team', 'canManage', 'availableUsers', 'leaderCandidates', 'allProjects', 'taskStats', 'teamTasks'));
+    }
+
+    public function edit(Team $team)
+    {
+        abort_unless($this->canManageTeam(Auth::user(), $team), 403);
+
+        $offices = Office::active()->orderBy('office_name')->get();
+        $users = User::where('status', 'Active')->orderBy('full_name')->get();
+        $parentTeams = Team::where('team_id', '!=', $team->team_id)
+            ->whereNotIn('team_id', $team->allDescendantIds())
+            ->orderBy('team_name')
+            ->get();
+
+        return view('teams.edit', compact('team', 'offices', 'users', 'parentTeams'));
+    }
+
+    public function update(Request $request, Team $team)
+    {
+        abort_unless($this->canManageTeam(Auth::user(), $team), 403);
+
+        if ($request->filled('parent_team_id') && $team->wouldCauseCycle((int) $request->parent_team_id)) {
+            return back()->withErrors(['parent_team_id' => 'Cannot set a subteam as parent (circular reference).'])->withInput();
+        }
+
+        $data = $request->validate([
+            'team_name' => ['required', 'string', 'max:100'],
+            'parent_team_id' => ['nullable', 'exists:teams,team_id'],
+            'description' => ['nullable', 'string', 'max:1000'],
+            'office_id' => ['nullable', 'exists:offices,office_id'],
+        ]);
+
+        $team->update($data);
+
+        Activity::log('Updated team', 'Team', $team->team_id, $team->team_name);
+
+        return redirect()->route('teams.show', $team)->with('status', 'Team updated.');
+    }
+
+    public function destroy(Team $team)
+    {
+        $user = Auth::user();
+        abort_unless($user->can('delete', $team), 403);
+
+        $teamName = $team->team_name;
+        $team->delete();
+
+        Activity::log('Deleted team', 'Team', $team->team_id, $teamName);
+
+        return redirect()->route('teams.index')->with('status', "Team \"{$teamName}\" deleted.");
     }
 
     public function addMember(Request $request, Team $team)
@@ -209,6 +269,7 @@ class TeamController extends Controller
     {
         return $candidate->isActive()
             && (empty($team->office_id) || empty($candidate->office_id)
+                || $candidate->isGlobal()
                 || (int) $team->office_id === (int) $candidate->office_id);
     }
 
@@ -288,19 +349,18 @@ class TeamController extends Controller
     {
         $user = Auth::user();
 
-        return $user->can('manage_team') || $user->isAdmin() || $user->isDirectorOrAdmin();
+        return $user->isAdmin() || $user->isDirectorOrAdmin() || $user->can('manage_team');
     }
 
+    /**
+     * Standardized on TeamPolicy hierarchical leadership: creating a team is
+     * an org-structure change, so it stays restricted to org-wide managers,
+     * but team management now accepts any leadership role up the chain
+     * (Team Lead -> Project Manager -> Office Head -> Department Head)
+     * instead of the raw manage_team gate alone.
+     */
     private function canManageTeam(User $user, Team $team): bool
     {
-        if ($user->isAdmin() || $user->isDirectorOrAdmin()) {
-            return true;
-        }
-
-        if (! $user->can('manage_team')) {
-            return false;
-        }
-
-        return (int) $team->team_leader_id === (int) $user->user_id;
+        return $user->can('update', $team);
     }
 }

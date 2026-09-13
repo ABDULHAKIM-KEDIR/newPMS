@@ -2,7 +2,7 @@
 @section('title', 'Edit Project')
 @section('crumb')
     <a class="link-small" style="cursor:pointer;"
-        href="{{ route('projects.show', $project) }}">{{ $project->project_name }}</a> <b>/ Edit</b>
+        href="{{ route('projects.show', $project) }}">{{ $project->project_name }}</a> / Edit
 @endsection
 
 @section('content')

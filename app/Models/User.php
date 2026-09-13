@@ -13,7 +13,11 @@ class User extends Authenticatable
 
     public $timestamps = false;
 
-    protected $fillable = ['full_name', 'email', 'password_hash', 'phone', 'department', 'avatar', 'status', 'role', 'office_id'];
+    protected $fillable = ['full_name', 'email', 'password_hash', 'phone', 'department', 'avatar', 'status', 'role', 'office_id', 'is_global'];
+
+    protected $casts = [
+        'is_global' => 'boolean',
+    ];
 
     protected $hidden = ['password_hash'];
 
@@ -103,7 +107,8 @@ class User extends Authenticatable
     public function scopeForOffice(Builder $query, ?int $officeId): Builder
     {
         return $query->where(function (Builder $officeQuery) use ($officeId) {
-            $officeQuery->whereNull('office_id');
+            $officeQuery->whereNull('office_id')
+                ->orWhere('is_global', true);
 
             if ($officeId) {
                 $officeQuery->orWhere('office_id', $officeId);
@@ -121,7 +126,8 @@ class User extends Authenticatable
         return $query->forOffice($viewer->office_id ? (int) $viewer->office_id : null)
             ->where(function (Builder $statusQuery) {
                 $statusQuery->where('status', '!=', 'Pending')
-                    ->orWhereNotNull('office_id');
+                    ->orWhereNotNull('office_id')
+                    ->orWhere('is_global', true);
             });
     }
 
@@ -135,7 +141,9 @@ class User extends Authenticatable
         }
 
         return $viewer->office_id
-            ? $query->where('office_id', $viewer->office_id)
+            ? $query->where(function (Builder $q) use ($viewer) {
+                $q->where('office_id', $viewer->office_id)->orWhereNull('office_id');
+            })
             : $query->whereNull('office_id');
     }
 
@@ -173,6 +181,13 @@ class User extends Authenticatable
      * descendant offices) plus global/shared accounts (office_id null).
      * Pass the User's own office model; the branch is resolved recursively.
      */
+    /**
+     * Office-scoped user selection for team/project creation dropdowns:
+     * only users inside the given office's branch (the office plus all its
+     * descendant offices) plus global/shared accounts (office_id null or
+     * is_global true). Pass the User's own office model; the branch is
+     * resolved recursively.
+     */
     public function scopeInOfficeBranch($query, ?Office $office)
     {
         if (! $office) {
@@ -181,6 +196,7 @@ class User extends Authenticatable
 
         return $query->where(function ($q) use ($office) {
             $q->whereNull('office_id')
+                ->orWhere('is_global', true)
                 ->orWhereIn('office_id', $office->branchIds());
         });
     }
@@ -224,6 +240,13 @@ class User extends Authenticatable
     public function isDirectorOrAdmin(): bool
     {
         return $this->hasPermission('edit_projects');
+    }
+
+    public function isGlobal(): bool
+    {
+        return (bool) ($this->is_global ?? false)
+            || $this->isAdmin()
+            || $this->roles->contains(fn ($r) => in_array($r->role_name, ['Administrator', 'Auditor', 'Security Specialist']));
     }
 
     public function isAdmin(): bool
