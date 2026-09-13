@@ -46,6 +46,12 @@
         @endforeach
       </select>
     </div>
+    <div class="form-field" style="margin-top:12px;">
+      <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+        <input type="checkbox" name="is_global" value="1" {{ old('is_global', $user->is_global) ? 'checked' : '' }} style="accent-color:var(--accent); cursor:pointer;">
+        <span><strong>Global / Shared User</strong> (Can participate across multiple offices and cross-office projects)</span>
+      </label>
+    </div>
     <div style="display:flex; gap:10px; margin-top:20px;">
       <button type="submit" class="btn btn-accent">Save changes</button>
       <a href="{{ route('admin.users.index') }}" class="btn btn-ghost">Cancel</a>

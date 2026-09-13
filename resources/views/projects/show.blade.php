@@ -15,9 +15,20 @@
   <div class="page-head">
     <div>
       <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; flex-wrap:wrap;">
+        <a href="{{ route('projects.index') }}" class="btn btn-ghost" style="padding:2px 8px; font-size:12px;">← Projects</a>
         <span class="mono" style="font-weight:700; color:var(--ink-soft); font-size:12px; background:var(--surface-soft); padding:2px 8px; border-radius:4px;">
           PRJ-{{ str_pad($project->project_id, 3, '0', STR_PAD_LEFT) }}
         </span>
+        @if ($project->primaryOffice)
+          <a href="{{ route('admin.offices.show', $project->primaryOffice) }}" class="badge" style="background:var(--primary-soft); color:var(--primary); font-weight:600; text-decoration:none;">
+            🏢 Office: {{ $project->primaryOffice->office_name }}
+          </a>
+        @endif
+        @if ($project->team)
+          <a href="{{ route('teams.show', $project->team) }}" class="badge" style="background:var(--bg-subtle); color:var(--ink); font-weight:600; text-decoration:none;">
+            👥 Team: {{ $project->team->team_name }}
+          </a>
+        @endif
         @if ($project->client)
           <span class="badge" style="background:var(--primary-soft); color:var(--primary-dark); font-weight:700; font-size:11px;">
             🏢 {{ $project->client }}

@@ -81,6 +81,17 @@ class DashboardController extends Controller
         }
         $teamLoad = $teamLoadQuery->orderByDesc('open_task_count')->take(4)->get();
 
+        // User approval statistics for administrators (Requirement 9)
+        $userApprovalStats = null;
+        if ($user->can('manage_users') || $user->isAdmin()) {
+            $userApprovalStats = [
+                'total' => User::count(),
+                'active' => User::where('status', 'Active')->count(),
+                'pending' => User::where('status', 'Pending')->count(),
+                'rejected' => User::where('status', 'Rejected')->count(),
+            ];
+        }
+
         // Attention items: my tasks, overdue tasks, blocked tasks
         $myAssignedTasks = Task::where('assigned_to', $user->user_id)
             ->whereNotIn('status', ['Done', 'Completed'])
@@ -107,7 +118,7 @@ class DashboardController extends Controller
 
         return view('dashboard', compact(
             'projects', 'stats', 'activity', 'teamLoad', 'scoped', 'officeStats',
-            'myAssignedTasks', 'overdueTasksList', 'blockedTasksList'
+            'myAssignedTasks', 'overdueTasksList', 'blockedTasksList', 'userApprovalStats'
         ));
     }
 }

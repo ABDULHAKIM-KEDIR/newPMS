@@ -1,7 +1,7 @@
 @extends('layouts.app')
 @section('title', 'New Project')
 @section('crumb')
-  <a class="link-small" style="cursor:pointer;" href="{{ route('projects.index') }}">Projects</a> / New Project Wizard
+  <a class="link-small" style="cursor:pointer;" href="{{ route('projects.index') }}">Projects</a> / New Project
 @endsection
 
 @section('content')
@@ -752,7 +752,6 @@
     filterTypes();
   })();
 
-<<<<<<< HEAD
   /*
    * Office-restricted team selection: teams from unrelated offices are
    * hidden. Allowed offices = primary office + participating offices.
@@ -802,7 +801,7 @@
 
     filterTeams();
   })();
-=======
+
   // Re-expose wizard functions globally so inline onclick handlers keep working.
   Object.assign(window, {
     goToStep,
@@ -820,6 +819,5 @@
     editWizardStep,
   });
   });
->>>>>>> 3a73bc0050cf8f8dfb5c739e44327f427cf2478f
 </script>
 @endsection

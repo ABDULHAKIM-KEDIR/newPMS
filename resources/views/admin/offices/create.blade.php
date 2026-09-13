@@ -34,6 +34,29 @@
           placeholder="e.g. ICT">
       </div>
       <div class="form-field">
+        <label for="unit_type">Entity / Hierarchy Level</label>
+        <select id="unit_type" name="unit_type">
+          <option value="Office" {{ old('unit_type', 'Office') === 'Office' ? 'selected' : '' }}>Office</option>
+          <option value="Organization" {{ old('unit_type') === 'Organization' ? 'selected' : '' }}>Organization</option>
+          <option value="Directorate" {{ old('unit_type') === 'Directorate' ? 'selected' : '' }}>Directorate</option>
+          <option value="Department" {{ old('unit_type') === 'Department' ? 'selected' : '' }}>Department</option>
+          <option value="Sub-department" {{ old('unit_type') === 'Sub-department' ? 'selected' : '' }}>Sub-department</option>
+          <option value="Branch Office" {{ old('unit_type') === 'Branch Office' ? 'selected' : '' }}>Branch Office</option>
+          <option value="Unit" {{ old('unit_type') === 'Unit' ? 'selected' : '' }}>Unit / Team</option>
+        </select>
+      </div>
+      <div class="form-field">
+        <label for="parent_office_id">Parent Office / Entity <span style="font-weight:400; color:var(--ink-faint);">(optional)</span></label>
+        <select id="parent_office_id" name="parent_office_id">
+          <option value="">— None (Top-Level) —</option>
+          @foreach ($parentOffices as $po)
+            <option value="{{ $po->office_id }}" {{ (string) old('parent_office_id') === (string) $po->office_id ? 'selected' : '' }}>
+              {{ $po->office_name }} ({{ $po->unit_type ?? 'Office' }})
+            </option>
+          @endforeach
+        </select>
+      </div>
+      <div class="form-field">
         <label for="description">Description</label>
         <textarea id="description" name="description" rows="3">{{ old('description') }}</textarea>
       </div>

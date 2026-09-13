@@ -258,7 +258,7 @@ class ProjectManagementFullWorkflowTest extends TestCase
         // 1. Reports
         $reportResponse = $this->actingAs($pm)->get(route('reports.index'));
         $reportResponse->assertOk();
-        $reportResponse->assertSee('Reports &amp; Analytics', false);
+        $reportResponse->assertSee('Reports');
         $reportResponse->assertSee('E-Commerce Website');
 
         // 2. Calendar

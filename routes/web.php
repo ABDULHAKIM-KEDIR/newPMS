@@ -10,6 +10,7 @@ use App\Http\Controllers\GuestController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\OfficeController;
+use App\Http\Controllers\PaymentController;
 use App\Http\Controllers\PhaseController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProjectController;
@@ -431,6 +432,26 @@ Route::middleware(['auth', 'active', 'approved'])->group(function () {
         ->name('tasks.subtasks.toggle')
         ->middleware('can:view_tasks');
 
+    Route::post(
+        '/tasks/{task}/accept',
+        [TaskController::class, 'accept']
+    )->name('tasks.accept');
+
+    Route::post(
+        '/tasks/{task}/reject',
+        [TaskController::class, 'reject']
+    )->name('tasks.reject');
+
+    Route::post(
+        '/tasks/{task}/assign-users',
+        [TaskController::class, 'assignUsers']
+    )->name('tasks.assign-users');
+
+    Route::delete(
+        '/tasks/{task}/assignees/{user}',
+        [TaskController::class, 'removeAssignee']
+    )->name('tasks.assignees.remove');
+
     /*
     |--------------------------------------------------------------------------
     | Change Requests
@@ -553,6 +574,32 @@ Route::middleware(['auth', 'active', 'approved'])->group(function () {
     )
         ->name('budgets.phases.update')
         ->middleware('can:manage_budgets');
+
+    /*
+    |--------------------------------------------------------------------------
+    | Payments & Costs
+    |--------------------------------------------------------------------------
+    */
+
+    Route::get(
+        '/payments',
+        [PaymentController::class, 'index']
+    )->name('payments.index');
+
+    Route::post(
+        '/payments',
+        [PaymentController::class, 'store']
+    )->name('payments.store');
+
+    Route::put(
+        '/payments/{payment}',
+        [PaymentController::class, 'update']
+    )->name('payments.update');
+
+    Route::delete(
+        '/payments/{payment}',
+        [PaymentController::class, 'destroy']
+    )->name('payments.destroy');
 
     /*
     |--------------------------------------------------------------------------

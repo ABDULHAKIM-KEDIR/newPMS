@@ -1,8 +1,15 @@
 <div class="topbar">
 
-    <div class="crumb">
+    <div class="crumb" style="display:flex; align-items:center; gap:8px;">
+        @if (! request()->routeIs('dashboard') && ! request()->routeIs('landing'))
+            <button type="button" onclick="window.history.length > 1 ? window.history.back() : window.location.href='{{ route('dashboard') }}'" class="btn btn-ghost" style="padding:2px 7px; font-size:11.5px; border-radius:4px; display:inline-flex; align-items:center; gap:4px;" title="Go back to previous page">
+                <span>←</span> Back
+            </button>
+        @endif
+
         @php
-            $crumb = trim(strip_tags($__env->yieldContent('crumb', 'Dashboard')));
+            $rawCrumb = $__env->yieldContent('crumb', 'Dashboard');
+            $crumb = trim(html_entity_decode(strip_tags($rawCrumb), ENT_QUOTES, 'UTF-8'));
         @endphp
 
         <strong class="font-bold">{{ $crumb ?: 'Dashboard' }}</strong>

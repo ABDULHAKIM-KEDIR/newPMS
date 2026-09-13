@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class Team extends Model
@@ -11,7 +12,42 @@ class Team extends Model
 
     public $timestamps = false;
 
-    protected $fillable = ['team_name', 'team_leader_id', 'description', 'status', 'office_id'];
+    protected $fillable = ['team_name', 'parent_team_id', 'team_leader_id', 'description', 'status', 'office_id'];
+
+    public function parentTeam()
+    {
+        return $this->belongsTo(Team::class, 'parent_team_id', 'team_id');
+    }
+
+    public function subteams()
+    {
+        return $this->hasMany(Team::class, 'parent_team_id', 'team_id');
+    }
+
+    /**
+     * Get all recursive subteam IDs to prevent circular assignment.
+     *
+     * @return Collection<int, int>
+     */
+    public function allDescendantIds(): Collection
+    {
+        $ids = collect();
+        foreach ($this->subteams as $sub) {
+            $ids->push((int) $sub->team_id);
+            $ids = $ids->merge($sub->allDescendantIds());
+        }
+
+        return $ids->unique();
+    }
+
+    public function wouldCauseCycle(int $newParentId): bool
+    {
+        if ($this->team_id && (int) $this->team_id === (int) $newParentId) {
+            return true;
+        }
+
+        return $this->allDescendantIds()->contains((int) $newParentId);
+    }
 
     public function office()
     {

@@ -16,6 +16,43 @@
   </div>
 </div>
 
+@if ($userApprovalStats)
+  <!-- User Governance & Approval Section (Requirement 9) -->
+  <div class="card card-pad" style="margin-bottom:20px; background:var(--surface); border:1px solid var(--line);">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="font-size:16px;">👥</span>
+        <h3 style="margin:0; font-size:14px; font-weight:700; color:var(--ink);">User Access &amp; Approvals</h3>
+      </div>
+      <a href="{{ route('admin.users.index') }}" class="link-small" style="font-size:12px;">Manage All Users →</a>
+    </div>
+
+    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:12px;">
+      <a href="{{ route('admin.users.index') }}" style="text-decoration:none; color:inherit; background:var(--bg-subtle); border:1px solid var(--line); border-radius:8px; padding:12px 14px; display:block;">
+        <div style="font-size:11px; text-transform:uppercase; font-weight:700; color:var(--ink-muted);">Total Users</div>
+        <div style="font-size:22px; font-weight:800; color:var(--ink); margin-top:4px;">{{ $userApprovalStats['total'] }}</div>
+      </a>
+      <a href="{{ route('admin.users.index', ['status' => 'Active']) }}" style="text-decoration:none; color:inherit; background:var(--bg-subtle); border:1px solid var(--line); border-radius:8px; padding:12px 14px; display:block;">
+        <div style="font-size:11px; text-transform:uppercase; font-weight:700; color:var(--success);">Active Users</div>
+        <div style="font-size:22px; font-weight:800; color:var(--success); margin-top:4px;">{{ $userApprovalStats['active'] }}</div>
+      </a>
+      <a href="{{ route('admin.users.index', ['status' => 'Pending']) }}" style="text-decoration:none; color:inherit; background:{{ $userApprovalStats['pending'] > 0 ? '#eff6ff' : 'var(--bg-subtle)' }}; border:1px solid {{ $userApprovalStats['pending'] > 0 ? '#93c5fd' : 'var(--line)' }}; border-radius:8px; padding:12px 14px; display:block;">
+        <div style="font-size:11px; text-transform:uppercase; font-weight:700; color:{{ $userApprovalStats['pending'] > 0 ? '#1d4ed8' : 'var(--ink-muted)' }};">Pending Approval</div>
+        <div style="font-size:22px; font-weight:800; color:{{ $userApprovalStats['pending'] > 0 ? '#1d4ed8' : 'var(--ink)' }}; margin-top:4px;">
+          {{ $userApprovalStats['pending'] }}
+          @if ($userApprovalStats['pending'] > 0)
+            <span style="font-size:11px; font-weight:600; background:#dbeafe; padding:2px 6px; border-radius:4px; vertical-align:middle;">Action needed</span>
+          @endif
+        </div>
+      </a>
+      <a href="{{ route('admin.users.index', ['status' => 'Rejected']) }}" style="text-decoration:none; color:inherit; background:var(--bg-subtle); border:1px solid var(--line); border-radius:8px; padding:12px 14px; display:block;">
+        <div style="font-size:11px; text-transform:uppercase; font-weight:700; color:var(--danger);">Rejected Users</div>
+        <div style="font-size:22px; font-weight:800; color:var(--danger); margin-top:4px;">{{ $userApprovalStats['rejected'] }}</div>
+      </a>
+    </div>
+  </div>
+@endif
+
 @if ($officeStats)
 @php
   $ob = $officeStats['budget'];

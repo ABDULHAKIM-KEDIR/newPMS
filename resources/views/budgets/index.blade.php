@@ -9,6 +9,9 @@
       <h1>Organization Budgets</h1>
       <div class="page-sub">Financial allocation, expenditure tracking, and utilization across all projects</div>
     </div>
+    <div style="display:flex; gap:8px;">
+      <a href="{{ route('payments.index') }}" class="btn btn-accent">Payments &amp; Costs →</a>
+    </div>
   </div>
 
   <div class="grid grid-4" style="margin-bottom:20px;">

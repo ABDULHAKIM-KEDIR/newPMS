@@ -12,7 +12,11 @@ class User extends Authenticatable
 
     public $timestamps = false;
 
-    protected $fillable = ['full_name', 'email', 'password_hash', 'phone', 'department', 'avatar', 'status', 'role', 'office_id'];
+    protected $fillable = ['full_name', 'email', 'password_hash', 'phone', 'department', 'avatar', 'status', 'role', 'office_id', 'is_global'];
+
+    protected $casts = [
+        'is_global' => 'boolean',
+    ];
 
     protected $hidden = ['password_hash'];
 
@@ -152,6 +156,13 @@ class User extends Authenticatable
     public function isDirectorOrAdmin(): bool
     {
         return $this->hasPermission('edit_projects');
+    }
+
+    public function isGlobal(): bool
+    {
+        return (bool) ($this->is_global ?? false)
+            || $this->isAdmin()
+            || $this->roles->contains(fn ($r) => in_array($r->role_name, ['Administrator', 'Auditor', 'Security Specialist']));
     }
 
     public function isAdmin(): bool
