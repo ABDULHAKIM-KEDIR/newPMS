@@ -71,6 +71,31 @@ class Office extends Model
         return $primary->merge($participating)->unique('project_id')->values();
     }
 
+    /**
+     * Every office id in this office's branch: the office itself plus all
+     * descendant offices (recursive).
+     *
+     * @return array<int, int>
+     */
+    public function branchIds(): array
+    {
+        $ids = collect([(int) $this->office_id]);
+        $frontier = [$this->office_id];
+
+        while ($frontier !== []) {
+            $children = self::whereIn('parent_office_id', $frontier)
+                ->pluck('office_id')
+                ->map(fn ($id) => (int) $id)
+                ->reject(fn ($id) => $ids->contains($id))
+                ->all();
+
+            $ids = $ids->merge($children)->unique()->values();
+            $frontier = $children;
+        }
+
+        return $ids->all();
+    }
+
     public function isActive(): bool
     {
         return $this->status === 'Active';

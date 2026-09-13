@@ -438,6 +438,27 @@ class Project extends Model
         ];
     }
 
+    /**
+     * User ids holding leadership over this project and every parent node,
+     * used by the hierarchical policies: Project Manager -> Office Head ->
+     * Department Head.
+     *
+     * @return array<int, int>
+     */
+    public function leadershipUserIds(): array
+    {
+        return collect([
+            $this->project_manager_id,
+            $this->primaryOffice?->head_user_id,
+            $this->primaryOffice?->department?->head_user_id,
+        ])
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
     // current phase = first phase not yet "Done"/"Closed", falls back to last phase
     public function currentPhaseIndex(): int
     {

@@ -167,6 +167,24 @@ class User extends Authenticatable
         return $ids->merge($viaTeams)->unique()->values();
     }
 
+    /**
+     * Office-scoped user selection for team/project creation dropdowns:
+     * only users inside the given office's branch (the office plus all its
+     * descendant offices) plus global/shared accounts (office_id null).
+     * Pass the User's own office model; the branch is resolved recursively.
+     */
+    public function scopeInOfficeBranch($query, ?Office $office)
+    {
+        if (! $office) {
+            return $query;
+        }
+
+        return $query->where(function ($q) use ($office) {
+            $q->whereNull('office_id')
+                ->orWhereIn('office_id', $office->branchIds());
+        });
+    }
+
     /** True if the user heads this office. */
     public function headsOffice(Office $office): bool
     {

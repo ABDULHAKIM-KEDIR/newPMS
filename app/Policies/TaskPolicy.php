@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\Models\Task;
 use App\Models\User;
+use App\Policies\Concerns\ChecksHierarchicalLeadership;
 use App\Services\RbacService;
 
 /**
@@ -13,6 +14,8 @@ use App\Services\RbacService;
  */
 class TaskPolicy
 {
+    use ChecksHierarchicalLeadership;
+
     public function view(User $user, Task $task): bool
     {
         // Assigned user always has access.
@@ -36,6 +39,11 @@ class TaskPolicy
         $project = $task->project ?? optional($task->phase)->project;
 
         if ((int) $task->assigned_to === (int) $user->user_id) {
+            return true;
+        }
+
+        // Sub-Team Lead / Team Lead / PM / Office Head / Dept Head.
+        if ($this->leadsOrOversees($user, $task)) {
             return true;
         }
 

@@ -11,7 +11,7 @@ class Task extends Model
     public $timestamps = false;
 
     protected $fillable = [
-        'project_id', 'phase_id', 'team_id', 'parent_task_id', 'task_name', 'description', 'assigned_to',
+        'project_id', 'phase_id', 'team_id', 'sub_team_id', 'parent_task_id', 'task_name', 'description', 'assigned_to',
         'status', 'priority', 'progress', 'budget', 'blocker_reason', 'start_date', 'end_date', 'duration',
     ];
 
@@ -28,6 +28,65 @@ class Task extends Model
     public function team()
     {
         return $this->belongsTo(Team::class, 'team_id', 'team_id');
+    }
+
+    /** Optional sub-team scope; null means the task sits at the team level. */
+    public function subTeam()
+    {
+        return $this->belongsTo(SubTeam::class, 'sub_team_id', 'sub_team_id');
+    }
+
+    /** Sub-Team Lead when scoped to a sub-team with a lead, else the Team Lead. */
+    public function teamLead(): ?User
+    {
+        if ($this->sub_team_id) {
+            $lead = $this->subTeam?->lead;
+
+            if ($lead) {
+                return $lead;
+            }
+        }
+
+        return $this->team?->leader;
+    }
+
+    public function projectManager(): ?User
+    {
+        return $this->project?->projectManager;
+    }
+
+    public function officeHead(): ?User
+    {
+        return $this->project?->primaryOffice?->head;
+    }
+
+    public function departmentHead(): ?User
+    {
+        return $this->project?->primaryOffice?->department?->head;
+    }
+
+    /**
+     * User ids holding leadership over this task and every node above it,
+     * used by the hierarchical policies. Gracefully falls back up the chain
+     * when sub_team_id is null: Sub-Team Lead (optional) -> Team Lead ->
+     * Project Manager -> Office Head -> Department Head.
+     *
+     * @return array<int, int>
+     */
+    public function leadershipUserIds(): array
+    {
+        return collect([
+            $this->sub_team_id ? $this->subTeam?->lead_user_id : null,
+            $this->teamLead()?->user_id,
+            $this->projectManager()?->user_id,
+            $this->officeHead()?->user_id,
+            $this->departmentHead()?->user_id,
+        ])
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     public function phase()

@@ -63,6 +63,59 @@ class Team extends Model
         return $this->hasMany(Task::class, 'team_id', 'team_id');
     }
 
+    /** Optional refinement layer: a team may have zero or many sub-teams. */
+    public function subTeams()
+    {
+        return $this->hasMany(SubTeam::class, 'team_id', 'team_id');
+    }
+
+    /**
+     * Resolve the project manager above this team: prefer the project whose
+     * primary team is this one, then any project this team is assigned to.
+     * Null when the team has no project or the project has no PM of record.
+     */
+    public function projectManager(): ?User
+    {
+        $project = Project::where('team_id', $this->team_id)
+            ->orWhereHas('teams', fn ($q) => $q->where('teams.team_id', $this->team_id))
+            ->orderByDesc('team_id')
+            ->first();
+
+        return $project?->projectManager;
+    }
+
+    public function officeHead(): ?User
+    {
+        return $this->office?->head;
+    }
+
+    public function departmentHead(): ?User
+    {
+        return $this->office?->department?->head;
+    }
+
+    /**
+     * User ids holding leadership over this node and every parent node,
+     * used by the hierarchical policies: Team Lead -> Project Manager ->
+     * Office Head -> Department Head.
+     *
+     * @return array<int, int>
+     */
+    public function leadershipUserIds(): array
+    {
+        return collect([
+            $this->team_leader_id,
+            $this->projectManager()?->user_id,
+            $this->office?->head_user_id,
+            $this->office?->department?->head_user_id,
+        ])
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
     /**
      * All projects this team is involved in (primary or assigned via project_teams)
      */
