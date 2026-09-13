@@ -101,12 +101,6 @@ class Team extends Model
         return $this->hasMany(Task::class, 'team_id', 'team_id');
     }
 
-    /** Optional refinement layer: a team may have zero or many sub-teams. */
-    public function subTeams()
-    {
-        return $this->hasMany(SubTeam::class, 'team_id', 'team_id');
-    }
-
     /**
      * Resolve the project manager above this team: prefer the project whose
      * primary team is this one, then any project this team is assigned to.
