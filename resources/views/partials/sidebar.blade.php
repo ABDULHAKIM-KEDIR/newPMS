@@ -21,13 +21,6 @@
 
             $projectsCount = \App\Models\Project::count();
 
-            $myTasksCount = \App\Models\Task::where(function ($query) use ($currentUser) {
-                $query->where('assigned_to', $currentUser->user_id)
-                    ->orWhereHas('assignments', fn ($assignmentQuery) => $assignmentQuery->where('user_id', $currentUser->user_id));
-            })
-                ->whereNotIn('status', ['Done', 'Completed'])
-                ->count();
-
             $teamsCount = \App\Models\Team::count();
 
             $unreadNotifsCount = \App\Models\Notification::where(
@@ -98,30 +91,6 @@
             </a>
         @endcan
 
-        @can('view_tasks')
-            <a
-                href="{{ route('tasks.index') }}"
-                class="nav-item {{ request()->routeIs('tasks.*') ? 'active' : '' }}"
-            >
-                <svg width="16" height="16" viewBox="0 0 24 24"
-                    fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M9 11l3 3L22 4" />
-                    <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-                </svg>
-
-                <span>Tasks</span>
-
-                @if ($myTasksCount > 0)
-                    <span
-                        class="nav-badge"
-                        style="background:var(--accent-soft); color:var(--accent-dark);"
-                    >
-                        {{ $myTasksCount }}
-                    </span>
-                @endif
-            </a>
-        @endcan
-
         <a
             href="{{ route('calendar.index') }}"
             class="nav-item {{ request()->routeIs('calendar.*') ? 'active' : '' }}"
@@ -189,6 +158,19 @@
                 </svg>
 
                 <span>Budgets</span>
+            </a>
+
+            <a
+                href="{{ route('payments.index') }}"
+                class="nav-item {{ request()->routeIs('payments.*') ? 'active' : '' }}"
+            >
+                <svg width="16" height="16" viewBox="0 0 24 24"
+                    fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="2" y="5" width="20" height="14" rx="2" />
+                    <line x1="2" y1="10" x2="22" y2="10" />
+                </svg>
+
+                <span>Payments &amp; Costs</span>
             </a>
 
         @endif

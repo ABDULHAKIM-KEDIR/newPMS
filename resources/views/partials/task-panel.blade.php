@@ -56,6 +56,35 @@
         </div>
       </template>
 
+      <!-- Lock Banner if Locked -->
+      <template x-if="task.is_locked">
+        <div style="background:#f0fdf4; border:1px solid #86efac; border-radius:8px; padding:10px 14px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center;">
+          <div style="font-size:12px; color:#166534; display:flex; align-items:center; gap:6px;">
+            <span>🔒 <strong>TASK AGREEMENT LOCKED</strong></span>
+            <span style="color:#15803d;" x-text="task.lock_reason ? '— ' + task.lock_reason : '— Agreed terms locked upon acceptance'"></span>
+          </div>
+          <template x-if="task.can_modify_locked">
+            <span class="badge" style="background:#bbf7d0; color:#14532d; font-size:10px;">Admin Override Enabled</span>
+          </template>
+        </div>
+      </template>
+
+      <!-- Assignment Accept / Reject Action Banner -->
+      <template x-if="task.can_accept && task.assignees && task.assignees.some(a => a.is_current_user && a.acceptance_status === 'Pending Acceptance')">
+        <div style="background:#eff6ff; border:1px solid #93c5fd; border-radius:8px; padding:12px 14px; margin-bottom:16px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+            <div>
+              <div style="font-weight:700; color:#1e40af; font-size:13px;">📋 Assignment Response Required</div>
+              <div style="font-size:12px; color:#1d4ed8; margin-top:2px;">You are assigned to this task. Please accept or reject below:</div>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button type="button" class="btn btn-primary" style="padding:4px 12px; font-size:12px;" @click="acceptTask()">✓ Accept Task</button>
+              <button type="button" class="btn btn-ghost" style="padding:4px 12px; font-size:12px; color:var(--danger); border-color:#fca5a5;" @click="showRejectModal = true">✕ Reject</button>
+            </div>
+          </div>
+        </div>
+      </template>
+
       <div class="field-row">
         <span class="k">Status</span>
         <span class="v">
@@ -220,6 +249,64 @@
         x-text="savedMessage"
       ></div>
 
+      <!-- Assigned Users Section (Requirement 3, 7, 8) -->
+      <div style="margin-top:20px; border-top:1px solid var(--line); padding-top:16px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+          <div class="stat-label" style="margin:0;">Assigned Team Members</div>
+          <span style="font-size:11.5px; color:var(--ink-soft);" x-text="(task.assignees ? task.assignees.length : 0) + ' assigned'"></span>
+        </div>
+
+        <template x-for="as in task.assignees" :key="as.id || as.user_id">
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 10px; background:var(--bg-subtle); border:1px solid var(--line); border-radius:6px; margin-bottom:6px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <div style="width:26px; height:26px; border-radius:50%; background:var(--primary-soft); color:var(--primary); font-weight:700; font-size:11px; display:flex; align-items:center; justify-content:center;"
+                x-text="(as.name || '?').split(' ').map(w => w[0]).join('')"></div>
+              <div>
+                <div style="font-size:13px; font-weight:600; color:var(--ink);" x-text="as.name"></div>
+                <div style="font-size:11px; color:var(--ink-muted);" x-text="as.role_label || 'Assignee'"></div>
+              </div>
+            </div>
+            <div style="text-align:right; display:flex; align-items:center; gap:8px;">
+              <div>
+                <span class="badge"
+                  :class="as.acceptance_status === 'Accepted' ? 'b-active' : (as.acceptance_status === 'Rejected' ? 'b-blocked' : 'b-risk')"
+                  style="font-size:10px;"
+                  x-text="as.acceptance_status"></span>
+                <template x-if="as.rejection_reason">
+                  <div style="font-size:10.5px; color:var(--danger); margin-top:2px; max-width:180px;" x-text="'Reason: ' + as.rejection_reason"></div>
+                </template>
+              </div>
+              <template x-if="task.can_manage && (!task.is_locked || task.can_modify_locked)">
+                <button type="button" @click="removeAssignee(as.user_id)" title="Remove assignee" class="btn btn-ghost" style="padding:2px 6px; font-size:11px; color:var(--danger); border:none; line-height:1;">✕</button>
+              </template>
+            </div>
+          </div>
+        </template>
+
+        <!-- Add Additional Assignee (if can_manage and not locked or admin) -->
+        <template x-if="task.can_manage && (!task.is_locked || task.can_modify_locked)">
+          <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+            <select x-model="newAssigneeUserId" style="flex:1; min-width:160px; border:1px solid var(--line); border-radius:6px; padding:6px 10px; font-size:12.5px; font-family:inherit; background:var(--surface);">
+              <option value="">— Add Assignee —</option>
+              <template x-for="u in task.assignable_users" :key="u.user_id">
+                <option :value="u.user_id" x-text="u.full_name + (u.role_title ? ' (' + u.role_title + ')' : '')"></option>
+              </template>
+            </select>
+            <input type="text" x-model="newAssigneeRole" placeholder="Role (e.g. Tester, Frontend)" style="width:140px; border:1px solid var(--line); border-radius:6px; padding:6px 8px; font-size:12px; font-family:inherit; background:var(--surface);">
+            <button type="button" class="btn btn-ghost" style="padding:6px 12px; font-size:12px;" @click="assignAdditionalUser()" :disabled="!newAssigneeUserId">+ Assign</button>
+          </div>
+        </template>
+      </div>
+
+      <!-- Cost / Payment Section (Requirement 2) -->
+      <div style="margin-top:16px; padding:10px 12px; background:var(--bg-subtle); border:1px solid var(--line); border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="font-size:11px; text-transform:uppercase; font-weight:700; color:var(--ink-muted);">Task Expenditure / Cost</div>
+          <div style="font-size:14px; font-weight:800; color:var(--ink); margin-top:2px;" x-text="'ETB ' + Number(task.total_cost || 0).toLocaleString()"></div>
+        </div>
+        <a href="{{ route('payments.index') }}" class="btn btn-ghost" style="padding:4px 10px; font-size:11px;">View Payments →</a>
+      </div>
+
       <!-- Subtasks Section -->
       <div style="margin-top:20px; border-top:1px solid var(--line); padding-top:16px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -336,6 +423,19 @@
       </div>
     </div>
   </div>
+
+  <!-- Rejection Modal Dialog -->
+  <div x-show="showRejectModal" x-cloak style="position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:99999; display:flex; align-items:center; justify-content:center; padding:16px;">
+    <div class="card card-pad" style="max-width:440px; width:100%; background:var(--surface);" @click.away="showRejectModal = false">
+      <h3 style="margin-top:0; color:var(--danger); font-size:15px;">Reject Task Assignment</h3>
+      <p style="font-size:13px; color:var(--ink-soft); margin-bottom:12px;">Please provide the reason for rejecting this assignment so your manager can reassign or adjust the task:</p>
+      <textarea x-model="rejectionReason" placeholder="Reason for rejection (e.g. Schedule conflict, requires backend skill, etc.)..." rows="3" style="width:100%; border:1px solid var(--line); border-radius:6px; padding:8px 10px; font-size:13px; font-family:inherit;"></textarea>
+      <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:14px;">
+        <button type="button" class="btn btn-ghost" @click="showRejectModal = false">Cancel</button>
+        <button type="button" class="btn btn-accent" style="background:var(--danger); border-color:var(--danger);" @click="submitRejection()" :disabled="!rejectionReason.trim()">Confirm Rejection</button>
+      </div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -354,6 +454,10 @@
       savedMessage: '',
       fileSelected: null,
       uploading: false,
+      showRejectModal: false,
+      rejectionReason: '',
+      newAssigneeUserId: '',
+      newAssigneeRole: '',
 
       csrf() {
         return document.querySelector('meta[name="csrf-token"]').content;
@@ -450,7 +554,7 @@
           if (!res.ok) {
             const err = await res.json().catch(() => ({}));
             console.error('Failed to update task:', res.status, err);
-            alertDialog({ text: err.message || 'Failed to save task changes.' });
+            alertDialog({ text: err.error || err.message || 'Failed to save task changes.' });
             return;
           }
 
@@ -781,6 +885,107 @@
             this.flash('Attachment removed');
           }
         } catch(e) {
+          console.error(e);
+        }
+      },
+
+      async acceptTask() {
+        try {
+          const res = await fetch(`/tasks/${this.task.id}/accept`, {
+            method: 'POST',
+            headers: {
+              'Accept': 'application/json',
+              'X-CSRF-TOKEN': this.csrf()
+            }
+          });
+          if (res.ok) {
+            this.flash('Task accepted! Agreed terms are now locked.');
+            this.dirty = true;
+            await this.show(this.task.id);
+          } else {
+            const err = await res.json().catch(() => ({}));
+            alertDialog({ text: err.message || 'Failed to accept task.' });
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      },
+
+      async submitRejection() {
+        if (!this.rejectionReason.trim()) return;
+        try {
+          const res = await fetch(`/tasks/${this.task.id}/reject`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'X-CSRF-TOKEN': this.csrf()
+            },
+            body: JSON.stringify({ rejection_reason: this.rejectionReason.trim() })
+          });
+          if (res.ok) {
+            this.showRejectModal = false;
+            this.rejectionReason = '';
+            this.flash('Assignment rejected.');
+            this.dirty = true;
+            await this.show(this.task.id);
+          } else {
+            const err = await res.json().catch(() => ({}));
+            alertDialog({ text: err.message || 'Failed to reject task.' });
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      },
+
+      async assignAdditionalUser() {
+        if (!this.newAssigneeUserId) return;
+        try {
+          const res = await fetch(`/tasks/${this.task.id}/assign-users`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Accept': 'application/json',
+              'X-CSRF-TOKEN': this.csrf()
+            },
+            body: JSON.stringify({
+              users: [{ user_id: this.newAssigneeUserId, role_label: this.newAssigneeRole || 'Contributor' }]
+            })
+          });
+          if (res.ok) {
+            this.newAssigneeUserId = '';
+            this.newAssigneeRole = '';
+            this.flash('Team member assigned.');
+            this.dirty = true;
+            await this.show(this.task.id);
+          } else {
+            const err = await res.json().catch(() => ({}));
+            alertDialog({ text: err.message || 'Failed to assign team member.' });
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      },
+
+      async removeAssignee(userId) {
+        if (!confirm('Remove this assigned team member?')) return;
+        try {
+          const res = await fetch(`/tasks/${this.task.id}/assignees/${userId}`, {
+            method: 'DELETE',
+            headers: {
+              'Accept': 'application/json',
+              'X-CSRF-TOKEN': this.csrf()
+            }
+          });
+          if (res.ok) {
+            this.flash('Assignee removed.');
+            this.dirty = true;
+            await this.show(this.task.id);
+          } else {
+            const err = await res.json().catch(() => ({}));
+            alertDialog({ text: err.error || err.message || 'Failed to remove assignee.' });
+          }
+        } catch (e) {
           console.error(e);
         }
       }

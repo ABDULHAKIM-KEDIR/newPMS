@@ -41,4 +41,14 @@ class Phase extends Model
 
         return max(0, $allocated - $spent - $this->allocatedTaskAmount());
     }
+
+    public function payments()
+    {
+        return $this->hasMany(Payment::class, 'phase_id', 'phase_id');
+    }
+
+    public function totalPayments(): float
+    {
+        return (float) $this->payments()->where('payment_status', 'Completed')->sum('amount');
+    }
 }

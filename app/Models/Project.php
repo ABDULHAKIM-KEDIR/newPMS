@@ -315,6 +315,10 @@ class Project extends Model
      */
     public function canAssignUser(User $user): bool
     {
+        if ($user->isGlobal()) {
+            return true;
+        }
+
         $allowedOfficeIds = $this->authorizedOfficeIds();
 
         if ($allowedOfficeIds->isEmpty() || ! $user->office_id) {
@@ -337,6 +341,26 @@ class Project extends Model
     public function budget()
     {
         return $this->hasOne(ProjectBudget::class, 'project_id', 'project_id');
+    }
+
+    public function payments()
+    {
+        return $this->hasMany(Payment::class, 'project_id', 'project_id');
+    }
+
+    public function totalPayments(): float
+    {
+        return (float) $this->payments()->where('payment_status', 'Completed')->sum('amount');
+    }
+
+    public function calculateTotalCost(): float
+    {
+        $paymentsSum = $this->totalPayments();
+        if ($paymentsSum > 0) {
+            return $paymentsSum;
+        }
+
+        return (float) (optional($this->budget)->spent_amount ?? 0);
     }
 
     public function tasks()
@@ -453,6 +477,27 @@ class Project extends Model
             'overdue' => $overdue,
             'progress' => $total > 0 ? (int) round(($completed / $total) * 100) : (int) ($this->progress ?: 0),
         ];
+    }
+
+    /**
+     * User ids holding leadership over this project and every parent node,
+     * used by the hierarchical policies: Project Manager -> Office Head ->
+     * Department Head.
+     *
+     * @return array<int, int>
+     */
+    public function leadershipUserIds(): array
+    {
+        return collect([
+            $this->project_manager_id,
+            $this->primaryOffice?->head_user_id,
+            $this->primaryOffice?->department?->head_user_id,
+        ])
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     // current phase = first phase not yet "Done"/"Closed", falls back to last phase

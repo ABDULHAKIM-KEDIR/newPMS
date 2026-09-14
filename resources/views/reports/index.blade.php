@@ -1,11 +1,11 @@
 @extends('layouts.app')
-@section('title', 'Reports & Analytics')
-@section('crumb', 'Reports &amp; Analytics')
+@section('title', 'Reports')
+@section('crumb', 'Reports')
 
 @section('content')
 <div class="page-head">
   <div>
-    <h1>Reports &amp; Analytics</h1>
+    <h1>Reports</h1>
     <div class="page-sub">Project delivery metrics, team performance, workload distribution, and completion trends</div>
   </div>
 
@@ -33,34 +33,31 @@
 </div>
 
 <!-- Executive Summary Cards -->
-<div class="grid grid-4" style="margin-bottom:20px;">
+<div class="grid grid-4" style="margin-bottom:14px;">
   <div class="card stat-card">
-    <div class="stat-label">Active Projects</div>
-    <div class="stat-value" style="font-size:26px;">{{ $activeProjects }} / {{ $totalProjects }}</div>
-    <div class="stat-delta">Total project portfolio</div>
+    <div class="stat-label">Total Projects</div>
+    <div class="stat-value" style="font-size:24px;">{{ $totalProjects }}</div>
+    <div class="stat-delta">{{ $completedProjects }} completed · {{ $inProgressProjects }} active · {{ $pendingProjects }} pending</div>
   </div>
 
   <div class="card stat-card">
-    <div class="stat-label">Overall Completion Rate</div>
-    <div class="stat-value" style="font-size:26px; color:var(--active);">{{ $overallProgress }}%</div>
-    <div class="progressbar" style="margin-top:6px;">
-      <div style="width:{{ $overallProgress }}%"></div>
-    </div>
+    <div class="stat-label">Task Performance</div>
+    <div class="stat-value" style="font-size:24px; color:var(--active);">{{ $overallProgress }}%</div>
+    <div class="stat-delta">{{ $completedTasks }} done of {{ $totalTasks }} total tasks</div>
   </div>
 
   <div class="card stat-card">
-    <div class="stat-label">Tasks Completed</div>
-    <div class="stat-value" style="font-size:26px; color:var(--success);">{{ $completedTasks }} / {{ $totalTasks }}
+    <div class="stat-label">Tasks Pending / Rejected</div>
+    <div class="stat-value" style="font-size:24px; color:{{ $rejectedTasks > 0 ? 'var(--danger)' : 'var(--ink)' }};">
+      {{ $toDoTasks }} / {{ $rejectedTasks }}
     </div>
-    <div class="stat-delta">{{ $inProgressTasks }} currently in progress</div>
+    <div class="stat-delta">{{ $toDoTasks }} pending · {{ $rejectedTasks }} rejected</div>
   </div>
 
   <div class="card stat-card">
-    <div class="stat-label">Overdue Tasks</div>
-    <div class="stat-value" style="font-size:26px; color:{{ $overdueTasks > 0 ? 'var(--danger)' : 'var(--success)' }};">
-      {{ $overdueTasks }}
-    </div>
-    <div class="stat-delta">{{ $blockedTasks }} tasks currently blocked</div>
+    <div class="stat-label">Total Payment / Cost</div>
+    <div class="stat-value" style="font-size:24px; color:var(--ink);">ETB {{ number_format($totalCost) }}</div>
+    <div class="stat-delta">Across all tracked project disbursements</div>
   </div>
 </div>
 
@@ -246,7 +243,74 @@
   </div>
 </div>
 
-<!-- Section 3: Upcoming Deadlines -->
+<!-- Section 3: Payments by Project & Cost Audit (Requirement 13) -->
+<div class="card card-pad" style="margin-bottom:20px;">
+  <div class="card-title-row" style="margin-bottom:14px; display:flex; justify-content:space-between; align-items:center;">
+    <h3 style="margin:0;">Project Cost &amp; Payment Audit Breakdown</h3>
+    <a href="{{ route('payments.index') }}" class="link-small">View All Payments →</a>
+  </div>
+
+  <div style="overflow-x:auto;">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Project</th>
+          <th>Allocated Budget</th>
+          <th>Actual Cost / Payments</th>
+          <th>Utilization</th>
+        </tr>
+      </thead>
+      <tbody>
+        @foreach ($paymentsByProject as $pPay)
+          <tr>
+            <td>
+              <a href="{{ route('projects.show', $pPay['project_id']) }}" class="link-small" style="font-weight:700;">{{ $pPay['name'] }}</a>
+            </td>
+            <td>ETB {{ number_format($pPay['allocated']) }}</td>
+            <td style="font-weight:700;">ETB {{ number_format($pPay['spent']) }}</td>
+            <td>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <div class="progressbar" style="flex:1; max-width:120px;">
+                  <div style="width:{{ min(100, $pPay['utilization']) }}%"></div>
+                </div>
+                <span style="font-size:12px; font-weight:600;">{{ $pPay['utilization'] }}%</span>
+              </div>
+            </td>
+          </tr>
+        @endforeach
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Section 4: Organizational Metrics (Requirement 13) -->
+<div class="two-col" style="margin-bottom:20px;">
+  <div class="card card-pad">
+    <h3 style="margin:0 0 14px;">Users by Office</h3>
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      @foreach ($usersByOffice as $uo)
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:var(--bg-subtle); border-radius:6px; border:1px solid var(--line);">
+          <span style="font-weight:600; font-size:13px;">{{ $uo['name'] }} ({{ $uo['code'] }})</span>
+          <span class="badge" style="font-size:11px;">{{ $uo['count'] }} user(s)</span>
+        </div>
+      @endforeach
+    </div>
+  </div>
+
+  <div class="card card-pad">
+    <h3 style="margin:0 0 14px;">Projects by Department / Primary Office</h3>
+    <div style="display:flex; flex-direction:column; gap:8px;">
+      @foreach ($projectsByDepartment as $pd)
+        <div style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; background:var(--bg-subtle); border-radius:6px; border:1px solid var(--line);">
+          <span style="font-weight:600; font-size:13px;">{{ $pd['department'] }}</span>
+          <span class="badge b-active" style="font-size:11px;">{{ $pd['count'] }} project(s)</span>
+        </div>
+      @endforeach
+    </div>
+  </div>
+</div>
+
+<!-- Section 5: Upcoming Deadlines -->
 <div class="card card-pad">
   <div class="card-title-row" style="margin-bottom:12px;">
     <h3 style="margin:0;">Upcoming Project Deadlines &amp; Deliverables</h3>

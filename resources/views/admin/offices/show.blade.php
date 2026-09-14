@@ -7,8 +7,15 @@
 @section('content')
   <div class="page-head">
     <div>
+      <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
+        <a href="{{ route('admin.offices.index') }}" class="btn btn-ghost" style="padding:2px 8px; font-size:12px;">← Offices</a>
+        @if ($office->parent)
+          <span style="font-size:12px; color:var(--ink-muted);">↳ Parent: <a href="{{ route('admin.offices.show', $office->parent) }}" class="link-small">{{ $office->parent->office_name }}</a></span>
+        @endif
+      </div>
       <h1>{{ $office->office_name }}</h1>
       <div class="page-sub">
+        <span class="badge" style="background:var(--bg-subtle);">{{ $office->unit_type ?? 'Office' }}</span>
         <span class="badge b-active">{{ $office->office_code }}</span>
         <span class="badge {{ $office->isActive() ? 'b-active' : 'b-inactive' }}">{{ $office->status }}</span>
         @if ($office->description) — {{ $office->description }} @endif
@@ -65,6 +72,25 @@
       </div>
     </div>
   @endcan
+
+  @if ($office->children->isNotEmpty())
+    <div class="card card-pad" style="margin-bottom:20px;">
+      <h3 style="margin:0 0 12px; font-size:14px; text-transform:uppercase; color:var(--ink-soft);">Child Offices &amp; Sub-Units ({{ $office->children->count() }})</h3>
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px;">
+        @foreach ($office->children as $child)
+          <div style="padding:10px 14px; background:var(--bg-subtle); border:1px solid var(--line); border-radius:8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <a href="{{ route('admin.offices.show', $child) }}" style="font-weight:700; color:var(--ink); font-size:13.5px; text-decoration:none;">{{ $child->office_name }}</a>
+              <span class="badge" style="font-size:10px;">{{ $child->unit_type ?? 'Office' }}</span>
+            </div>
+            <div style="font-size:11.5px; color:var(--ink-muted); margin-top:4px;">
+              Code: {{ $child->office_code }} · Head: {{ optional($child->head)->full_name ?? 'Unassigned' }}
+            </div>
+          </div>
+        @endforeach
+      </div>
+    </div>
+  @endif
 
   <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
     <div class="card card-pad">

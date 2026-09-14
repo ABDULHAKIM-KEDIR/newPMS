@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class Team extends Model
@@ -23,9 +24,46 @@ class Team extends Model
         return $this->belongsTo(self::class, 'parent_team_id', 'team_id');
     }
 
+    /**
+     * dev's self-referencing subteams adapted to the standardized
+     * 5-tier schema: sub-grouping lives in the sub_teams table.
+     * (Single canonical relation; ->subteams and ->subTeams resolve
+     * to this same method case-insensitively.)
+     */
+    public function subTeams()
+    {
+        return $this->hasMany(SubTeam::class, 'team_id', 'team_id');
+    }
+
     public function childTeams()
     {
         return $this->hasMany(self::class, 'parent_team_id', 'team_id');
+    }
+
+    /**
+     * All recursive child-team (parent_team_id) ids, used to prevent
+     * circular parent-team assignment.
+     *
+     * @return Collection<int, int>
+     */
+    public function allDescendantIds(): Collection
+    {
+        $ids = collect();
+        foreach ($this->childTeams as $sub) {
+            $ids->push((int) $sub->team_id);
+            $ids = $ids->merge($sub->allDescendantIds());
+        }
+
+        return $ids->unique();
+    }
+
+    public function wouldCauseCycle(int $newParentId): bool
+    {
+        if ($this->team_id && (int) $this->team_id === (int) $newParentId) {
+            return true;
+        }
+
+        return $this->allDescendantIds()->contains((int) $newParentId);
     }
 
     public function heads()
@@ -61,6 +99,53 @@ class Team extends Model
     public function tasks()
     {
         return $this->hasMany(Task::class, 'team_id', 'team_id');
+    }
+
+    /**
+     * Resolve the project manager above this team: prefer the project whose
+     * primary team is this one, then any project this team is assigned to.
+     * Null when the team has no project or the project has no PM of record.
+     */
+    public function projectManager(): ?User
+    {
+        $project = Project::where('team_id', $this->team_id)
+            ->orWhereHas('teams', fn ($q) => $q->where('teams.team_id', $this->team_id))
+            ->orderByDesc('team_id')
+            ->first();
+
+        return $project?->projectManager;
+    }
+
+    public function officeHead(): ?User
+    {
+        return $this->office?->head;
+    }
+
+    public function departmentHead(): ?User
+    {
+        return $this->office?->department?->head;
+    }
+
+    /**
+     * User ids holding leadership over this node and every parent node,
+     * used by the hierarchical policies: Team Lead -> Project Manager ->
+     * Office Head -> Department Head.
+     *
+     * @return array<int, int>
+     */
+    public function leadershipUserIds(): array
+    {
+        return collect([
+            $this->team_leader_id,
+            $this->projectManager()?->user_id,
+            $this->office?->head_user_id,
+            $this->office?->department?->head_user_id,
+        ])
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     /**

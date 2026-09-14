@@ -44,10 +44,16 @@
         @forelse ($offices as $office)
           <tr>
             <td>
-              <a class="link-small" href="{{ route('admin.offices.show', $office) }}"
-                style="font-weight:600;">{{ $office->office_name }}</a>
+              <div style="display:flex; align-items:center; gap:6px;">
+                <a class="link-small" href="{{ route('admin.offices.show', $office) }}"
+                  style="font-weight:600;">{{ $office->office_name }}</a>
+                <span class="badge" style="font-size:10px; background:var(--bg-subtle);">{{ $office->unit_type ?? 'Office' }}</span>
+              </div>
+              @if ($office->parent)
+                <div style="font-size:11px; color:var(--ink-muted); margin-top:2px;">↳ Parent: {{ $office->parent->office_name }}</div>
+              @endif
               @if ($office->description)
-                <div style="font-size:11.5px; color:var(--ink-muted);">{{ Str::limit($office->description, 60) }}</div>
+                <div style="font-size:11.5px; color:var(--ink-muted); margin-top:2px;">{{ Str::limit($office->description, 60) }}</div>
               @endif
             </td>
             <td><span class="badge b-active">{{ $office->office_code }}</span></td>

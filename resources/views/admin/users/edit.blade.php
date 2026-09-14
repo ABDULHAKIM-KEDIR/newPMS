@@ -1,7 +1,7 @@
 @extends('layouts.app')
 @section('title', 'Edit User')
 @section('crumb')
-  <a class="link-small" style="cursor:pointer;" href="{{ route('admin.users.index') }}">Users</a> <b>/ {{ $user->full_name }}</b>
+  <a class="link-small" style="cursor:pointer;" href="{{ route('admin.users.index') }}">Users</a> / {{ $user->full_name }}
 @endsection
 
 @section('content')
@@ -45,6 +45,12 @@
           <option value="{{ $office->office_id }}" {{ (string) old('office_id', $user->office_id) === (string) $office->office_id ? 'selected' : '' }}>{{ $office->office_name }}</option>
         @endforeach
       </select>
+    </div>
+    <div class="form-field" style="margin-top:12px;">
+      <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+        <input type="checkbox" name="is_global" value="1" {{ old('is_global', $user->is_global) ? 'checked' : '' }} style="accent-color:var(--accent); cursor:pointer;">
+        <span><strong>Global / Shared User</strong> (Can participate across multiple offices and cross-office projects)</span>
+      </label>
     </div>
     <div style="display:flex; gap:10px; margin-top:20px;">
       <button type="submit" class="btn btn-accent">Save changes</button>

@@ -65,7 +65,10 @@ class OfficeController extends Controller
 
         $users = User::where('status', 'Active')->orderBy('full_name')->get();
         $departments = Department::where('status', 'Active')->orderBy('department_name')->get();
-        $parentOffices = Office::active()->where('office_id', '!=', $office->office_id)->orderBy('office_name')->get();
+        $parentOffices = Office::where('office_id', '!=', $office->office_id)
+            ->whereNotIn('office_id', $office->allDescendantIds())
+            ->orderBy('office_name')
+            ->get();
 
         return view('admin.offices.edit', compact('office', 'users', 'departments', 'parentOffices'));
     }
@@ -73,6 +76,10 @@ class OfficeController extends Controller
     public function update(Request $request, Office $office)
     {
         $this->authorize('update', $office);
+
+        if ($request->filled('parent_office_id') && $office->wouldCauseCycle((int) $request->parent_office_id)) {
+            return back()->withErrors(['parent_office_id' => 'Cannot set a descendant office as parent (circular reference).'])->withInput();
+        }
 
         $data = $this->validated($request, $office);
 
@@ -126,6 +133,8 @@ class OfficeController extends Controller
                 Rule::unique('offices', 'office_code')->ignore($office?->office_id, 'office_id'),
             ],
             'description' => ['nullable', 'string', 'max:2000'],
+            'unit_type' => ['nullable', 'string', 'max:50'],
+            'parent_office_id' => ['nullable', 'exists:offices,office_id'],
             'head_user_id' => ['nullable', 'exists:users,user_id'],
             'department_id' => ['nullable', 'exists:departments,department_id'],
             'parent_office_id' => [

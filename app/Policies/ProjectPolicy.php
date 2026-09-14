@@ -4,6 +4,7 @@ namespace App\Policies;
 
 use App\Models\Project;
 use App\Models\User;
+use App\Policies\Concerns\ChecksHierarchicalLeadership;
 use App\Services\RbacService;
 
 /**
@@ -18,6 +19,8 @@ use App\Services\RbacService;
  */
 class ProjectPolicy
 {
+    use ChecksHierarchicalLeadership;
+
     /**
      * A user may view a project when they are a system administrator,
      * or when the project sits under their office (primary or
@@ -47,6 +50,10 @@ class ProjectPolicy
      */
     public function update(User $user, Project $project): bool
     {
+        if ($this->leadsOrOversees($user, $project)) {
+            return true;
+        }
+
         return $project->isManagedBy($user);
     }
 

@@ -197,7 +197,7 @@ class ProjectAndTaskTest extends TestCase
         $this->assertNotNull($project);
         $createResponse->assertRedirect(route('projects.show', $project));
 
-        $followCreate = $this->actingAs($director)->get(route('projects.show', $project));
+        $followCreate = $this->followRedirects($createResponse);
         $followCreate->assertOk();
         $followCreate->assertSee('Project created.');
         $followCreate->assertSee('alert-close');
@@ -206,7 +206,7 @@ class ProjectAndTaskTest extends TestCase
         $deleteResponse = $this->actingAs($director)->delete(route('projects.destroy', $project));
         $deleteResponse->assertRedirect(route('projects.index'));
 
-        $followDelete = $this->actingAs($director)->get(route('projects.index'));
+        $followDelete = $this->followRedirects($deleteResponse);
         $followDelete->assertOk();
         $followDelete->assertSee('was deleted.');
         $followDelete->assertSee('alert-close');
