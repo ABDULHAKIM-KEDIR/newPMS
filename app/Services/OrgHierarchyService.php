@@ -61,7 +61,7 @@ class OrgHierarchyService
             return false;
         }
 
-        if ($user->hasPermission('manage_system_settings') || $user->hasRole('Super Admin')) {
+        if ($user->canAccessGlobalScope()) {
             return true;
         }
 
@@ -171,14 +171,16 @@ class OrgHierarchyService
 
     protected function recursiveQuery(string $selectType, string $selectId, string $joinType, string $joinId, string $rootType, int|string $rootId): Collection
     {
-        $sql = "WITH RECURSIVE tree(node_type, node_id, depth) AS (
-            SELECT {$selectType}, {$selectId}, 1
+        $sql = "WITH RECURSIVE tree(node_type, node_id, depth, path) AS (
+            SELECT {$selectType}, {$selectId}, 1, {$selectType} || ':' || {$selectId}
             FROM org_unit_edges
             WHERE {$joinType} = ? AND {$joinId} = ?
-            UNION
-            SELECT e.{$selectType}, e.{$selectId}, tree.depth + 1
+            UNION ALL
+            SELECT e.{$selectType}, e.{$selectId}, tree.depth + 1,
+                tree.path || ',' || e.{$selectType} || ':' || e.{$selectId}
             FROM org_unit_edges e
             INNER JOIN tree ON e.{$joinType} = tree.node_type AND e.{$joinId} = tree.node_id
+            WHERE instr(',' || tree.path || ',', ',' || e.{$selectType} || ':' || e.{$selectId} || ',') = 0
         ) SELECT node_type, node_id, MIN(depth) AS depth FROM tree GROUP BY node_type, node_id ORDER BY depth, node_type, node_id";
 
         return collect(DB::select($sql, [$rootType, $rootId]));

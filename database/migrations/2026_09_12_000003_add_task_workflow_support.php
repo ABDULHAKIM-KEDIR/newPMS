@@ -10,24 +10,35 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('tasks', function (Blueprint $table): void {
-            $table->boolean('is_locked')->default(false)->after('blocker_reason');
-            $table->timestamp('locked_at')->nullable()->after('is_locked');
-            $table->foreignId('locked_by')->nullable()->after('locked_at')
-                ->constrained('users', 'user_id')->nullOnDelete();
+            if (! Schema::hasColumn('tasks', 'is_locked')) {
+                $table->boolean('is_locked')->default(false);
+            }
+            if (! Schema::hasColumn('tasks', 'locked_at')) {
+                $table->timestamp('locked_at')->nullable();
+            }
+            if (! Schema::hasColumn('tasks', 'locked_by')) {
+                $table->foreignId('locked_by')->nullable()
+                    ->constrained('users', 'user_id')->nullOnDelete();
+            }
+            if (! Schema::hasColumn('tasks', 'lock_reason')) {
+                $table->text('lock_reason')->nullable();
+            }
             $table->index(['parent_task_id', 'project_id']);
         });
 
-        Schema::create('task_assignments', function (Blueprint $table): void {
-            $table->id('task_assignment_id');
-            $table->foreignId('task_id')->constrained('tasks', 'task_id')->cascadeOnDelete();
-            $table->foreignId('user_id')->constrained('users', 'user_id')->cascadeOnDelete();
-            $table->string('status', 20)->default('pending');
-            $table->timestamp('assigned_at')->useCurrent();
-            $table->timestamp('responded_at')->nullable();
-            $table->string('response_reason', 1000)->nullable();
-            $table->unique(['task_id', 'user_id']);
-            $table->index(['user_id', 'status']);
-        });
+        if (! Schema::hasTable('task_assignments')) {
+            Schema::create('task_assignments', function (Blueprint $table): void {
+                $table->id('task_assignment_id');
+                $table->foreignId('task_id')->constrained('tasks', 'task_id')->cascadeOnDelete();
+                $table->foreignId('user_id')->constrained('users', 'user_id')->cascadeOnDelete();
+                $table->string('status', 20)->default('pending');
+                $table->timestamp('assigned_at')->useCurrent();
+                $table->timestamp('responded_at')->nullable();
+                $table->string('response_reason', 1000)->nullable();
+                $table->unique(['task_id', 'user_id']);
+                $table->index(['user_id', 'status']);
+            });
+        }
 
         DB::table('tasks')
             ->whereNotNull('assigned_to')

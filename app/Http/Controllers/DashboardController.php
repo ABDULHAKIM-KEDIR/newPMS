@@ -84,7 +84,7 @@ class DashboardController extends Controller
 
         // User approval statistics for administrators (Requirement 9)
         $userApprovalStats = null;
-        if ($user->can('manage_users') || $user->isAdmin()) {
+        if ($user->can('manage_users')) {
             $userApprovalStats = [
                 'total' => User::count(),
                 'active' => User::where('status', 'Active')->count(),

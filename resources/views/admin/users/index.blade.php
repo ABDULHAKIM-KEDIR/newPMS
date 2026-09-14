@@ -12,20 +12,31 @@
         <h1>Users</h1>
 
         <div class="page-sub">
-            Manage accounts, registrations, roles, and access · {{ $pendingUsersCount }} pending
+            Manage accounts, registrations, roles, and access
         </div>
     </div>
 
-    <div class="badge b-planning">
-        Pending approvals: {{ $pendingApprovalCount }}
-    </div>
+    <div style="display:flex; align-items:center; gap:10px;">
 
-    <a
-        href="{{ route('admin.users.create') }}"
-        class="btn btn-accent"
-    >
-        + New User
-    </a>
+        @if ($pendingApprovalCount > 0)
+            <a
+                href="{{ route('admin.users.index', ['status' => 'Pending']) }}"
+                class="badge b-planning"
+                style="text-decoration:none;"
+            >
+                <span class="badge-dot"></span>
+                {{ $pendingApprovalCount }} pending approval{{ $pendingApprovalCount === 1 ? '' : 's' }}
+            </a>
+        @endif
+
+        <a
+            href="{{ route('admin.users.create') }}"
+            class="btn btn-accent"
+        >
+            + New User
+        </a>
+
+    </div>
 
 </div>
 
@@ -168,13 +179,21 @@
     method="GET"
     action="{{ route('admin.users.index') }}"
     class="filter-row"
+    style="
+        display:flex;
+        flex-wrap:wrap;
+        align-items:center;
+        gap:10px;
+        margin-bottom:16px;
+    "
 >
 
     <input
-        type="text"
+        type="search"
         name="q"
         value="{{ request('q') }}"
         placeholder="Search name or email…"
+        aria-label="Search users"
         style="
             border:1px solid var(--line);
             border-radius:8px;
@@ -186,40 +205,62 @@
         "
     >
 
-    <a
-        href="{{ route('admin.users.index') }}"
-        class="pill {{ !request('status') ? 'active' : '' }}"
+    <div
+        style="
+            display:inline-flex;
+            border:1px solid var(--line);
+            border-radius:8px;
+            background:var(--surface);
+            overflow:hidden;
+        "
+        role="group"
+        aria-label="Filter by status"
     >
-        All
-    </a>
 
-    <a
-        href="{{ route('admin.users.index', ['status' => 'Pending'] + request()->only('q')) }}"
-        class="pill {{ request('status') === 'Pending' ? 'active' : '' }}"
-    >
-        Pending
-    </a>
+        @foreach (['' => 'All', 'Pending' => 'Pending', 'Active' => 'Active', 'Inactive' => 'Inactive', 'Rejected' => 'Rejected'] as $statusValue => $statusLabel)
+            @php
+                $isSegmentActive = $statusValue === ''
+                    ? ! request('status')
+                    : request('status') === $statusValue;
+            @endphp
 
-    <a
-        href="{{ route('admin.users.index', ['status' => 'Active'] + request()->only('q')) }}"
-        class="pill {{ request('status') === 'Active' ? 'active' : '' }}"
-    >
-        Active
-    </a>
+            <a
+                href="{{ $statusValue === ''
+                    ? route('admin.users.index', request()->only('q', 'office_id'))
+                    : route('admin.users.index', ['status' => $statusValue] + request()->only('q', 'office_id')) }}"
+                style="
+                    padding:8px 14px;
+                    font-size:12.5px;
+                    font-weight:{{ $isSegmentActive ? '600' : '400' }};
+                    color:{{ $isSegmentActive ? 'var(--primary-dark)' : 'var(--ink-soft)' }};
+                    background:{{ $isSegmentActive ? 'var(--primary-soft)' : 'transparent' }};
+                    text-decoration:none;
+                    border-right:1px solid var(--line);
+                "
+            >
+                {{ $statusLabel }}
+            </a>
+        @endforeach
 
-    <a
-        href="{{ route('admin.users.index', ['status' => 'Inactive'] + request()->only('q')) }}"
-        class="pill {{ request('status') === 'Inactive' ? 'active' : '' }}"
-    >
-        Inactive
-    </a>
+    </div>
 
-    <a
-        href="{{ route('admin.users.index', ['status' => 'Rejected'] + request()->only('q')) }}"
-        class="pill {{ request('status') === 'Rejected' ? 'active' : '' }}"
+    <select
+        name="office_id"
+        aria-label="Filter by office"
+        style="
+            border:1px solid var(--line);
+            border-radius:8px;
+            padding:8px 12px;
+            font-size:13px;
+            font-family:inherit;
+            background:var(--surface);
+        "
     >
-        Rejected
-    </a>
+        <option value="">All offices</option>
+        @foreach ($offices as $office)
+            <option value="{{ $office->office_id }}" {{ (string) $officeFilter === (string) $office->office_id ? 'selected' : '' }}>{{ $office->office_name }}</option>
+        @endforeach
+    </select>
 
     <button
         type="submit"
@@ -228,16 +269,37 @@
         Search
     </button>
 
-    <select name="office_id" style="border:1px solid var(--line); border-radius:8px; padding:8px 12px; font-size:13px; font-family:inherit; background:var(--surface);">
-        <option value="">All offices</option>
-        @foreach ($offices as $office)
-            <option value="{{ $office->office_id }}" {{ (string) $officeFilter === (string) $office->office_id ? 'selected' : '' }}>{{ $office->office_name }}</option>
-        @endforeach
-    </select>
-
 </form>
 
 <div class="card">
+
+    <div
+        style="
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            padding:12px 16px;
+            border-bottom:1px solid var(--line);
+            font-size:12.5px;
+            color:var(--ink-faint);
+        "
+    >
+        <span>
+            {{ $users->total() }} user{{ $users->total() === 1 ? '' : 's' }}
+            @if (request('status') || request('q') || $officeFilter)
+                matching filters
+            @endif
+        </span>
+
+        @if (request('status') || request('q') || $officeFilter)
+            <a
+                href="{{ route('admin.users.index') }}"
+                class="link-small"
+            >
+                Clear filters
+            </a>
+        @endif
+    </div>
 
     <table>
 
@@ -510,6 +572,14 @@
                     <div class="empty">
 
                         <h4>No users found</h4>
+
+                        <p style="color:var(--ink-faint); font-size:13px; margin:6px 0 0;">
+                            @if (request('q') || request('status') || $officeFilter)
+                                Try adjusting or clearing the search filters.
+                            @else
+                                No accounts exist yet — create the first one.
+                            @endif
+                        </p>
 
                     </div>
 

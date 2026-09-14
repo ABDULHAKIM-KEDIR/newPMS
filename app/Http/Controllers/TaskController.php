@@ -136,9 +136,17 @@ class TaskController extends Controller
         })->count();
         $allCount = (clone $countQuery)->count();
 
-        $projects = Project::orderBy('project_name')->get();
-        $teams = Team::where('status', 'Active')->orderBy('team_name')->get();
-        $assignableUsers = User::where('status', 'Active')->orderBy('full_name')->get();
+        $projects = Project::query()
+            ->visibleTo($user)
+            ->with('phases')
+            ->orderBy('project_name')
+            ->get();
+        $teams = Team::query()
+            ->where('status', 'Active')
+            ->visibleTo($user)
+            ->orderBy('team_name')
+            ->get();
+        $assignableUsers = User::availableTo($user)->where('status', 'Active')->orderBy('full_name')->get();
 
         return view('tasks.index', compact(
             'tasks', 'filter', 'view', 'status', 'priority', 'search',

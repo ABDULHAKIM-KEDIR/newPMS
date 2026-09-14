@@ -165,10 +165,18 @@ class ProjectController extends Controller
     {
         Gate::authorize('create_projects');
 
-        $teams = Team::with(['leader', 'members.user', 'office'])->orderBy('team_name')->get();
-        $projectManagers = User::where('status', 'Active')->orderBy('full_name')->get();
+        /** @var User $user */
+        $user = Auth::user();
+        abort_unless($user->office_id, 403, 'Your account must belong to an office before creating a project.');
+
+        $teams = Team::with(['leader', 'members.user', 'office'])
+            ->where('office_id', $user->office_id)
+            ->orderBy('team_name')->get();
+        $projectManagers = User::where('status', 'Active')
+            ->where('office_id', $user->office_id)
+            ->orderBy('full_name')->get();
         $projectTypes = ProjectType::where('is_active', true)->orderBy('name')->get();
-        $offices = Office::active()->orderBy('office_name')->get();
+        $offices = Office::active()->where('office_id', $user->office_id)->orderBy('office_name')->get();
 
         $teamsData = $teams->map(function ($t) {
             return [
@@ -176,7 +184,7 @@ class ProjectController extends Controller
                 'name' => $t->team_name,
                 'office_id' => $t->office_id,
                 'leader_name' => optional($t->leader)->full_name ?? 'Unassigned',
-                'members' => $t->members->map(function ($m) {
+                'members' => $t->members->map(function ($m) use ($t) {
                     if ($m->user && $t->office_id && $m->user->office_id
                         && (int) $m->user->office_id !== (int) $t->office_id) {
                         return null;
@@ -225,12 +233,20 @@ class ProjectController extends Controller
                         });
                     }),
                 ],
-                'project_manager_id' => ['nullable', 'exists:users,user_id'],
+                'project_manager_id' => [
+                    'nullable',
+                    Rule::exists('users', 'user_id')->where(function ($query) use ($user) {
+                        $query->where('status', 'Active')->where('office_id', $user->office_id);
+                    }),
+                ],
                 'priority' => ['nullable', 'in:Low,Medium,High,Urgent'],
                 'start_date' => ['nullable', 'date'],
                 'end_date' => ['nullable', 'date', 'after_or_equal:start_date'],
                 'allocated_amount' => ['nullable', 'numeric', 'min:0'],
-                'primary_office_id' => ['nullable', 'exists:offices,office_id'],
+                'primary_office_id' => [
+                    'required',
+                    Rule::exists('offices', 'office_id')->where('office_id', $user->office_id),
+                ],
                 'participating_offices' => ['nullable', 'array'],
                 'participating_offices.*' => ['exists:offices,office_id'],
             ]);
@@ -422,6 +438,8 @@ class ProjectController extends Controller
     public function store(StoreProjectRequest $request)
     {
         Gate::authorize('create_projects');
+
+        abort_unless(Auth::user()->office_id, 403, 'Your account must belong to an office before creating a project.');
 
         $project = $this->projectWizardService->handleWizardSave($request);
 
@@ -810,6 +828,11 @@ class ProjectController extends Controller
     private function eligibleTeamsFor(User $user, ?Project $editingProject = null): Collection
     {
         $query = Team::orderBy('team_name');
+
+        if (! $user->canAccessGlobalScope()) {
+            $officeIds = $user->officeScopeIds();
+            $query->whereIn('office_id', $officeIds->all());
+        }
 
         if (! $user->isDirectorOrAdmin()) {
             $query->where('team_leader_id', $user->user_id);

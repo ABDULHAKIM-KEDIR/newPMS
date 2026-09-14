@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Department;
 use App\Models\Office;
 use App\Models\User;
+use App\Services\OrgHierarchyService;
 use App\Support\Activity;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -41,6 +42,15 @@ class OfficeController extends Controller
         $data = $this->validated($request);
 
         $office = Office::create($data);
+
+        // Grant the scoped Head of Office role so the RBAC engine honours
+        // the head's permissions (head_user_id alone is not a grant).
+        if ($office->head_user_id) {
+            app(OrgHierarchyService::class)->assignHead(
+                User::findOrFail($office->head_user_id),
+                $office
+            );
+        }
 
         Activity::log('Created office', 'Office', $office->office_id, "{$office->office_name} ({$office->office_code})");
 
@@ -85,6 +95,23 @@ class OfficeController extends Controller
 
         $previousHeadId = (int) ($office->head_user_id ?? 0);
         $office->update($data);
+
+        // Keep the scoped Head of Office role in sync when the head
+        // changes: revoke it from the previous head, grant it to the new
+        // one. head_user_id alone is not an RBAC grant.
+        $hierarchy = app(OrgHierarchyService::class);
+
+        $previousHead = $previousHeadId && $previousHeadId !== (int) ($office->head_user_id ?? 0)
+            ? User::find($previousHeadId)
+            : null;
+
+        if ($previousHead) {
+            $hierarchy->revokeHead($previousHead, $office);
+        }
+
+        if ($office->head_user_id && (int) $office->head_user_id !== $previousHeadId) {
+            $hierarchy->assignHead(User::findOrFail($office->head_user_id), $office);
+        }
 
         if ((int) ($office->head_user_id ?? 0) !== $previousHeadId && $office->head_user_id) {
             Activity::notify(

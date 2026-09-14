@@ -76,6 +76,32 @@ class Team extends Model
         return $this->belongsTo(User::class, 'team_leader_id', 'user_id');
     }
 
+    public static function countVisibleTo(User $user): int
+    {
+        return static::query()->visibleTo($user)->count();
+    }
+
+    public function scopeVisibleTo($query, User $user)
+    {
+        if ($user->canAccessGlobalScope()) {
+            return $query;
+        }
+
+        $officeIds = $user->officeScopeIds();
+
+        if ($officeIds->isEmpty()) {
+            return $query->whereNull('office_id');
+        }
+
+        $query->whereIn('office_id', $officeIds->all());
+
+        if ($user->isTeamMember()) {
+            $query->whereHas('members', fn ($memberQuery) => $memberQuery->where('team_members.user_id', $user->user_id));
+        }
+
+        return $query;
+    }
+
     public function members()
     {
         return $this->hasMany(TeamMember::class, 'team_id', 'team_id');

@@ -20,14 +20,21 @@ class ReportController extends Controller
 
         $projectId = $request->get('project_id');
         $teamId = $request->get('team_id');
+        $authUser = Auth::user();
 
         $projectsQuery = Project::with(['tasks', 'phases.tasks', 'projectManager', 'team', 'teams']);
+        if (! $authUser->isAdmin()) {
+            $projectsQuery->visibleTo($authUser);
+        }
         if ($projectId) {
             $projectsQuery->where('project_id', $projectId);
         }
         $projects = $projectsQuery->get();
 
         $tasksQuery = Task::with(['project', 'team', 'assignee']);
+        if (! $authUser->isAdmin()) {
+            $tasksQuery->whereHas('project', fn ($projectQuery) => $projectQuery->visibleTo($authUser));
+        }
         if ($projectId) {
             $tasksQuery->where('project_id', $projectId);
         }
@@ -36,7 +43,9 @@ class ReportController extends Controller
         }
         $tasks = $tasksQuery->get();
 
-        $teams = Team::with(['leader', 'members.user', 'tasks'])->get();
+        $teams = Team::with(['leader', 'members.user', 'tasks'])
+            ->visibleTo($authUser)
+            ->get();
 
         // High level metrics
         $totalProjects = $projects->count();

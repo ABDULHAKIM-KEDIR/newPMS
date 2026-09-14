@@ -237,11 +237,16 @@
 
                 <div class="form-field">
                   <label for="phase_id">Phase</label>
-                  <select id="phase_id" name="phase_id" required>
-                    @foreach ($project->phases as $ph)
-                      <option value="{{ $ph->phase_id }}" {{ old('phase_id') == $ph->phase_id || (empty(old('phase_id')) && $ph->status === 'In Progress') ? 'selected' : '' }}>{{ $ph->phase_name }}</option>
-                    @endforeach
+                  <select id="phase_id" name="phase_id" {{ $project->phases->isNotEmpty() ? 'required' : 'disabled' }}>
+                    @forelse ($project->phases as $ph)
+                      <option value="{{ $ph->phase_id }}" {{ old('phase_id') == $ph->phase_id || (empty(old('phase_id')) && ($ph->status === 'In Progress' || $loop->first)) ? 'selected' : '' }}>{{ $ph->phase_name }}</option>
+                    @empty
+                      <option value="">No phases available</option>
+                    @endforelse
                   </select>
+                  @if ($project->phases->isEmpty())
+                    <small style="display:block; margin-top:4px; color:var(--ink-muted);">Add a project phase before creating a phased task.</small>
+                  @endif
                 </div>
               </div>
 

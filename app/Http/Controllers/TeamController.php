@@ -19,11 +19,14 @@ class TeamController extends Controller
         abort_unless(Auth::user()->can('view_projects'), 403);
 
         $authUser = Auth::user();
-        $canViewAllOffices = $authUser->isAdmin() || $authUser->isDirectorOrAdmin();
-        $myOfficeIds = $authUser->officeIds();
+        $canViewAllOffices = $authUser->isAdmin();
+        $myOfficeIds = $authUser->isOfficeHead()
+            ? $authUser->officeScopeIds()
+            : $authUser->officeIds();
 
         $teams = Team::with(['leader', 'members', 'projects', 'office'])
-            ->when(! $canViewAllOffices, fn ($q) => $q->whereIn('office_id', $myOfficeIds))
+            ->when(! $canViewAllOffices && $myOfficeIds->isNotEmpty(), fn ($q) => $q->whereIn('office_id', $myOfficeIds->all()))
+            ->when(! $canViewAllOffices && $authUser->isTeamMember(), fn ($q) => $q->whereHas('members', fn ($memberQuery) => $memberQuery->where('team_members.user_id', $authUser->user_id)))
             ->get();
 
         return view('teams.index', compact('teams'));
@@ -94,7 +97,8 @@ class TeamController extends Controller
 
     public function show(Team $team)
     {
-        abort_unless(Auth::user()->can('view_projects'), 403);
+        $user = Auth::user();
+        abort_unless($user->can('view_projects') && $this->canViewTeam($user, $team), 403);
 
         $team->load([
             'leader', 'parentTeam', 'childTeams', 'members.user.assignedTasks',
@@ -102,10 +106,11 @@ class TeamController extends Controller
             'assignedProjects.budget', 'assignedProjects.phases.tasks',
             'tasks.project', 'tasks.assignee', 'tasks.comments', 'tasks.attachments',
         ]);
-        $user = Auth::user();
         $canManage = $this->canManageTeam($user, $team);
 
-        $allProjects = $team->allProjects();
+        $allProjects = $team->allProjects()
+            ->filter(fn ($project) => $user->can('view', $project))
+            ->values();
         $taskStats = $team->taskStats();
         $teamTasks = $team->tasks;
 
@@ -269,6 +274,25 @@ class TeamController extends Controller
                 || (int) $team->office_id === (int) $candidate->office_id);
     }
 
+    private function canViewTeam(User $user, Team $team): bool
+    {
+        if ($user->isAdmin()) {
+            return true;
+        }
+
+        if ($user->office_id && $team->office_id && (int) $user->office_id !== (int) $team->office_id) {
+            return false;
+        }
+
+        if ($user->isOfficeHead()) {
+            return app(OrgHierarchyService::class)->canManage($user, $team)
+                && ($user->office_id === null || $user->headOfficeIds()->contains((int) $user->office_id));
+        }
+
+        return ! $user->isTeamMember()
+            || $team->members()->where('user_id', $user->user_id)->exists();
+    }
+
     private function resolveUserId($input, ?int $teamId = null): ?int
     {
         if ($input === null || $input === '') {
@@ -357,8 +381,13 @@ class TeamController extends Controller
      */
     private function canManageTeam(User $user, Team $team): bool
     {
-        if ($user->isAdmin() || $user->isDirectorOrAdmin()) {
+        if ($user->isAdmin()) {
             return true;
+        }
+
+        if ($user->isOfficeHead()) {
+            return app(OrgHierarchyService::class)->canManage($user, $team)
+                && ($user->office_id === null || $user->headOfficeIds()->contains((int) $user->office_id));
         }
 
         if (app(OrgHierarchyService::class)->canManage($user, $team)) {

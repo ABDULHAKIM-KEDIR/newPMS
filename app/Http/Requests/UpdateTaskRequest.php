@@ -31,6 +31,10 @@ class UpdateTaskRequest extends FormRequest
         return [
             'task_name' => ['sometimes', 'required', 'string', 'max:150'],
             'description' => ['nullable', 'string', 'max:2000'],
+            'assigned_to' => ['nullable'],
+            'assignee_name' => ['nullable', 'string', 'max:150'],
+            'assignees' => ['nullable', 'array'],
+            'assignees.*' => ['nullable'],
             'phase_id' => ['nullable', 'exists:phases,phase_id'],
             'team_id' => ['nullable', 'exists:teams,team_id'],
             'priority' => ['sometimes', 'required', 'in:High,Medium,Low,Urgent'],

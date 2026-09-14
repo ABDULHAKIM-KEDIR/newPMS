@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\OrgHierarchyService;
 use App\Services\RbacService;
 use App\Services\RosterService;
 use Illuminate\Database\Eloquent\Model;
@@ -161,34 +162,41 @@ class Project extends Model
     }
 
     /**
-     * Query scope restricting projects to those under the user's office(s)
-     * (primary or participating office) or those the user participates in
-     * directly (PM of record, any assigned team they belong to, or direct
-     * project membership). System administrators see everything.
+     * Restrict projects to the user's office boundary. Team members must
+     * also participate in the project itself.
      */
     public function scopeVisibleTo($query, User $user)
     {
-        if ($user->hasPermission('manage_system_settings')) {
+        if ($user->canAccessGlobalScope()) {
             return $query;
         }
 
-        $officeIds = $user->officeIds();
+        $officeIds = $user->officeScopeIds();
 
-        return $query->where(function ($q) use ($user, $officeIds) {
-            if ($officeIds->isNotEmpty()) {
-                $q->orWhere(function ($oq) use ($officeIds) {
-                    $oq->whereIn('primary_office_id', $officeIds)
-                        ->orWhereHas('offices', fn ($oq2) => $oq2->whereIn('offices.office_id', $officeIds));
-                });
+        $query->where(function ($officeQuery) use ($officeIds) {
+            if ($officeIds->isEmpty()) {
+                return;
             }
 
-            $q->orWhere(function ($pq) use ($user) {
-                $pq->where('project_manager_id', $user->user_id)
-                    ->orWhereHas('memberRoles', fn ($mq) => $mq->where('project_member_roles.user_id', $user->user_id))
-                    ->orWhereHas('team.members', fn ($tq) => $tq->where('team_members.user_id', $user->user_id))
-                    ->orWhereHas('teams.members', fn ($tq) => $tq->where('team_members.user_id', $user->user_id));
-            });
+            $officeQuery
+                ->where(function ($legacyQuery) {
+                    $legacyQuery->whereNull('primary_office_id')
+                        ->whereDoesntHave('offices');
+                })
+                ->orWhereIn('primary_office_id', $officeIds->all())
+                ->orWhereHas('offices', fn ($officeRelation) => $officeRelation->whereIn('offices.office_id', $officeIds->all()));
         });
+
+        if ($user->isTeamMember()) {
+            $query->where(function ($participationQuery) use ($user) {
+                $participationQuery->where('project_manager_id', $user->user_id)
+                    ->orWhereHas('memberRoles', fn ($memberQuery) => $memberQuery->where('project_member_roles.user_id', $user->user_id))
+                    ->orWhereHas('team.members', fn ($teamQuery) => $teamQuery->where('team_members.user_id', $user->user_id))
+                    ->orWhereHas('teams.members', fn ($teamQuery) => $teamQuery->where('team_members.user_id', $user->user_id));
+            });
+        }
+
+        return $query;
     }
 
     /**
@@ -521,6 +529,11 @@ class Project extends Model
      */
     public function isManagedBy(User $user): bool
     {
+        if ($user->isOfficeHead()) {
+            return app(OrgHierarchyService::class)->canManage($user, $this)
+                && ($user->office_id === null || $user->headOfficeIds()->contains((int) $user->office_id));
+        }
+
         if ($user->hasPermission('edit_projects')) {
             return true;
         }

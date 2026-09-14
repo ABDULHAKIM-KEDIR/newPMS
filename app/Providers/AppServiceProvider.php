@@ -15,6 +15,7 @@ use App\Policies\ProjectPolicy;
 use App\Policies\TaskPolicy;
 use App\Services\RbacService;
 use App\Support\Permissions;
+use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 
@@ -33,8 +34,18 @@ class AppServiceProvider extends ServiceProvider
         $rbac = app(RbacService::class);
 
         Gate::before(function (User $user, string $ability) use ($rbac): ?bool {
+            // Only org-wide (unscoped, non-leadership) roles may bypass the
+            // Gate. Checking the RBAC engine here would let scoped roles
+            // like "Head of Office" (permission set: *) bypass every
+            // object-level policy outside their subtree.
+            $hasOrgWideAdminSlug = $user->roles()
+                ->wherePivotNull('scope_type')
+                ->whereNotIn('role_name', RbacService::LEADERSHIP_ROLE_NAMES)
+                ->whereHas('permissions', fn ($q) => $q->where('permission_name', 'manage_system_settings'))
+                ->exists();
+
             if (
-                $rbac->can($user, 'manage_system_settings')
+                $hasOrgWideAdminSlug
                 || (method_exists($user, 'hasRole') && ($user->hasRole('System Administrator') || $user->hasRole('Administrator') || $user->hasRole('Super Admin')))
             ) {
                 return true;
@@ -69,5 +80,11 @@ class AppServiceProvider extends ServiceProvider
         Gate::policy(Project::class, ProjectPolicy::class);
         Gate::policy(Task::class, TaskPolicy::class);
         Gate::policy(Office::class, OfficePolicy::class);
+
+        // The app ships custom CSS only (no Tailwind), so Laravel's default
+        // pagination markup renders unstyled — including full-screen chevron
+        // SVGs. Use the project's own pagination view everywhere.
+        Paginator::defaultView('pagination::custom');
+        Paginator::defaultSimpleView('pagination::custom');
     }
 }

@@ -21,9 +21,12 @@ class SearchController extends Controller
 
         if ($q !== '') {
             $projects = Project::with('team')
-                ->where('project_name', 'like', "%{$q}%")
-                ->orWhere('description', 'like', "%{$q}%")
-                ->orWhere('client', 'like', "%{$q}%")
+                ->visibleTo($request->user())
+                ->where(function ($projectQuery) use ($q) {
+                    $projectQuery->where('project_name', 'like', "%{$q}%")
+                        ->orWhere('description', 'like', "%{$q}%")
+                        ->orWhere('client', 'like', "%{$q}%");
+                })
                 ->limit(10)->get();
 
             $teams = Team::with('leader')
@@ -32,6 +35,10 @@ class SearchController extends Controller
                 ->limit(10)->get();
 
             $tasks = Task::with(['phase.project', 'project', 'team', 'assignee'])
+                ->where(function ($taskQuery) use ($request) {
+                    $taskQuery->whereHas('project', fn ($projectQuery) => $projectQuery->visibleTo($request->user()))
+                        ->orWhereHas('phase.project', fn ($projectQuery) => $projectQuery->visibleTo($request->user()));
+                })
                 ->where('task_name', 'like', "%{$q}%")
                 ->orWhere('description', 'like', "%{$q}%")
                 ->limit(10)->get();

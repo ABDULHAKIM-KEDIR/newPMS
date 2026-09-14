@@ -68,8 +68,38 @@ class RbacService
 
         // 1. Organization-wide roles (scope NULL on user_roles).
         $slugs = $slugs->merge($this->rolePermissionSlugs(
-            $user->roles()->wherePivotNull('scope_type')->get()
+            $user->roles()
+                ->wherePivotNull('scope_type')
+                ->whereNotIn('roles.role_name', self::LEADERSHIP_ROLE_NAMES)
+                ->get()
         ));
+
+        // 1b. Leadership roles scoped to an office or department convey
+        //     standing authority over that subtree. At the org level (no
+        //     specific project — navigation, sidebar) their permissions are
+        //     treated as broadly available; object-level policies still
+        //     restrict access to the head's own subtree. With a project in
+        //     context, ONLY the subtree-verified path below applies, so a
+        //     head never inherits another office's projects through these
+        //     slugs.
+        if (! $project) {
+            $slugs = $slugs->merge($this->rolePermissionSlugs(
+                $user->roles()
+                    ->wherePivotIn('scope_type', ['office', 'department'])
+                    ->whereIn('roles.role_name', self::LEADERSHIP_ROLE_NAMES)
+                    ->get()
+            ));
+
+            // An unscoped Head of Office role covers the user's own office.
+            if ($user->office_id) {
+                $slugs = $slugs->merge($this->rolePermissionSlugs(
+                    $user->roles()
+                        ->wherePivotNull('scope_type')
+                        ->where('roles.role_name', 'Head of Office')
+                        ->get()
+                ));
+            }
+        }
 
         if ($project) {
             // 2. Direct project-scoped roles held by this user on this project.

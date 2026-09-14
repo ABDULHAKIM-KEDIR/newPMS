@@ -46,24 +46,30 @@ return new class extends Migration
             });
         }
 
-        Schema::create('sub_teams', function (Blueprint $table) {
-            $table->id('sub_team_id');
-            $table->foreignId('team_id')->constrained('teams', 'team_id')->cascadeOnDelete();
-            $table->string('sub_team_name', 100);
-            $table->foreignId('lead_user_id')->nullable()->constrained('users', 'user_id')->nullOnDelete();
-            $table->text('description')->nullable();
-            $table->string('status', 30)->default('Active');
-        });
+        if (! Schema::hasTable('sub_teams')) {
+            Schema::create('sub_teams', function (Blueprint $table) {
+                $table->id('sub_team_id');
+                $table->foreignId('team_id')->constrained('teams', 'team_id')->cascadeOnDelete();
+                $table->string('sub_team_name', 100);
+                $table->foreignId('lead_user_id')->nullable()->constrained('users', 'user_id')->nullOnDelete();
+                $table->text('description')->nullable();
+                $table->string('status', 30)->default('Active');
+            });
+        }
 
-        Schema::table('tasks', function (Blueprint $table) {
-            $table->foreignId('sub_team_id')->nullable()->after('team_id')
-                ->constrained('sub_teams', 'sub_team_id')->nullOnDelete();
-        });
+        if (! Schema::hasColumn('tasks', 'sub_team_id')) {
+            Schema::table('tasks', function (Blueprint $table) {
+                $table->foreignId('sub_team_id')->nullable()
+                    ->constrained('sub_teams', 'sub_team_id')->nullOnDelete();
+            });
+        }
 
-        Schema::table('team_members', function (Blueprint $table) {
-            $table->foreignId('sub_team_id')->nullable()->after('team_id')
-                ->constrained('sub_teams', 'sub_team_id')->nullOnDelete();
-        });
+        if (Schema::hasTable('team_members') && ! Schema::hasColumn('team_members', 'sub_team_id')) {
+            Schema::table('team_members', function (Blueprint $table) {
+                $table->foreignId('sub_team_id')->nullable()
+                    ->constrained('sub_teams', 'sub_team_id')->nullOnDelete();
+            });
+        }
     }
 
     public function down(): void

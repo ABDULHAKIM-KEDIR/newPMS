@@ -60,6 +60,13 @@
                 </div>
 
                 <div class="form-field">
+                  <label for="task_phase_id">Phase</label>
+                  <select id="task_phase_id" name="phase_id" data-old-phase="{{ old('phase_id') }}">
+                    <option value="">— Select Phase —</option>
+                  </select>
+                </div>
+
+                <div class="form-field">
                   <label for="assigned_to">Assignee</label>
                   <input
                     type="text"
@@ -476,6 +483,46 @@
   document.addEventListener('dragend', (e) => {
     if (e.target.classList.contains('tcard')) {
       e.target.style.opacity = '1';
+    }
+  });
+
+  const taskProjectPhases = @json($projects->mapWithKeys(fn ($project) => [
+    $project->project_id => $project->phases->map(fn ($phase) => [
+      'id' => $phase->phase_id,
+      'name' => $phase->phase_name,
+      'status' => $phase->status,
+    ])->values(),
+  ]));
+
+  function updateNewTaskPhases(projectId) {
+    const phaseSelect = document.getElementById('task_phase_id');
+
+    if (!phaseSelect) {
+      return;
+    }
+
+    const phases = taskProjectPhases[projectId] || [];
+    const oldPhaseId = phaseSelect.dataset.oldPhase || '';
+    const preferredPhase = phases.find((phase) => phase.id == oldPhaseId)
+      || phases.find((phase) => phase.status === 'In Progress')
+      || phases[0];
+
+    phaseSelect.innerHTML = '<option value="">— Select Phase —</option>';
+
+    phases.forEach((phase) => {
+      const option = document.createElement('option');
+      option.value = phase.id;
+      option.textContent = phase.name;
+      option.selected = preferredPhase && phase.id == preferredPhase.id;
+      phaseSelect.appendChild(option);
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const projectSelect = document.getElementById('project_id');
+
+    if (projectSelect) {
+      updateNewTaskPhases(projectSelect.value);
     }
   });
 </script>

@@ -624,6 +624,9 @@
         }
         const data = await res.json();
         this.task.assignments = data.assignments || [];
+        this.task.assignee_id = data.assignee_id || null;
+        this.task.assignee = data.assignee || null;
+        this.task.assignee_name = data.assignee || null;
         this.flash('Collaborators updated');
         this.dirty = true;
       },

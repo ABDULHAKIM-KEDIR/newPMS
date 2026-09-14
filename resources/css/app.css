@@ -627,7 +627,8 @@ nav {
 
 .grid-3 {
     grid-template-columns: 2fr 1fr;
-        max-width: none;
+    max-width: none;
+}
 
 .card {
     background: var(--surface);

@@ -35,6 +35,10 @@ class ProjectWizardService
         /** @var User $user */
         $user = Auth::user();
 
+        if (! $user->office_id || (int) $request->input('primary_office_id') !== (int) $user->office_id) {
+            abort(422, 'Projects must be created under your assigned office.');
+        }
+
         $pmInput = $request->input('project_manager_id') ?? $request->input('project_manager_name');
         $resolvedPmId = $this->resolveUserId($pmInput, $request->input('team_id'));
 
@@ -61,6 +65,13 @@ class ProjectWizardService
 
         $assertUserAllowed($resolvedPmId);
 
+        if ($resolvedPmId) {
+            $projectManager = User::find($resolvedPmId);
+            if (! $projectManager || (int) $projectManager->office_id !== (int) $user->office_id) {
+                abort(422, 'The Project Manager must belong to your office.');
+            }
+        }
+
         $selectedTeamIds = collect($request->input('team_ids', []))
             ->merge($request->input('teams', []))
             ->push($request->input('team_id'))
@@ -84,7 +95,18 @@ class ProjectWizardService
                 'status' => 'planning',
                 'progress' => 0,
                 'created_by' => $user->user_id,
+                'primary_office_id' => $data['primary_office_id'],
             ]);
+
+            $officePivot = [
+                (int) $data['primary_office_id'] => ['participation_type' => 'primary'],
+            ];
+            foreach (collect($data['participating_offices'] ?? [])->unique() as $officeId) {
+                if ((int) $officeId !== (int) $data['primary_office_id']) {
+                    $officePivot[(int) $officeId] = ['participation_type' => 'participating'];
+                }
+            }
+            $project->offices()->sync($officePivot);
 
             // Attach all selected teams in project_teams pivot
             if ($selectedTeamIds->isNotEmpty()) {

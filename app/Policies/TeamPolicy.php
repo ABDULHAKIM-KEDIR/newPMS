@@ -32,6 +32,10 @@ class TeamPolicy
 
     public function update(User $user, Team $team): bool
     {
+        if ($this->headsTeamOffice($user, $team)) {
+            return true;
+        }
+
         if ($user->hasPermission('edit_teams')) {
             return true;
         }
@@ -42,12 +46,18 @@ class TeamPolicy
     public function delete(User $user, Team $team): bool
     {
         return $user->hasPermission('delete_teams')
-            && ($user->isAdmin() || $this->leadsOrOversees($user, $team));
+            && ($user->isAdmin()
+                || $this->headsTeamOffice($user, $team)
+                || $this->leadsOrOversees($user, $team));
     }
 
     /** Only leaders up the chain may add/remove team members. */
     public function manageMembers(User $user, Team $team): bool
     {
+        if ($this->headsTeamOffice($user, $team)) {
+            return true;
+        }
+
         if ($user->hasPermission('edit_teams')) {
             return true;
         }
@@ -58,6 +68,18 @@ class TeamPolicy
     /** Creating a sub-team under this team: Team Lead or above. */
     public function createSubTeam(User $user, Team $team): bool
     {
-        return $this->leadsOrOversees($user, $team);
+        return $this->leadsOrOversees($user, $team)
+            || $this->headsTeamOffice($user, $team);
+    }
+
+    /**
+     * True when this user heads the office the team belongs to — the head
+     * manages only teams that belong to their own office(s).
+     */
+    protected function headsTeamOffice(User $user, Team $team): bool
+    {
+        return (bool) $team->office_id
+            && $user->isOfficeHead()
+            && $user->headOfficeIds()->contains((int) $team->office_id);
     }
 }

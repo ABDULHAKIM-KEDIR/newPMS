@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\OrgHierarchyService;
 use App\Services\RbacService;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -154,10 +155,70 @@ class User extends Authenticatable
 
     public function canAccessGlobalScope(): bool
     {
-        return $this->hasPermission('manage_system_settings')
-            || $this->hasRole('System Administrator')
-            || $this->hasRole('Administrator')
-            || $this->hasRole('Super Admin');
+        $orgWideRoles = $this->roles()
+            ->wherePivotNull('scope_type')
+            ->whereNotIn('role_name', [
+                'Head of Department',
+                'Head of Office',
+                'Head of Project',
+                'Head of Team',
+            ]);
+
+        if ($orgWideRoles->whereIn('role_name', ['System Administrator', 'Administrator', 'Super Admin'])->exists()) {
+            return true;
+        }
+
+        return $orgWideRoles->whereHas('permissions', function ($query) {
+            $query->whereIn('permission_name', ['manage_system_settings', 'manage_users']);
+        })->exists();
+    }
+
+    public function isOfficeHead(): bool
+    {
+        return $this->roles()->where('role_name', 'Head of Office')->exists();
+    }
+
+    /** @return Collection<int, int> */
+    public function headOfficeIds(): Collection
+    {
+        $ids = $this->roles()
+            ->where('role_name', 'Head of Office')
+            ->wherePivot('scope_type', 'office')
+            ->pluck('user_roles.scope_id')
+            ->map(fn ($id) => (int) $id)
+            ->filter();
+
+        // A Head of Office role with no explicit scope covers the user's own office.
+        $unscopedHeadRoles = $this->roles()
+            ->where('role_name', 'Head of Office')
+            ->wherePivotNull('scope_type')
+            ->exists();
+
+        if ($unscopedHeadRoles && $this->office_id) {
+            $ids->push((int) $this->office_id);
+        }
+
+        return $ids
+            ->unique()
+            ->values();
+    }
+
+    /** @return Collection<int, int> */
+    public function officeScopeIds(): Collection
+    {
+        $ids = collect($this->office_id ? [(int) $this->office_id] : []);
+        $headOfficeIds = $this->headOfficeIds();
+        $descendantOfficeIds = $headOfficeIds->isEmpty()
+            ? collect()
+            : app(OrgHierarchyService::class)
+                ->getEffectiveScope($this)
+                ->filter(fn ($node) => $node->node_type === 'office')
+                ->pluck('node_id');
+
+        return $ids->merge($headOfficeIds)
+            ->merge($descendantOfficeIds)
+            ->unique()
+            ->values();
     }
 
     /**
@@ -256,7 +317,7 @@ class User extends Authenticatable
 
     public function isAdmin(): bool
     {
-        return $this->hasPermission('manage_users') || $this->hasPermission('manage_system_settings');
+        return $this->canAccessGlobalScope();
     }
 
     public function isProjectManager(): bool
@@ -271,6 +332,15 @@ class User extends Authenticatable
 
     public function isTeamMember(): bool
     {
+        if ($this->roles()->whereIn('role_name', [
+            'Head of Department',
+            'Head of Office',
+            'Head of Project',
+            'Head of Team',
+        ])->exists()) {
+            return false;
+        }
+
         return ! $this->isTeamLead() && ! $this->isAdmin() && $this->hasPermission('update_task_status');
     }
 

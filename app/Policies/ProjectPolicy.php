@@ -35,8 +35,17 @@ class ProjectPolicy
             return true;
         }
 
-        if ($user->officeIds()->contains(fn ($id) => $project->involvesOffice((int) $id))) {
-            return true;
+        $officeIds = $user->officeScopeIds();
+        $inUserOffice = $officeIds->isEmpty()
+            ? (! $project->primary_office_id && ! $project->offices()->exists())
+            : $officeIds->contains(fn (int $officeId) => $project->involvesOffice($officeId));
+
+        if (! $inUserOffice) {
+            return false;
+        }
+
+        if ($user->isTeamMember()) {
+            return $project->participatesIn($user);
         }
 
         return $project->participatesIn($user)
@@ -46,10 +55,15 @@ class ProjectPolicy
     /**
      * Editing mirrors isManagedBy(): organization edit_projects, the PM of
      * record, a team leader with manage-level team assignment, or an
-     * explicit project role granting edit_projects.
+     * explicit project role granting edit_projects. An office head may
+     * manage projects that belong to their own office(s) only.
      */
     public function update(User $user, Project $project): bool
     {
+        if ($user->isOfficeHead()) {
+            return $this->projectBelongsToHeadOffices($user, $project);
+        }
+
         if ($this->leadsOrOversees($user, $project)) {
             return true;
         }
@@ -61,6 +75,26 @@ class ProjectPolicy
     public function delete(User $user, Project $project): bool
     {
         return app(RbacService::class)->can($user, 'delete_projects', $project)
-            && $project->isManagedBy($user);
+            && ($user->isOfficeHead()
+                ? $this->projectBelongsToHeadOffices($user, $project)
+                : $project->isManagedBy($user));
+    }
+
+    /** True when the project's primary or participating offices intersect the offices this user heads. */
+    protected function projectBelongsToHeadOffices(User $user, Project $project): bool
+    {
+        $headOfficeIds = $user->headOfficeIds();
+
+        if ($headOfficeIds->isEmpty()) {
+            return false;
+        }
+
+        if ($project->primary_office_id && $headOfficeIds->contains((int) $project->primary_office_id)) {
+            return true;
+        }
+
+        return $project->offices()
+            ->pluck('offices.office_id')
+            ->contains(fn ($id) => $headOfficeIds->contains((int) $id));
     }
 }

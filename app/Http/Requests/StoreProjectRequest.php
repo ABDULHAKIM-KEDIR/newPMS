@@ -6,6 +6,7 @@ use App\Models\Team;
 use App\Models\User;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreProjectRequest extends FormRequest
 {
@@ -20,6 +21,8 @@ class StoreProjectRequest extends FormRequest
      */
     public function rules(): array
     {
+        $creatorOfficeId = (int) ($this->user()?->office_id ?? 0);
+
         // Teams must belong to the project's primary or participating offices.
         $allowedOfficeIds = collect([(int) $this->input('primary_office_id')])
             ->merge((array) $this->input('participating_offices', []))
@@ -60,6 +63,16 @@ class StoreProjectRequest extends FormRequest
             'client' => ['nullable', 'string', 'max:150'],
             'project_type' => ['nullable', 'string', 'max:100'],
             'project_type_id' => ['nullable', 'exists:project_types,project_type_id'],
+            'primary_office_id' => [
+                'required',
+                Rule::exists('offices', 'office_id')->where('office_id', $creatorOfficeId),
+            ],
+            'project_manager_id' => [
+                'nullable',
+                Rule::exists('users', 'user_id')->where(function ($query) use ($creatorOfficeId) {
+                    $query->where('status', 'Active')->where('office_id', $creatorOfficeId);
+                }),
+            ],
             'team_id' => ['nullable', ...$teamRule],
             'team_ids' => ['nullable', 'array'],
             'team_ids.*' => $teamRule,

@@ -345,57 +345,49 @@ Route::middleware(['auth', 'active', 'approved'])->group(function () {
         '/tasks',
         [TaskController::class, 'index']
     )
-        ->name('tasks.index')
-        ->middleware('can:view_tasks');
+        ->name('tasks.index');
 
     Route::post(
         '/tasks',
         [TaskController::class, 'store']
     )
-        ->name('tasks.store')
-        ->middleware('can:create_tasks');
+        ->name('tasks.store');
 
     Route::get(
         '/tasks/{task}',
         [TaskController::class, 'show']
     )
-        ->name('tasks.show')
-        ->middleware('can:view_tasks');
+        ->name('tasks.show');
 
     Route::put(
         '/tasks/{task}',
         [TaskController::class, 'update']
     )
-        ->name('tasks.update')
-        ->middleware('can:view_tasks');
+        ->name('tasks.update');
 
     Route::delete(
         '/tasks/{task}',
         [TaskController::class, 'destroy']
     )
-        ->name('tasks.destroy')
-        ->middleware('can:view_tasks');
+        ->name('tasks.destroy');
 
     Route::post(
         '/tasks/{task}/status',
         [TaskController::class, 'updateStatus']
     )
-        ->name('tasks.status')
-        ->middleware('can:update_task_status');
+        ->name('tasks.status');
 
     Route::post(
         '/tasks/{task}/comments',
         [TaskController::class, 'addComment']
     )
-        ->name('tasks.comments')
-        ->middleware('can:view_tasks');
+        ->name('tasks.comments');
 
     Route::post(
         '/tasks/{task}/assign',
         [TaskController::class, 'assign']
     )
-        ->name('tasks.assign')
-        ->middleware('can:assign_tasks');
+        ->name('tasks.assign');
 
     Route::post(
         '/tasks/assignments/{assignment}/respond',
