@@ -7,6 +7,9 @@
       <div style="flex:1; margin-right:12px; min-width:0;">
         <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
           <span class="mono" style="color:var(--ink-faint); font-size:11px;" x-text="'TASK-' + String(task.id || '').padStart(4, '0')"></span>
+          <template x-if="task.parent_task_id">
+            <button type="button" @click="show(task.parent_task_id)" class="mono" style="color:var(--ink-soft); font-size:11px; text-decoration:none; background:var(--bg-subtle); border:1px solid var(--line); padding:1px 6px; border-radius:4px; cursor:pointer;" x-text="'↖ Parent: ' + (task.parent_task_name || ('TASK-' + task.parent_task_id))"></button>
+          </template>
           <template x-if="task.project">
             <a :href="task.project_url" class="mono" style="color:var(--primary); font-size:11px; text-decoration:none; background:var(--primary-soft); padding:1px 6px; border-radius:4px;" x-text="'📁 ' + task.project"></a>
           </template>
@@ -273,6 +276,9 @@
               <span :style="s.is_completed ? 'text-decoration:line-through; color:var(--ink-muted);' : 'color:var(--ink);'" x-text="s.name"></span>
             </label>
             <div style="display:flex; align-items:center; gap:6px;">
+              <template x-if="s.subtask_count > 0">
+                <span class="mono" style="font-size:10.5px; color:var(--ink-soft); background:var(--surface); border:1px solid var(--line); padding:1px 4px; border-radius:3px;" x-text="s.subtask_count + ' sub'"></span>
+              </template>
               <button type="button" @click="show(s.id)" class="btn btn-ghost" style="padding:2px 6px; font-size:11px;" title="Open subtask details">View →</button>
               <span class="badge" :class="s.is_completed ? 'b-active' : 'b-risk'" style="font-size:10px;" x-text="s.is_completed ? 'Done' : 'Pending'"></span>
             </div>

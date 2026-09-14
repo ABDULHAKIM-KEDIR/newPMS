@@ -183,6 +183,8 @@ class TaskController extends Controller
             'start_date_formatted' => optional($task->start_date)?->format('d M Y'),
             'end_date_formatted' => optional($task->end_date)?->format('d M Y'),
             'due' => optional($task->end_date)?->format('d M Y'),
+            'parent_task_id' => $task->parent_task_id,
+            'parent_task_name' => optional($task->parent)->task_name,
             'is_overdue' => $task->isOverdue(),
             'blocker_reason' => $task->blocker_reason,
             'description' => $task->description,
@@ -211,6 +213,8 @@ class TaskController extends Controller
                 'name' => $t->task_name,
                 'status' => $t->status,
                 'is_completed' => in_array($t->status, ['Done', 'Completed']),
+                'subtask_count' => $t->subtasks()->count(),
+                'total_cost' => $t->totalCost(),
             ]),
             'attachments' => $task->attachments->map(fn ($a) => [
                 'id' => $a->attachment_id,

@@ -98,7 +98,13 @@ class PaymentController extends Controller
         $user = Auth::user();
         abort_unless($user->can('manage_budgets') || $user->isDirectorOrAdmin(), 403);
 
+        $oldProjectId = $payment->project_id;
+        $oldPhaseId = $payment->phase_id;
+
         $data = $request->validate([
+            'project_id' => ['nullable', 'exists:projects,project_id'],
+            'phase_id' => ['nullable', 'exists:phases,phase_id'],
+            'task_id' => ['nullable', 'exists:tasks,task_id'],
             'amount' => ['required', 'numeric', 'min:0.01'],
             'payment_date' => ['required', 'date'],
             'recipient' => ['required', 'string', 'max:255'],
@@ -111,6 +117,11 @@ class PaymentController extends Controller
         $payment->update($data);
 
         $this->syncBudgetRollups($payment->project_id, $payment->phase_id);
+        if ($oldProjectId && $oldProjectId !== $payment->project_id) {
+            $this->syncBudgetRollups($oldProjectId, $oldPhaseId);
+        } elseif ($oldPhaseId && $oldPhaseId !== $payment->phase_id) {
+            $this->syncBudgetRollups($payment->project_id, $oldPhaseId);
+        }
 
         Activity::log(
             'Updated payment',
@@ -146,24 +157,20 @@ class PaymentController extends Controller
             ->where('payment_status', 'Completed')
             ->sum('amount');
 
-        if ($completedSum > 0) {
-            ProjectBudget::updateOrCreate(
-                ['project_id' => $projectId],
-                ['spent_amount' => $completedSum]
-            );
-        }
+        ProjectBudget::updateOrCreate(
+            ['project_id' => $projectId],
+            ['spent_amount' => $completedSum]
+        );
 
         if ($phaseId) {
             $phaseCompletedSum = (float) Payment::where('phase_id', $phaseId)
                 ->where('payment_status', 'Completed')
                 ->sum('amount');
 
-            if ($phaseCompletedSum > 0) {
-                PhaseBudget::updateOrCreate(
-                    ['phase_id' => $phaseId],
-                    ['spent_amount' => $phaseCompletedSum]
-                );
-            }
+            PhaseBudget::updateOrCreate(
+                ['phase_id' => $phaseId],
+                ['spent_amount' => $phaseCompletedSum]
+            );
         }
     }
 }

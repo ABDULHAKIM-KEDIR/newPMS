@@ -38,4 +38,12 @@ class Phase extends Model
     {
         return (float) $this->payments()->where('payment_status', 'Completed')->sum('amount');
     }
+
+    public function totalCost(): float
+    {
+        $directPayments = $this->totalPayments();
+        $taskCosts = (float) $this->tasks()->whereNull('parent_task_id')->get()->sum(fn ($t) => $t->totalCost());
+
+        return $directPayments + $taskCosts;
+    }
 }

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Project;
+use Illuminate\Support\Collection;
 
 /**
  * Builds the presentation-ready project roster: PM, team leaders, team
@@ -14,9 +15,9 @@ class RosterService
      * Structured roster of all participants on a project with their roles
      * and specialties.
      *
-     * @return \Illuminate\Support\Collection<int, object>
+     * @return Collection<int, object>
      */
-    public function getFormattedRoster(Project $project): \Illuminate\Support\Collection
+    public function getFormattedRoster(Project $project): Collection
     {
         $project->loadMissing(['projectManager', 'team.leader', 'team.members.user', 'teams.leader', 'teams.members.user', 'memberRoles.user', 'memberRoles.role']);
 
